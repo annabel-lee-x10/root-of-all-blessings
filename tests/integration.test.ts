@@ -135,7 +135,7 @@ describe('Tag lifecycle', () => {
 
 describe('Regression: auth guard', () => {
   it('middleware blocks unauthenticated API requests', async () => {
-    const { middleware } = await import('@/middleware')
+    const { proxy: middleware } = await import('@/proxy')
     const { NextRequest } = await import('next/server')
 
     const protectedPaths = [

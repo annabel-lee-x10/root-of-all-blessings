@@ -3,7 +3,7 @@ import { verifySessionToken } from '@/lib/session'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))
