@@ -1,0 +1,58 @@
+name: AnakenOS Draft Card
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  create-draft-card:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post draft card to AnakenOS
+        uses: actions/github-script@v7
+        env:
+          ANAKENOS_API_URL: ${{ secrets.ANAKENOS_API_URL }}
+          ANAKENOS_API_KEY: ${{ secrets.ANAKENOS_API_KEY }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+            });
+
+            const extSet = new Set();
+            for (const f of files) {
+              const m = f.filename.match(/\.([^./]+)$/);
+              if (m) extSet.add(m[1].toLowerCase());
+            }
+            const extTags = [...extSet].map(e => `lang:${e}`);
+            const tags = ['root-of-all-blessings', ...extTags];
+
+            const payload = {
+              name: pr.title,
+              stage: 'Draft',
+              what: pr.title,
+              why: `PR #${pr.number} opened against ${pr.base.ref}`,
+              next_action: 'Review and merge',
+              notes: pr.body ?? '',
+              tags,
+            };
+
+            const res = await fetch(`${process.env.ANAKENOS_API_URL}/api/projects`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.ANAKENOS_API_KEY}`,
+              },
+              body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+              const text = await res.text();
+              core.setFailed(`AnakenOS API error ${res.status}: ${text}`);
+            } else {
+              core.info(`Draft card created for PR #${pr.number}`);
+            }
