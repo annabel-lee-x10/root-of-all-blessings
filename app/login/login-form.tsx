@@ -40,7 +40,7 @@ export function LoginForm() {
         return
       }
 
-      const from = searchParams.get('from') ?? '/dashboard'
+      const from = searchParams.get('from') ?? '/'
       router.push(from)
       router.refresh()
     } catch {
