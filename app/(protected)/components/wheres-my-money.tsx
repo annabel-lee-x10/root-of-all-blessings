@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useToast } from './toast'
 import type { Account, Category, Tag, TxType } from '@/lib/types'
+import { parseBlessThis } from '@/lib/parse-bless-this'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
 
@@ -58,8 +59,13 @@ export function WheresMyMoney() {
   const [tags, setTags] = useState<Tag[]>([])
   const [payees, setPayees] = useState<string[]>([])
 
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteApplied, setPasteApplied] = useState(false)
+
   const amountRef = useRef<HTMLInputElement>(null)
   const tagDropdownRef = useRef<HTMLDivElement>(null)
+  const pasteRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     Promise.all([
@@ -126,6 +132,75 @@ export function WheresMyMoney() {
     }
   }
 
+  const applyPasteData = useCallback(async (text: string) => {
+    const data = parseBlessThis(text)
+    if (!data.amount && !data.payee && !data.category) {
+      showToast('Could not parse any fields - check the format', 'error')
+      return
+    }
+
+    if (data.amount) setAmount(String(data.amount))
+    if (data.currency) setCurrency(data.currency)
+    if (data.payee) setPayee(data.payee)
+    if (data.notes) { setNote(data.notes); setShowNoteField(true) }
+
+    // Datetime: combine date + time if present
+    if (data.date || data.time) {
+      const currentDt = sgtNow()
+      const datePart = data.date ?? currentDt.split('T')[0]
+      const timePart = data.time ?? currentDt.split('T')[1]
+      setDatetime(`${datePart}T${timePart}`)
+    }
+
+    // Category: match by name (case-insensitive)
+    if (data.category) {
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === data.category!.toLowerCase()
+      )
+      if (match) setCategoryId(match.id)
+    }
+
+    // Account: match by name (case-insensitive)
+    if (data.account) {
+      const match = accounts.find(
+        (a) => a.name.toLowerCase() === data.account!.toLowerCase() && a.is_active === 1
+      )
+      if (match) setAccountId(match.id)
+    }
+
+    // Tags: match existing or create new
+    if (data.tags && data.tags.length > 0) {
+      const resolvedIds: string[] = []
+      for (const tagName of data.tags) {
+        const existing = tags.find((t) => t.name.toLowerCase() === tagName.toLowerCase())
+        if (existing) {
+          resolvedIds.push(existing.id)
+        } else {
+          try {
+            const res = await fetch('/api/tags', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: tagName }),
+            })
+            if (res.ok) {
+              const newTag: Tag = await res.json()
+              setTags((prev) => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)))
+              resolvedIds.push(newTag.id)
+            }
+          } catch { /* skip */ }
+        }
+      }
+      if (resolvedIds.length > 0) setSelectedTagIds(resolvedIds)
+    }
+
+    setPasteApplied(true)
+    setPasteOpen(false)
+    setPasteText('')
+    showToast('Form pre-filled from receipt - review and save', 'success')
+    setTimeout(() => amountRef.current?.focus(), 100)
+    setTimeout(() => setPasteApplied(false), 4000)
+  }, [accounts, categories, tags, showToast])
+
   function reset() {
     setAmount('')
     setCurrency('SGD')
@@ -138,6 +213,7 @@ export function WheresMyMoney() {
     setSelectedTagIds([])
     setTagSearch('')
     setShowNoteField(false)
+    setPasteApplied(false)
     setTimeout(() => amountRef.current?.focus(), 50)
   }
 
@@ -214,9 +290,86 @@ export function WheresMyMoney() {
           padding: '1.5rem',
         }}
       >
-        <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: '0 0 1.25rem' }}>
-          Where's My Money
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : '1.25rem' }}>
+          <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+            Where's My Money
+          </h2>
+          <button
+            type="button"
+            onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              padding: '6px 12px', borderRadius: '8px', border: '1px solid #30363d',
+              background: pasteOpen ? '#f0b42915' : 'transparent',
+              color: pasteOpen ? '#f0b429' : '#8b949e',
+              fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+              minHeight: '36px',
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="2" width="10" height="4" rx="1"/>
+              <path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/>
+            </svg>
+            {pasteOpen ? 'Cancel' : 'Paste Receipt'}
+          </button>
+        </div>
+
+        {/* Paste panel */}
+        {pasteOpen && (
+          <div style={{
+            background: '#0d1117', border: '1px solid #f0b42940',
+            borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem',
+          }}>
+            <textarea
+              ref={pasteRef}
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              onPaste={(e) => {
+                // Auto-apply 300ms after paste to let value settle
+                const pasted = e.clipboardData.getData('text')
+                if (pasted) setTimeout(() => applyPasteData(pasted), 300)
+              }}
+              placeholder={'Paste the "bless this" output here...\n\nAmount: 23.50\nCurrency: SGD\nMerchant/Payee: NTUC FairPrice\n...'}
+              rows={6}
+              style={{
+                ...inputStyle,
+                resize: 'none',
+                fontFamily: 'monospace',
+                fontSize: '13px',
+                lineHeight: 1.6,
+                marginBottom: '0.75rem',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => applyPasteData(pasteText)}
+              disabled={!pasteText.trim()}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
+                fontSize: '14px', fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'not-allowed',
+                background: pasteText.trim() ? '#f0b429' : '#21262d',
+                color: pasteText.trim() ? '#0d1117' : '#484f58',
+              }}
+            >
+              Fill Form
+            </button>
+          </div>
+        )}
+
+        {/* Pre-filled indicator */}
+        {pasteApplied && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            background: 'rgba(63,184,132,0.1)', border: '1px solid rgba(63,184,132,0.25)',
+            borderRadius: '8px', padding: '8px 12px', marginBottom: '1rem',
+            fontSize: '13px', color: '#3fb884',
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Pre-filled from receipt - review and save
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {/* Type toggle */}
