@@ -69,6 +69,10 @@ async function migrate() {
       created_at TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_news_date ON news_briefs(brief_date DESC)`,
+    `CREATE TABLE IF NOT EXISTS andromoney_imports (
+      uid TEXT PRIMARY KEY,
+      imported_at TEXT NOT NULL
+    )`,
   ])
 
   console.log('Migrations complete.')
