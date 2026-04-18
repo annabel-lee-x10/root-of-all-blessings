@@ -81,6 +81,60 @@ export interface PortfolioSnapshot {
   created_at: string
 }
 
+export type Sentiment = 'bullish' | 'bearish' | 'neutral'
+
+export interface MarketRow {
+  name: string
+  ticker?: string
+  value?: number
+  change?: number
+  change_pct?: number
+}
+
+export interface KeyMover {
+  ticker: string
+  name?: string
+  change_pct: number
+  note?: string
+}
+
+export interface HeadlineItem {
+  title: string
+  source?: string
+  url?: string
+  sentiment?: Sentiment
+  summary?: string
+  ticker?: string
+}
+
+export interface JobItem {
+  title: string
+  source?: string
+  url?: string
+  scope: 'global' | 'singapore'
+  summary?: string
+}
+
+export interface BriefContent {
+  market_pre_open: {
+    us_futures: MarketRow[]
+    asia_overnight: MarketRow[]
+    key_movers: KeyMover[]
+    macro_theme?: string
+  }
+  world_headlines: HeadlineItem[]
+  singapore_headlines: HeadlineItem[]
+  singapore_property: HeadlineItem[]
+  job_market: JobItem[]
+}
+
+export interface NewsBrief {
+  id: string
+  brief_date: string
+  content_json: string
+  created_at: string
+}
+
 export interface ExportFilters {
   start?: string
   end?: string
