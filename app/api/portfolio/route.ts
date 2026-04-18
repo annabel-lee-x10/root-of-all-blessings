@@ -93,7 +93,16 @@ function parseHtml(html: string): { holdings: Holding[]; total_value: number; to
   // Compute total_value from holdings if not extracted separately
   const total_value = holdings.reduce((s, h) => s + h.market_value, 0)
 
-  // Compute total_pnl
+  // Clear pnl/pnl_pct for holdings where the ratio is implausible (column map mismatch
+  // across multiple tables in the HTML — e.g. abs(pnl) >> market_value).
+  for (const h of holdings) {
+    if (h.pnl !== undefined && Math.abs(h.pnl) > h.market_value * 3) {
+      h.pnl = undefined
+      h.pnl_pct = undefined
+    }
+  }
+
+  // Compute total_pnl from holdings with plausible pnl values only
   const pnlValues = holdings.filter(h => h.pnl !== undefined).map(h => h.pnl!)
   const total_pnl = pnlValues.length > 0 ? pnlValues.reduce((s, v) => s + v, 0) : null
 
@@ -124,10 +133,19 @@ export async function GET() {
     return Response.json(null)
   }
   const row = result.rows[0]
-  return Response.json({
-    ...row,
-    holdings: JSON.parse(row.holdings_json as string),
-  })
+  const holdings: Holding[] = JSON.parse(row.holdings_json as string)
+
+  // Sanitize holdings in case old snapshots have implausible pnl values
+  for (const h of holdings) {
+    if (h.pnl !== undefined && Math.abs(h.pnl) > h.market_value * 3) {
+      h.pnl = undefined
+      h.pnl_pct = undefined
+    }
+  }
+  const pnlValues = holdings.filter(h => h.pnl !== undefined).map(h => h.pnl!)
+  const total_pnl = pnlValues.length > 0 ? pnlValues.reduce((s, v) => s + v, 0) : null
+
+  return Response.json({ ...row, holdings, total_pnl })
 }
 
 export async function POST(request: NextRequest) {
