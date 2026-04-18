@@ -59,6 +59,28 @@ export interface PaginatedResponse<T> {
   limit: number
 }
 
+export interface Holding {
+  name: string
+  ticker?: string
+  units?: number
+  avg_cost?: number
+  current_price?: number
+  market_value: number
+  pnl?: number
+  pnl_pct?: number
+  allocation_pct?: number
+}
+
+export interface PortfolioSnapshot {
+  id: string
+  snapshot_date: string
+  total_value: number
+  total_pnl: number | null
+  holdings_json: string
+  raw_html: string
+  created_at: string
+}
+
 export interface ExportFilters {
   start?: string
   end?: string

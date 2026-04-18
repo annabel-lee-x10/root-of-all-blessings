@@ -52,6 +52,16 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_tx_account ON transactions(account_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions(type)`,
+    `CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+      id TEXT PRIMARY KEY,
+      snapshot_date TEXT NOT NULL,
+      total_value REAL NOT NULL,
+      total_pnl REAL,
+      holdings_json TEXT NOT NULL,
+      raw_html TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_portfolio_date ON portfolio_snapshots(snapshot_date DESC)`,
   ])
 
   console.log('Migrations complete.')
