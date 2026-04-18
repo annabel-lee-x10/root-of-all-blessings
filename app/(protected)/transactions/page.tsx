@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react'
 import type { TransactionRow, Account, Category, Tag, TxType } from '@/lib/types'
 import { useToast } from '../components/toast'
 
-export const metadata = { title: 'Transactions - Root OS' }
 
 const LIMIT = 20
 
