@@ -149,6 +149,7 @@ export function WheresMyMoney() {
     if (data.currency) setCurrency(data.currency)
     if (data.payee) setPayee(data.payee)
     if (data.payment_method) setPaymentMethod(data.payment_method)
+    if (data.type) setType(data.type)
     if (data.notes) { setNote(data.notes); setShowNoteField(true) }
 
     // Datetime: combine date + time if present
@@ -470,7 +471,7 @@ export function WheresMyMoney() {
           {/* Type toggle */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)} style={pillBtn(type === t)}>
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} style={pillBtn(type === t)}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
