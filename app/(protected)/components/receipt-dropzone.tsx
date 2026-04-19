@@ -75,14 +75,19 @@ export function ReceiptDropzone() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64, mediaType: item.file.type, merchantLookup, accountId }),
         })
-        const data = await res.json()
-        if (res.ok && data.draft) {
+        let data: { draft?: unknown; error?: string } | null = null
+        try {
+          data = await res.json()
+        } catch {
+          // Server returned a non-JSON body (HTML error page, empty body, etc.)
+        }
+        if (res.ok && data?.draft) {
           setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'done' } : f)))
           window.dispatchEvent(new CustomEvent('drafts-updated'))
         } else {
           setFiles((prev) =>
             prev.map((f) =>
-              f.id === item.id ? { ...f, status: 'error', error: data.error ?? 'Processing failed' } : f
+              f.id === item.id ? { ...f, status: 'error', error: data?.error ?? 'Processing failed' } : f
             )
           )
         }

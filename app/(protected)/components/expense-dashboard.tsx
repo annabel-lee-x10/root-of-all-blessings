@@ -174,7 +174,13 @@ export function ExpenseDashboard() {
           </p>
         )}
 
-        {!error && (
+        {!error && !loading && data?.total_spend === 0 && data?.total_income === 0 && data?.category_breakdown.length === 0 && (
+          <p style={{ color: '#8b949e', fontSize: '13px', textAlign: 'center', padding: '1.5rem 0' }}>
+            No transactions yet in this period.
+          </p>
+        )}
+
+        {!error && (loading || !data || data.total_spend > 0 || data.total_income > 0 || data.category_breakdown.length > 0) && (
           <>
             {/* Widgets row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '1rem' }}>
