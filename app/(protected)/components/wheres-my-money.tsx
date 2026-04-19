@@ -48,6 +48,7 @@ export function WheresMyMoney() {
   const [categoryId, setCategoryId] = useState('')
   const [payee, setPayee] = useState('')
   const [note, setNote] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('')
   const [datetime, setDatetime] = useState(sgtNow)
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [tagSearch, setTagSearch] = useState('')
@@ -142,6 +143,7 @@ export function WheresMyMoney() {
     if (data.amount) setAmount(String(data.amount))
     if (data.currency) setCurrency(data.currency)
     if (data.payee) setPayee(data.payee)
+    if (data.payment_method) setPaymentMethod(data.payment_method)
     if (data.notes) { setNote(data.notes); setShowNoteField(true) }
 
     // Datetime: combine date + time if present
@@ -209,6 +211,7 @@ export function WheresMyMoney() {
     setCategoryId('')
     setPayee('')
     setNote('')
+    setPaymentMethod('')
     setDatetime(sgtNow())
     setSelectedTagIds([])
     setTagSearch('')
@@ -236,6 +239,7 @@ export function WheresMyMoney() {
     if (type !== 'transfer' && categoryId) payload.category_id = categoryId
     if (payee) payload.payee = payee
     if (note) payload.note = note
+    if (paymentMethod) payload.payment_method = paymentMethod
     if (currency !== 'SGD') {
       if (fxRate) payload.fx_rate = parseFloat(fxRate)
       if (fxDate) payload.fx_date = fxDate
@@ -480,6 +484,17 @@ export function WheresMyMoney() {
             <datalist id="wmm-payees">
               {payees.map((p) => <option key={p} value={p} />)}
             </datalist>
+          </div>
+
+          {/* Payment Method */}
+          <div style={{ marginBottom: '12px' }}>
+            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={selectStyle}>
+              <option value="">Payment method (optional)</option>
+              <option value="cash">Cash</option>
+              <option value="credit card">Credit card</option>
+              <option value="debit card">Debit card</option>
+              <option value="e-wallet">E-wallet</option>
+            </select>
           </div>
 
           {/* Tags */}

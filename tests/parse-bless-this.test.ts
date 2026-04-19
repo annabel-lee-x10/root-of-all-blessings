@@ -26,6 +26,7 @@ describe('parseBlessThis - full example', () => {
     expect(result.time).toBe('14:32')
     expect(result.category).toBe('Food')
     expect(result.tags).toEqual(['groceries', 'weekly'])
+    expect(result.payment_method).toBe('credit card')
     expect(result.account).toBe('6674')
     expect(result.notes).toBe('weekly groceries run')
   })
@@ -213,16 +214,36 @@ describe('partial / missing fields', () => {
     expect(result.amount).toBe(3.5)
   })
 
-  it('ignores Payment Method field (not mapped)', () => {
+  it('parses Payment Method field', () => {
     const result = parseBlessThis('Payment Method: credit card\nAmount: 10.00')
     expect(result.amount).toBe(10)
-    expect(result).not.toHaveProperty('paymentMethod')
+    expect(result.payment_method).toBe('credit card')
   })
 
   it('handles value containing colons (e.g. note with time)', () => {
     // Only the first colon splits key from value
     const result = parseBlessThis('Notes: reminder: check receipt')
     expect(result.notes).toBe('reminder: check receipt')
+  })
+})
+
+// ── Payment Method ────────────────────────────────────────────────────────────
+
+describe('payment_method parsing', () => {
+  it('parses "Payment Method" key', () => {
+    expect(parseBlessThis('Payment Method: credit card').payment_method).toBe('credit card')
+  })
+
+  it('parses "Payment" short alias', () => {
+    expect(parseBlessThis('Payment: debit card').payment_method).toBe('debit card')
+  })
+
+  it('preserves case of value', () => {
+    expect(parseBlessThis('Payment Method: GrabPay').payment_method).toBe('GrabPay')
+  })
+
+  it('is absent when not in input', () => {
+    expect(parseBlessThis('Amount: 5.00').payment_method).toBeUndefined()
   })
 })
 

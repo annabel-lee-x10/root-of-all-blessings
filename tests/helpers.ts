@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   category_id TEXT REFERENCES categories(id),
   payee TEXT,
   note TEXT,
+  payment_method TEXT,
   datetime TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -203,6 +204,7 @@ export function seedTransaction(
     categoryId?: string | null
     payee?: string | null
     note?: string | null
+    payment_method?: string | null
     datetime?: string
   } = {}
 ) {
@@ -215,12 +217,13 @@ export function seedTransaction(
     categoryId = null,
     payee = null,
     note = null,
+    payment_method = null,
     datetime = n,
   } = opts
   testDb.prepare(
     `INSERT INTO transactions
       (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
-       account_id, to_account_id, category_id, payee, note, datetime, created_at, updated_at)
-     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, datetime, n, n)
+       account_id, to_account_id, category_id, payee, note, payment_method, datetime, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, datetime, n, n)
 }

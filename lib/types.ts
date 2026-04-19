@@ -40,6 +40,7 @@ export interface Transaction {
   category_id: string | null
   payee: string | null
   note: string | null
+  payment_method: string | null
   datetime: string
   created_at: string
   updated_at: string

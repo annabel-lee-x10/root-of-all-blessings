@@ -137,6 +137,11 @@ export function RecentTransactions() {
                         ? `${tx.account_name} → ${tx.to_account_name ?? ''}`
                         : tx.account_name}
                     </span>
+                    {tx.payment_method && (
+                      <span style={{ color: '#8b949e', fontSize: '12px' }}>
+                        {tx.payment_method as string}
+                      </span>
+                    )}
                     {tx.note && (
                       <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
                         {(tx.note as string).length > 50

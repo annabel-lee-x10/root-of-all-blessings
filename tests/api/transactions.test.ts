@@ -211,6 +211,20 @@ describe('POST /api/transactions', () => {
     expect(res.status).toBe(400)
   })
 
+  it('stores and returns payment_method', async () => {
+    const { POST } = await import('@/app/api/transactions/route')
+    const res = await POST(req('/api/transactions', 'POST', {
+      type: 'expense',
+      amount: 12.50,
+      account_id: 'acc1',
+      datetime: '2024-06-01T10:00:00.000+08:00',
+      payment_method: 'credit card',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.payment_method).toBe('credit card')
+  })
+
   it('attaches tags', async () => {
     seedTag('tag1', 'travel')
     const { POST } = await import('@/app/api/transactions/route')
@@ -269,6 +283,18 @@ describe('PATCH /api/transactions/[id]', () => {
     const tx = listData.data.find((t: { id: string }) => t.id === 'tx1')
     expect(tx.tags).toHaveLength(1)
     expect(tx.tags[0].name).toBe('work')
+  })
+
+  it('updates payment_method', async () => {
+    seedTransaction('tx-pm', 'acc1', { amount: 10 })
+    const { PATCH } = await import('@/app/api/transactions/[id]/route')
+    const res = await PATCH(
+      req('/api/transactions/tx-pm', 'PATCH', { payment_method: 'e-wallet' }),
+      { params: Promise.resolve({ id: 'tx-pm' }) }
+    )
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.payment_method).toBe('e-wallet')
   })
 
   it('returns 404 for unknown id', async () => {

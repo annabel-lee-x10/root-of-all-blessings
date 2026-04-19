@@ -23,6 +23,7 @@ export interface BlessThisData {
   time?: string   // HH:MM
   category?: string
   tags?: string[]
+  payment_method?: string
   account?: string
   notes?: string
 }
@@ -79,7 +80,7 @@ export function parseBlessThis(text: string): BlessThisData {
         break
       case 'payment method':
       case 'payment':
-        // Ignored for now - account field is more useful
+        result.payment_method = value
         break
       case 'account':
         result.account = value

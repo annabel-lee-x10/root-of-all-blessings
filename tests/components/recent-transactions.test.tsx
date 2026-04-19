@@ -95,6 +95,31 @@ describe('RecentTransactions', () => {
     })
   })
 
+  it('shows payment_method when present', async () => {
+    const txWithPayment = { ...makeTx('pm1'), payment_method: 'credit card' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: [txWithPayment], total: 1 }),
+    }))
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+    await waitFor(() => {
+      expect(screen.getByText('credit card')).toBeInTheDocument()
+    })
+  })
+
+  it('does not show payment_method label when absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: [makeTx('no-pm')], total: 1 }),
+    }))
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+    await waitFor(() => {
+      expect(screen.queryByText(/credit card|debit card|e-wallet|cash/i)).not.toBeInTheDocument()
+    })
+  })
+
   it('does not show Show more when no transactions', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

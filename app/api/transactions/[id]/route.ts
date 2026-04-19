@@ -3,7 +3,7 @@ import type { InValue } from '@libsql/client'
 import { db } from '@/lib/db'
 
 const UPDATABLE = ['type','amount','currency','fx_rate','fx_date','sgd_equivalent',
-                   'account_id','to_account_id','category_id','payee','note','datetime']
+                   'account_id','to_account_id','category_id','payee','note','payment_method','datetime']
 
 export async function PATCH(
   request: NextRequest,

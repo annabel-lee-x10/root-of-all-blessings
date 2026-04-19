@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
   const {
     type, amount, currency = 'SGD', fx_rate = null, fx_date = null,
     account_id, to_account_id = null, category_id = null,
-    payee = null, note = null, datetime, tag_ids = [],
+    payee = null, note = null, payment_method = null, datetime, tag_ids = [],
   } = body
 
   if (!type || amount == null || !account_id || !datetime) {
@@ -120,10 +120,10 @@ export async function POST(request: NextRequest) {
   await db.execute({
     sql: `INSERT INTO transactions
             (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
-             account_id, to_account_id, category_id, payee, note, datetime, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             account_id, to_account_id, category_id, payee, note, payment_method, datetime, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
-           account_id, to_account_id, category_id, payee, note, datetime, n, n],
+           account_id, to_account_id, category_id, payee, note, payment_method, datetime, n, n],
   })
 
   for (const tag_id of tag_ids) {

@@ -39,6 +39,7 @@ async function migrate() {
       category_id TEXT REFERENCES categories(id),
       payee TEXT,
       note TEXT,
+      payment_method TEXT,
       datetime TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -79,6 +80,13 @@ async function migrate() {
   // Idempotent: add tickers column to existing news_briefs tables
   try {
     await db.execute('ALTER TABLE news_briefs ADD COLUMN tickers TEXT')
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  // Idempotent: add payment_method column to existing transactions tables
+  try {
+    await db.execute('ALTER TABLE transactions ADD COLUMN payment_method TEXT')
   } catch {
     // Column already exists — safe to ignore
   }
