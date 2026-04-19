@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTransaction } from '../helpers'
+import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTag, seedTransaction, seedTransactionTag } from '../helpers'
 
 beforeAll(() => initTestDb())
 afterAll(() => clearTestDb())
@@ -107,5 +107,80 @@ describe('GET /api/dashboard', () => {
     const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
     const data = await res.json()
     expect(data.total_spend).toBeCloseTo(100)
+  })
+})
+
+describe('GET /api/dashboard (drilldown)', () => {
+  it('returns tag breakdown for a category', async () => {
+    seedTag('tag1', 'Dining Out')
+    seedTag('tag2', 'Groceries')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 30, categoryId: 'cat1', datetime: '2026-04-19T12:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    seedTransactionTag('tx2', 'tag2')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.category_name).toBe('Food')
+    expect(data.total).toBeCloseTo(80)
+    expect(data.tag_breakdown).toHaveLength(2)
+    expect(data.tag_breakdown[0].tag_name).toBe('Dining Out')
+    expect(data.tag_breakdown[0].total).toBeCloseTo(50)
+    expect(data.tag_breakdown[0].pct).toBeCloseTo(62.5)
+  })
+
+  it('groups multiple transactions under the same tag', async () => {
+    seedTag('tag1', 'Dining Out')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 20, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 30, categoryId: 'cat1', datetime: '2026-04-19T12:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    seedTransactionTag('tx2', 'tag1')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.tag_breakdown).toHaveLength(1)
+    expect(data.tag_breakdown[0].tag_name).toBe('Dining Out')
+    expect(data.tag_breakdown[0].total).toBeCloseTo(50)
+  })
+
+  it('shows untagged transactions as "(untagged)"', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 40, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.tag_breakdown).toHaveLength(1)
+    expect(data.tag_breakdown[0].tag_name).toBe('(untagged)')
+    expect(data.tag_breakdown[0].total).toBeCloseTo(40)
+    expect(data.tag_breakdown[0].pct).toBeCloseTo(100)
+  })
+
+  it('excludes transfers from drilldown totals', async () => {
+    seedAccount('acc2', 'Cash', 'cash')
+    seedTransaction('tx1', 'acc1', { type: 'transfer', amount: 100, toAccountId: 'acc2', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.total).toBe(0)
+    expect(data.tag_breakdown).toHaveLength(0)
+  })
+
+  it('respects date range — excludes transactions outside range', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-01-01T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.total).toBe(0)
+    expect(data.tag_breakdown).toHaveLength(0)
+  })
+
+  it('returns total 0 and empty breakdown when category has no spend in range', async () => {
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.category_name).toBe('Food')
+    expect(data.total).toBe(0)
+    expect(data.tag_breakdown).toEqual([])
   })
 })

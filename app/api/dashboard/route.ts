@@ -48,6 +48,44 @@ export async function GET(request: NextRequest) {
     p.get('end'),
   )
 
+  const drilldown = p.get('drilldown')
+  if (drilldown) {
+    const [totalResult, tagResult] = await Promise.all([
+      db.execute({
+        sql: `SELECT COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+              FROM transactions t
+              LEFT JOIN categories c ON t.category_id = c.id
+              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ? AND c.name = ?`,
+        args: [startDate, endDate, drilldown],
+      }),
+      db.execute({
+        sql: `SELECT COALESCE(tg.name, '(untagged)') as tag_name,
+                     COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+              FROM transactions t
+              LEFT JOIN categories c ON t.category_id = c.id
+              LEFT JOIN transaction_tags tt ON t.id = tt.transaction_id
+              LEFT JOIN tags tg ON tt.tag_id = tg.id
+              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ? AND c.name = ?
+              GROUP BY tg.id, tg.name
+              ORDER BY (tg.id IS NULL), total DESC`,
+        args: [startDate, endDate, drilldown],
+      }),
+    ])
+
+    const categoryTotal = Number(totalResult.rows[0].total)
+    const tagBreakdown = tagResult.rows.map((r) => ({
+      tag_name: r.tag_name as string,
+      total: Number(r.total),
+      pct: categoryTotal > 0 ? Math.round((Number(r.total) / categoryTotal) * 1000) / 10 : 0,
+    }))
+
+    return Response.json({
+      category_name: drilldown,
+      total: categoryTotal,
+      tag_breakdown: tagBreakdown,
+    })
+  }
+
   const [expenseResult, incomeResult, catResult] = await Promise.all([
     db.execute({
       sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
