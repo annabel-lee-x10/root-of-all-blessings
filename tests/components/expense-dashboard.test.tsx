@@ -8,8 +8,8 @@ const mockDashboardData = {
   total_income: 5000,
   daily_average: 88.18,
   category_breakdown: [
-    { category_name: 'Food', total: 800, pct: 64.8 },
-    { category_name: 'Transport', total: 434.56, pct: 35.2 },
+    { category_id: 'cat-food', category_name: 'Food', total: 800, pct: 64.8 },
+    { category_id: 'cat-transport', category_name: 'Transport', total: 434.56, pct: 35.2 },
   ],
   days_in_range: 14,
   budget_remaining: null,
@@ -18,10 +18,22 @@ const mockDashboardData = {
   end_date: '2026-04-19T23:59:59+08:00',
 }
 
+const mockTagData = {
+  tag_breakdown: [
+    { tag_name: 'Lunch', total: 500, pct: 62.5 },
+    { tag_name: 'Dinner', total: 300, pct: 37.5 },
+  ],
+  total: 800,
+  start_date: '2026-04-01T00:00:00+08:00',
+  end_date: '2026-04-19T23:59:59+08:00',
+}
+
 function mockFetchSuccess() {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(mockDashboardData),
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+    if (url.includes('category-tags')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockTagData) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(mockDashboardData) })
   }))
 }
 
@@ -130,6 +142,73 @@ describe('ExpenseDashboard', () => {
     render(<ExpenseDashboard />)
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument()
+    })
+  })
+
+  it('category bars are rendered as buttons', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /Food/i })).toBeInTheDocument()
+  })
+
+  it('clicking a category bar fetches tag breakdown and shows tag names', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('category-tags'))
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Lunch')).toBeInTheDocument()
+      expect(screen.getByText('Dinner')).toBeInTheDocument()
+    })
+  })
+
+  it('shows back button when in drill-down view', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument()
+    })
+  })
+
+  it('back button returns to category view', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => screen.getByRole('button', { name: /back/i }))
+    fireEvent.click(screen.getByRole('button', { name: /back/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Food')).toBeInTheDocument()
+      expect(screen.getByText('Transport')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument()
+    })
+  })
+
+  it('drill-down header shows selected category name', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/Food.*Tags/i)).toBeInTheDocument()
+    })
+  })
+
+  it('calls category-tags with correct category_id', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        expect.stringMatching(/category-tags.*category_id=cat-food/)
+      )
     })
   })
 })

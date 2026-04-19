@@ -5,7 +5,14 @@ import { useState, useEffect, useCallback } from 'react'
 type Range = 'daily' | '7day' | 'monthly' | 'custom'
 
 interface CategoryEntry {
+  category_id: string | null
   category_name: string
+  total: number
+  pct: number
+}
+
+interface TagEntry {
+  tag_name: string
   total: number
   pct: number
 }
@@ -20,6 +27,18 @@ interface DashboardData {
   range: string
   start_date: string
   end_date: string
+}
+
+interface TagData {
+  tag_breakdown: TagEntry[]
+  total: number
+  start_date: string
+  end_date: string
+}
+
+interface DrilldownState {
+  categoryId: string | null
+  categoryName: string
 }
 
 const RANGES: { id: Range; label: string }[] = [
@@ -64,6 +83,10 @@ export function ExpenseDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  const [drilldown, setDrilldown] = useState<DrilldownState | null>(null)
+  const [tagData, setTagData] = useState<TagData | null>(null)
+  const [tagLoading, setTagLoading] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
@@ -75,6 +98,8 @@ export function ExpenseDashboard() {
       const res = await fetch(url)
       if (!res.ok) throw new Error('Failed')
       setData(await res.json())
+      setDrilldown(null)
+      setTagData(null)
     } catch {
       setError(true)
     } finally {
@@ -92,6 +117,29 @@ export function ExpenseDashboard() {
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)
   }, [load])
+
+  const handleCategoryClick = useCallback(async (cat: CategoryEntry) => {
+    if (!data) return
+    setDrilldown({ categoryId: cat.category_id, categoryName: cat.category_name })
+    setTagLoading(true)
+    setTagData(null)
+    try {
+      const params = new URLSearchParams({ start: data.start_date, end: data.end_date })
+      if (cat.category_id) params.set('category_id', cat.category_id)
+      const res = await fetch(`/api/dashboard/category-tags?${params}`)
+      if (!res.ok) throw new Error('Failed')
+      setTagData(await res.json())
+    } catch {
+      // tag fetch failed — user can press Back and retry
+    } finally {
+      setTagLoading(false)
+    }
+  }, [data])
+
+  const handleBack = useCallback(() => {
+    setDrilldown(null)
+    setTagData(null)
+  }, [])
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -211,27 +259,94 @@ export function ExpenseDashboard() {
               </div>
             </div>
 
-            {/* Category breakdown */}
-            {!loading && data && data.category_breakdown.length > 0 && (
-              <div>
-                <div style={{ ...labelStyle, marginBottom: '8px' }}>Category Breakdown</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {data.category_breakdown.slice(0, 6).map((cat) => (
-                    <div key={cat.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
-                      <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
-                      </div>
-                      <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
-                        {fmt(cat.total)}
-                      </span>
-                      <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
-                        {cat.pct.toFixed(1)}%
-                      </span>
+            {/* Category / tag breakdown */}
+            {!loading && data && (
+              drilldown ? (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <button
+                      aria-label="Back to categories"
+                      onClick={handleBack}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid #30363d',
+                        borderRadius: '6px',
+                        color: '#8b949e',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        padding: '3px 8px',
+                      }}
+                    >
+                      ← Back
+                    </button>
+                    <span style={{ ...labelStyle, marginBottom: 0 }}>{drilldown.categoryName} — Tags</span>
+                  </div>
+                  {tagLoading && (
+                    <div style={{ color: '#484f58', fontSize: '13px', textAlign: 'center', padding: '0.5rem 0' }}>…</div>
+                  )}
+                  {!tagLoading && tagData && tagData.tag_breakdown.length === 0 && (
+                    <div style={{ color: '#484f58', fontSize: '13px', textAlign: 'center', padding: '0.5rem 0' }}>No tags found</div>
+                  )}
+                  {!tagLoading && tagData && tagData.tag_breakdown.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {tagData.tag_breakdown.map((tag) => (
+                        <div key={tag.tag_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{tag.tag_name}</span>
+                          <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, tag.pct)}%`, height: '100%', background: '#58a6ff', borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                            {fmt(tag.total)}
+                          </span>
+                          <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                            {tag.pct.toFixed(1)}%
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
+              ) : (
+                data.category_breakdown.length > 0 && (
+                  <div>
+                    <div style={{ ...labelStyle, marginBottom: '8px' }}>Category Breakdown</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {data.category_breakdown.slice(0, 6).map((cat) => (
+                        <button
+                          key={cat.category_name}
+                          aria-label={`${cat.category_name} ${fmt(cat.total)}`}
+                          onClick={() => handleCategoryClick(cat)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '2px 0',
+                            cursor: 'pointer',
+                            width: '100%',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                          <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                            {fmt(cat.total)}
+                          </span>
+                          <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                            {cat.pct.toFixed(1)}%
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ color: '#484f58', fontSize: '11px', marginTop: '6px' }}>
+                      Tap a category to see tag breakdown
+                    </div>
+                  </div>
+                )
+              )
             )}
           </>
         )}
