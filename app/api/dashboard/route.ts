@@ -88,9 +88,9 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  let expenseResult, incomeResult, catResult
+  let expenseResult, incomeResult, catResult, taggedResult, untaggedResult
   try {
-    ;[expenseResult, incomeResult, catResult] = await Promise.all([
+    ;[expenseResult, incomeResult, catResult, taggedResult, untaggedResult] = await Promise.all([
       db.execute({
         sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
               FROM transactions
@@ -116,12 +116,35 @@ export async function GET(request: NextRequest) {
               ORDER BY total DESC`,
         args: [startDate, endDate],
       }),
+      db.execute({
+        sql: `SELECT c.name as category_name, tg.name as tag_name,
+                     COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
+              FROM transactions tx
+              LEFT JOIN categories c ON tx.category_id = c.id
+              JOIN transaction_tags tt ON tx.id = tt.transaction_id
+              JOIN tags tg ON tt.tag_id = tg.id
+              WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
+                AND (tx.status IS NULL OR tx.status = 'approved')
+              GROUP BY tx.category_id, c.name, tg.id, tg.name
+              ORDER BY total DESC`,
+        args: [startDate, endDate],
+      }),
+      db.execute({
+        sql: `SELECT c.name as category_name, 'Untagged' as tag_name,
+                     COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
+              FROM transactions tx
+              LEFT JOIN categories c ON tx.category_id = c.id
+              WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
+                AND (tx.status IS NULL OR tx.status = 'approved')
+                AND NOT EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = tx.id)
+              GROUP BY tx.category_id, c.name
+              HAVING total > 0`,
+        args: [startDate, endDate],
+      }),
     ])
   } catch {
     // Fallback for databases where the status column migration has not run yet.
-    // Using plain queries without the status filter means draft transactions may
-    // briefly appear in totals, but the dashboard will not show an error.
-    ;[expenseResult, incomeResult, catResult] = await Promise.all([
+    ;[expenseResult, incomeResult, catResult, taggedResult, untaggedResult] = await Promise.all([
       db.execute({
         sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
               FROM transactions
@@ -144,17 +167,55 @@ export async function GET(request: NextRequest) {
               ORDER BY total DESC`,
         args: [startDate, endDate],
       }),
+      db.execute({
+        sql: `SELECT c.name as category_name, tg.name as tag_name,
+                     COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
+              FROM transactions tx
+              LEFT JOIN categories c ON tx.category_id = c.id
+              JOIN transaction_tags tt ON tx.id = tt.transaction_id
+              JOIN tags tg ON tt.tag_id = tg.id
+              WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
+              GROUP BY tx.category_id, c.name, tg.id, tg.name
+              ORDER BY total DESC`,
+        args: [startDate, endDate],
+      }),
+      db.execute({
+        sql: `SELECT c.name as category_name, 'Untagged' as tag_name,
+                     COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
+              FROM transactions tx
+              LEFT JOIN categories c ON tx.category_id = c.id
+              WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
+                AND NOT EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = tx.id)
+              GROUP BY tx.category_id, c.name
+              HAVING total > 0`,
+        args: [startDate, endDate],
+      }),
     ])
   }
 
   const totalSpend = Number(expenseResult.rows[0].total)
   const totalIncome = Number(incomeResult.rows[0].total)
 
-  const categoryBreakdown = catResult.rows.map((r) => ({
-    category_name: (r.category_name as string | null) ?? 'Uncategorised',
-    total: Number(r.total),
-    pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,
-  }))
+  const tagMap = new Map<string, { tag_name: string; total: number }[]>()
+  for (const r of [...taggedResult.rows, ...untaggedResult.rows]) {
+    const catName = (r.category_name as string | null) ?? 'Uncategorised'
+    const arr = tagMap.get(catName) ?? []
+    arr.push({ tag_name: r.tag_name as string, total: Number(r.total) })
+    tagMap.set(catName, arr)
+  }
+  for (const arr of tagMap.values()) {
+    arr.sort((a, b) => b.total - a.total)
+  }
+
+  const categoryBreakdown = catResult.rows.map((r) => {
+    const catName = (r.category_name as string | null) ?? 'Uncategorised'
+    return {
+      category_name: catName,
+      total: Number(r.total),
+      pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,
+      tag_breakdown: tagMap.get(catName) ?? [],
+    }
+  })
 
   return Response.json({
     total_spend: totalSpend,

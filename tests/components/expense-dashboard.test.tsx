@@ -8,8 +8,23 @@ const mockDashboardData = {
   total_income: 5000,
   daily_average: 88.18,
   category_breakdown: [
-    { category_name: 'Food', total: 800, pct: 64.8 },
-    { category_name: 'Transport', total: 434.56, pct: 35.2 },
+    {
+      category_name: 'Food',
+      total: 800,
+      pct: 64.8,
+      tag_breakdown: [
+        { tag_name: 'Lunch', total: 500 },
+        { tag_name: 'Dinner', total: 300 },
+      ],
+    },
+    {
+      category_name: 'Transport',
+      total: 434.56,
+      pct: 35.2,
+      tag_breakdown: [
+        { tag_name: 'Untagged', total: 434.56 },
+      ],
+    },
   ],
   days_in_range: 14,
   budget_remaining: null,
@@ -151,90 +166,47 @@ describe('ExpenseDashboard', () => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument()
     })
   })
-})
 
-const mockDrilldownData = {
-  category_name: 'Food',
-  total: 800,
-  tag_breakdown: [
-    { tag_name: 'Dining Out', total: 500, pct: 62.5 },
-    { tag_name: '(untagged)', total: 300, pct: 37.5 },
-  ],
-}
-
-function mockDrilldownFetch() {
-  vi.mocked(fetch).mockResolvedValueOnce({
-    ok: true,
-    json: () => Promise.resolve(mockDrilldownData),
-  } as Response)
-}
-
-describe('ExpenseDashboard drilldown', () => {
-  it('category rows have role="button"', async () => {
+  it('category bar has aria-expanded=false by default', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Food' })).toBeInTheDocument()
+    const foodBtn = screen.getByRole('button', { name: /food/i })
+    expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('clicking a category fetches drilldown with drilldown param', async () => {
+  it('clicking a category bar expands its tag breakdown', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    mockDrilldownFetch()
-    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
-    await waitFor(() => {
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('drilldown=Food'))
-    })
+    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Lunch')).toBeInTheDocument()
+    expect(screen.getByText('Dinner')).toBeInTheDocument()
   })
 
-  it('drilldown fetch includes current range param', async () => {
+  it('clicking expanded category bar collapses it', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    mockDrilldownFetch()
-    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
-    await waitFor(() => {
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('range=monthly'))
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('drilldown=Food'))
-    })
+    const foodBtn = screen.getByRole('button', { name: /food/i })
+    fireEvent.click(foodBtn)
+    fireEvent.click(foodBtn)
+    expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('shows tag names in drilldown panel after fetch', async () => {
+  it('clicking a different category collapses the previous one', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    mockDrilldownFetch()
-    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
-    await waitFor(() => {
-      expect(screen.getByText('Dining Out')).toBeInTheDocument()
-      expect(screen.getByText('(untagged)')).toBeInTheDocument()
-    })
-  })
-
-  it('shows loading skeleton while drilldown fetch is in progress', async () => {
-    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
-    render(<ExpenseDashboard />)
-    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    vi.mocked(fetch).mockReturnValueOnce(new Promise(() => {}) as Promise<Response>)
-    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
-    expect(screen.getByTestId('drilldown-loading')).toBeInTheDocument()
-  })
-
-  it('back button restores category overview', async () => {
-    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
-    render(<ExpenseDashboard />)
-    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    mockDrilldownFetch()
-    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Food' })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
-    })
+    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByRole('button', { name: /transport/i }))
+    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /transport/i })).toHaveAttribute('aria-expanded', 'true')
   })
 })
+
 
 describe('ExpenseDashboard - empty state (BUG-005)', () => {
   beforeEach(() => {
