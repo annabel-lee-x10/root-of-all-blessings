@@ -108,4 +108,12 @@ describe('GET /api/dashboard', () => {
     const data = await res.json()
     expect(data.total_spend).toBeCloseTo(100)
   })
+
+  it('category_breakdown includes category_id', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 40, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
+    const data = await res.json()
+    expect(data.category_breakdown[0].category_id).toBe('cat1')
+  })
 })

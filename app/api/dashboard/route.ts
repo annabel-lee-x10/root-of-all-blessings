@@ -62,7 +62,8 @@ export async function GET(request: NextRequest) {
       args: [startDate, endDate],
     }),
     db.execute({
-      sql: `SELECT c.name as category_name,
+      sql: `SELECT t.category_id,
+                   c.name as category_name,
                    COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
   const totalIncome = Number(incomeResult.rows[0].total)
 
   const categoryBreakdown = catResult.rows.map((r) => ({
+    category_id: (r.category_id as string | null) ?? null,
     category_name: (r.category_name as string | null) ?? 'Uncategorised',
     total: Number(r.total),
     pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,
