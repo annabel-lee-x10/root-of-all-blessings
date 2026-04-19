@@ -6,6 +6,15 @@ import { db } from '@/lib/db'
 let testDb: Database.Database
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+  id TEXT PRIMARY KEY,
+  snapshot_date TEXT NOT NULL,
+  total_value REAL NOT NULL,
+  total_pnl REAL,
+  holdings_json TEXT NOT NULL,
+  raw_html TEXT,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS news_briefs (
   id TEXT PRIMARY KEY,
   brief_date TEXT NOT NULL,
@@ -79,6 +88,7 @@ export function resetTestDb() {
       DELETE FROM categories;
       DELETE FROM accounts;
       DELETE FROM news_briefs;
+      DELETE FROM portfolio_snapshots;
     `)
   }
 }
@@ -165,6 +175,21 @@ export function seedNewsBrief(
       'INSERT INTO news_briefs (id, brief_date, content_json, created_at, tickers) VALUES (?, ?, ?, ?, ?)'
     )
     .run(id, date, JSON.stringify(briefJson), n, tickers ? JSON.stringify(tickers) : null)
+}
+
+export function seedPortfolioSnapshot(
+  id: string,
+  holdings: object[],
+  opts: { total_value?: number; total_pnl?: number | null; snapshot_date?: string } = {}
+) {
+  const n = new Date().toISOString()
+  const { total_value = 10000, total_pnl = null, snapshot_date = n } = opts
+  testDb
+    .prepare(
+      `INSERT INTO portfolio_snapshots (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?)`
+    )
+    .run(id, snapshot_date, total_value, total_pnl, JSON.stringify(holdings), n)
 }
 
 export function seedTransaction(
