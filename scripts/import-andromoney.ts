@@ -24,6 +24,8 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+import { config } from 'dotenv'
+config({ path: new URL('../.env.local', import.meta.url).pathname })
 import { db } from '../lib/db'
 
 // ── Column indices ────────────────────────────────────────────────────────────
@@ -132,14 +134,19 @@ export function determineRowType(row: CsvRow): RowType {
 // ── DateTime parsing ──────────────────────────────────────────────────────────
 
 export function parseDateTime(date: string, time: string): string {
-  // date: YYYYMMDD, time: HHMM or HH:MM or empty
+  // date: YYYYMMDD, time: HHMM / HMM / HH:MM / empty
   const y = date.slice(0, 4)
   const m = date.slice(4, 6)
   const d = date.slice(6, 8)
-  const clean = time.replace(':', '')
-  const hh = clean.slice(0, 2).padStart(2, '0') || '00'
-  const mm = clean.slice(2, 4).padStart(2, '0') || '00'
-  return `${y}-${m}-${d}T${hh}:${mm}:00`
+  const digits = time.replace(/[^0-9]/g, '')
+  let hh: string, mm: string
+  if (digits.length === 0)      { hh = '00'; mm = '00' }
+  else if (digits.length <= 2)  { hh = digits.padStart(2, '0'); mm = '00' }
+  else if (digits.length === 3) { hh = digits[0].padStart(2, '0'); mm = digits.slice(1, 3) }
+  else                          { hh = digits.slice(0, 2); mm = digits.slice(2, 4) }
+  const h = Math.min(parseInt(hh, 10), 23)
+  const min = Math.min(parseInt(mm, 10), 59)
+  return `${y}-${m}-${d}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`
 }
 
 // ── Category mapping ──────────────────────────────────────────────────────────

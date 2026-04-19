@@ -152,6 +152,26 @@ describe('parseDateTime', () => {
   it('handles single-digit hour padding', () => {
     expect(parseDateTime('20230601', '0900')).toBe('2023-06-01T09:00:00')
   })
+
+  it('handles 3-digit HMM time (e.g. 915 → 09:15)', () => {
+    expect(parseDateTime('20231003', '915')).toBe('2023-10-03T09:15:00')
+  })
+
+  it('handles 3-digit HMM time (e.g. 728 → 07:28)', () => {
+    expect(parseDateTime('20230115', '728')).toBe('2023-01-15T07:28:00')
+  })
+
+  it('handles 3-digit HMM time (e.g. 553 → 05:53)', () => {
+    expect(parseDateTime('20230601', '553')).toBe('2023-06-01T05:53:00')
+  })
+
+  it('handles 3-digit HMM time (e.g. 228 → 02:28)', () => {
+    expect(parseDateTime('20221231', '228')).toBe('2022-12-31T02:28:00')
+  })
+
+  it('handles 3-digit HMM time (e.g. 900 → 09:00)', () => {
+    expect(parseDateTime('20230101', '900')).toBe('2023-01-01T09:00:00')
+  })
 })
 
 // ── mapCategory ───────────────────────────────────────────────────────────────
