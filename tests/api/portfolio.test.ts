@@ -28,20 +28,36 @@ describe('GET /api/portfolio', () => {
     expect(mu?.currency).toBe('USD')
   })
 
-  it('infers ticker from name when name is a known symbol (Syfe stores ticker in name col)', async () => {
-    // Syfe HTML uses a "Stock" column header → matches `name` pattern, not `ticker`.
-    // Holdings are stored with name="MU" and no ticker field. GET must infer the ticker.
-    seedPortfolioSnapshot('snap1', [
-      { name: 'MU', market_value: 1600 },
-    ])
+  it('infers ticker when name is a bare symbol (Syfe name-column format)', async () => {
+    seedPortfolioSnapshot('snap1', [{ name: 'MU', market_value: 1600 }])
     const { GET } = await import('@/app/api/portfolio/route')
-    const res = await GET()
-    const snap = await res.json()
+    const snap = await (await GET()).json()
     const mu = snap.holdings.find((h: { ticker?: string }) => h.ticker === 'MU')
     expect(mu).toBeDefined()
     expect(mu?.geo).toBe('US')
     expect(mu?.sector).toBe('Technology')
-    expect(mu?.currency).toBe('USD')
+  })
+
+  it('infers ticker from first token when ticker field includes geo code (e.g. "MU US")', async () => {
+    // Syfe HTML Ticker column stores "MU US", "Z74 SG", "ABBV US DIV 15 May" etc.
+    seedPortfolioSnapshot('snap1', [
+      { ticker: 'MU US', name: 'Micron Technology', market_value: 1600 },
+      { ticker: 'Z74 SG', name: 'Singtel', market_value: 966 },
+      { ticker: 'ABBV US DIV 15 May', name: 'AbbVie', market_value: 640 },
+    ])
+    const { GET } = await import('@/app/api/portfolio/route')
+    const snap = await (await GET()).json()
+
+    const mu = snap.holdings.find((h: { ticker?: string }) => h.ticker === 'MU')
+    expect(mu?.sector).toBe('Technology')
+    expect(mu?.geo).toBe('US')
+
+    const z74 = snap.holdings.find((h: { ticker?: string }) => h.ticker === 'Z74')
+    expect(z74?.sector).toBe('Telecommunications')
+    expect(z74?.geo).toBe('SG')
+
+    const abbv = snap.holdings.find((h: { ticker?: string }) => h.ticker === 'ABBV')
+    expect(abbv?.sector).toBe('Healthcare')
   })
 
   it('returns change_1d_pct when stored in holdings_json', async () => {

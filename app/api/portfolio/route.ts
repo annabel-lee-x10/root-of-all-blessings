@@ -156,12 +156,17 @@ const TICKER_META: Record<string, { geo: 'US' | 'SG' | 'UK' | 'HK'; sector: stri
 }
 
 function enrichHolding(h: Holding): Holding {
-  // Syfe HTML stores ticker symbols in the name column (no separate ticker col).
-  // Infer ticker from name when it matches a known symbol so sparklines/badges work.
-  const ticker = h.ticker ?? (TICKER_META[(h.name ?? '').toUpperCase()] ? h.name!.toUpperCase() : undefined)
+  // Syfe HTML puts extra text in the ticker column: "MU US", "Z74 SG", "ABBV US DIV 15 May".
+  // Try full value first, then the first whitespace-separated token to find the base symbol.
+  const raw = h.ticker ?? h.name ?? ''
+  const candidates = [raw, raw.split(/\s+/)[0]]
+  let ticker: string | undefined
+  for (const c of candidates) {
+    const key = c.toUpperCase()
+    if (key && TICKER_META[key]) { ticker = key; break }
+  }
   if (!ticker) return h
   const meta = TICKER_META[ticker]
-  if (!meta) return h
   return { ...h, ticker, geo: meta.geo, sector: meta.sector, currency: meta.currency }
 }
 
