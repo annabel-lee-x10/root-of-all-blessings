@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useToast } from '../components/toast'
 import type { QsNewsCard, QsBriefSections, QsNewsBriefRow, Sentiment } from '@/lib/types'
+import { stripCiteTags } from '@/lib/news-utils'
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const BG = '#0f0f1a'
@@ -78,7 +79,7 @@ async function agenticLoop(system: string, userMsg: string): Promise<string> {
     const content = data.content ?? []
     const texts = content.filter(b => b.type === 'text').map(b => b.text ?? '')
 
-    if (data.stop_reason === 'end_turn') return texts.join('').trim()
+    if (data.stop_reason === 'end_turn') return stripCiteTags(texts.join('').trim())
 
     if (data.stop_reason === 'tool_use') {
       messages = [...messages, { role: 'assistant', content }]
@@ -92,7 +93,7 @@ async function agenticLoop(system: string, userMsg: string): Promise<string> {
       if (results.length) messages = [...messages, { role: 'user', content: results }]
       continue
     }
-    if (texts.length) return texts.join('').trim()
+    if (texts.length) return stripCiteTags(texts.join('').trim())
     break
   }
   return ''
@@ -131,10 +132,12 @@ function mapCard(
     category: String(it.category ?? 'News'),
     sentiment: (['bullish', 'bearish', 'neutral'] as const).includes(sent as Sentiment)
       ? (sent as Sentiment) : 'neutral',
-    headline: String(it.headline ?? 'No headline'),
-    catalyst: String(it.catalyst ?? ''),
-    summary: String(it.summary ?? ''),
-    keyPoints: Array.isArray(it.keyPoints) ? (it.keyPoints as string[]) : [],
+    headline: stripCiteTags(String(it.headline ?? 'No headline')),
+    catalyst: stripCiteTags(String(it.catalyst ?? '')),
+    summary: stripCiteTags(String(it.summary ?? '')),
+    keyPoints: Array.isArray(it.keyPoints)
+      ? (it.keyPoints as string[]).map(p => stripCiteTags(String(p)))
+      : [],
     source: String(it.source ?? 'Unknown'),
     url: String(it.url ?? ''),
     ticker: ticker ?? (it.ticker ? String(it.ticker) : undefined),
