@@ -1,58 +1,98 @@
-name: AnakenOS Draft Card
+# anakenos-draft-card.yml
+#
+# Posts a Draft card to the AnakenOS Command Center whenever a PR is merged.
+#
+# Required secrets (Settings > Secrets and variables > Actions):
+#   COMMAND_CENTER_URL     : Base URL of the Command Center (e.g. https://anakenos.quietbuild.ai)
+#   COMMAND_CENTER_API_KEY : Set to the DRAFT_WEBHOOK_API_KEY value from the Command Center env.
+
+name: Notify Command Center on PR Merge
 
 on:
   pull_request:
-    types: [opened, reopened]
+    types: [closed]
 
 jobs:
-  create-draft-card:
+  notify:
+    # Only run when the PR was actually merged (not just closed/abandoned)
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read  # required for github.rest.pulls.listFiles
+
     steps:
-      - name: Post draft card to AnakenOS
+      - name: Post Draft card to Command Center
         uses: actions/github-script@v7
         env:
-          ANAKENOS_API_URL: ${{ secrets.ANAKENOS_API_URL }}
-          ANAKENOS_API_KEY: ${{ secrets.ANAKENOS_API_KEY }}
+          COMMAND_CENTER_URL: ${{ secrets.COMMAND_CENTER_URL }}
+          COMMAND_CENTER_API_KEY: ${{ secrets.COMMAND_CENTER_API_KEY }}
         with:
           script: |
-            const pr = context.payload.pull_request;
+            const pr        = context.payload.pull_request;
+            const repoName  = context.repo.repo;
+            const repoOwner = context.repo.owner;
 
+            // ── Fetch changed files via GitHub API ───────────────────────
             const { data: files } = await github.rest.pulls.listFiles({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: repoOwner,
+              repo:  repoName,
               pull_number: pr.number,
+              per_page: 100,
             });
 
-            const extSet = new Set();
-            for (const f of files) {
-              const m = f.filename.match(/\.([^./]+)$/);
-              if (m) extSet.add(m[1].toLowerCase());
-            }
-            const extTags = [...extSet].map(e => `lang:${e}`);
-            const tags = ['root-of-all-blessings', ...extTags];
-
-            const payload = {
-              name: pr.title,
-              stage: 'Draft',
-              what: pr.title,
-              why: `PR #${pr.number} opened against ${pr.base.ref}`,
-              next_action: 'Review and merge',
-              notes: pr.body ?? '',
-              tags,
+            // ── Auto-generate tags from repo name + file extensions ──────
+            const extMap = {
+              tsx: 'react', jsx: 'react',
+              ts: 'typescript', js: 'javascript',
+              py: 'python', go: 'go', rs: 'rust', rb: 'ruby', java: 'java',
+              sql: 'sql', css: 'css', scss: 'css',
+              yml: 'devops', yaml: 'devops',
+              json: 'config', md: 'docs',
             };
 
-            const res = await fetch(`${process.env.ANAKENOS_API_URL}/api/projects`, {
+            const extensionTags = files.flatMap(f => {
+              const ext = f.filename.split('.').pop()?.toLowerCase();
+              return ext && extMap[ext] ? [extMap[ext]] : [];
+            });
+
+            const repoTag = repoName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+            const tags = [...new Set([repoTag, ...extensionTags])];
+
+            // ── Build card payload ───────────────────────────────────────
+            const fileList = files.length > 0
+              ? `Files changed (${files.length}):\n${files.slice(0, 20).map(f => `- ${f.filename}`).join('\n')}${files.length > 20 ? `\n… and ${files.length - 20} more` : ''}`
+              : 'No files changed.';
+
+            const what = [`PR #${pr.number}: ${pr.title}`, '', fileList].join('\n');
+            const why  = pr.body?.trim() || `Merged from branch: ${pr.head.ref}`;
+
+            const payload = {
+              name:        `[${repoName}] ${pr.title}`,
+              stage:       'Draft',
+              what:        what,
+              why:         why,
+              next_action: 'Review and promote or dismiss this card.',
+              notes:       `Branch: ${pr.head.ref}\nRepo: ${repoOwner}/${repoName}\nPR: #${pr.number}`,
+              tags:        tags,
+            };
+
+            // ── POST to Command Center ───────────────────────────────────
+            const url = `${process.env.COMMAND_CENTER_URL}/api/projects`;
+            const response = await fetch(url, {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.ANAKENOS_API_KEY}`,
+                'Content-Type':  'application/json',
+                'Authorization': `Bearer ${process.env.COMMAND_CENTER_API_KEY}`,
               },
               body: JSON.stringify(payload),
             });
 
-            if (!res.ok) {
-              const text = await res.text();
-              core.setFailed(`AnakenOS API error ${res.status}: ${text}`);
-            } else {
-              core.info(`Draft card created for PR #${pr.number}`);
+            if (!response.ok) {
+              const text = await response.text();
+              core.setFailed(`Command Center POST failed: ${response.status} ${text}`);
+              return;
             }
+
+            const created = await response.json();
+            core.info(`Draft card created: ${created.id} — "${created.name}"`);
