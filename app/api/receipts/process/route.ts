@@ -7,20 +7,22 @@ import { resolveAccount, resolveTagIds, insertDraftTransaction } from '../_lib'
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
 
-const RECEIPT_PROMPT = `You are a receipt parser for a personal finance app. Extract all available expense information from this receipt image.
+const RECEIPT_PROMPT = `You are a receipt parser for a personal finance app. Extract all available information from this receipt image.
 
 Output EXACTLY in this format (omit lines you cannot determine):
+Type: [expense or income]
 Amount: [total amount, numbers only]
 Currency: [3-letter code, default SGD]
 Merchant/Payee: [store or vendor name]
 Date: [YYYY-MM-DD]
 Time: [HH:MM 24h]
-Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
+Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other, Salary]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description of the purchase context]
 Payment Method: [cash/credit card/debit card/e-wallet]
 
 Rules:
+- Type is income if the document shows money received: sold, sale, resale, repayment, refund, reimbursement, received, earned, freelance, salary, got paid, cashback received, dividend; otherwise expense
 - Amount is the grand total (GST-inclusive if shown)
 - Category inferred from merchant type and line items
 - Tags: use item types, time of day, merchant type, spend amount as signals
@@ -111,10 +113,12 @@ export async function POST(request: NextRequest) {
     } catch { /* non-fatal: skip merchant lookup on error */ }
   }
 
-  // Match category by name
+  const parsedType = parsed.type ?? 'expense'
+
+  // Match category by name, filtered to the parsed transaction type
   const catResult = await db.execute({
     sql: 'SELECT id, name FROM categories WHERE type = ?',
-    args: ['expense'],
+    args: [parsedType],
   })
   let categoryId: string | null = null
   if (parsed.category) {
@@ -152,6 +156,7 @@ export async function POST(request: NextRequest) {
     currency: parsed.currency ?? 'SGD',
     datetime,
     tagIds,
+    type: parsedType,
   })
 
   return Response.json({ draft }, { status: 201 })
