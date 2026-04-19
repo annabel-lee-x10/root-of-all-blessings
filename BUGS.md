@@ -1,6 +1,15 @@
-# Bug Log
+# Known Bugs
 
-## BUG-001 · News: `<cite>` tags render as visible text in card summaries
+Track confirmed bugs here before they are fixed. Format:
+`**[ID]** Short description — discovered date, affected file`
+
+---
+
+**BUG-001** `PATCH /api/transactions/[id]` and `DELETE /api/transactions/[id]` do not call `verifySession()`, meaning authenticated endpoints are missing auth checks — discovered 2026-04-19, `app/api/transactions/[id]/route.ts`
+
+---
+
+## BUG-002 · News: `<cite>` tags render as visible text in card summaries
 
 **Status:** Fixed  
 **Reported:** 2026-04-19  
@@ -10,13 +19,13 @@
 
 **Root cause:** The Claude `web_search_20250305` tool annotates assistant text responses with inline `<cite index="...">` markers. These land verbatim in JSON string values returned by the model. `mapCard()` extracted them with `String(it.summary)` and they were passed directly to JSX — React renders strings literally, not as HTML, so the tag syntax appeared as raw characters.
 
-**Fix:** `stripCiteTags()` added to `lib/news-utils.ts`. Applied in `mapCard()` on `headline`, `catalyst`, `summary`, and every `keyPoints` item. Also applied in `agenticLoop` on the final text return (see BUG-002).
+**Fix:** `stripCiteTags()` added to `lib/news-utils.ts`. Applied in `mapCard()` on `headline`, `catalyst`, `summary`, and every `keyPoints` item. Also applied in `agenticLoop` on the final text return (see BUG-003).
 
 **Regression test:** `tests/regression/news-cite-tags.test.ts`
 
 ---
 
-## BUG-002 · News: Singapore Property section shows "No stories yet" after Refresh
+## BUG-003 · News: Singapore Property section shows "No stories yet" after Refresh
 
 **Status:** Fixed  
 **Reported:** 2026-04-19  

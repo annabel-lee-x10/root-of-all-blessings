@@ -2,9 +2,9 @@ import { db } from '@/lib/db'
 
 export async function GET() {
   const [acctResult, catResult, tagResult] = await Promise.all([
-    db.execute(`SELECT account_id, COUNT(*) as cnt FROM transactions GROUP BY account_id`),
+    db.execute(`SELECT account_id, COUNT(*) as cnt FROM transactions WHERE (status IS NULL OR status = 'approved') GROUP BY account_id`),
     db.execute(
-      `SELECT category_id, COUNT(*) as cnt FROM transactions WHERE category_id IS NOT NULL GROUP BY category_id`
+      `SELECT category_id, COUNT(*) as cnt FROM transactions WHERE category_id IS NOT NULL AND (status IS NULL OR status = 'approved') GROUP BY category_id`
     ),
     db.execute(`SELECT tag_id, COUNT(*) as cnt FROM transaction_tags GROUP BY tag_id`),
   ])

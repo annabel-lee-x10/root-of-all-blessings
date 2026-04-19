@@ -348,6 +348,53 @@ describe('DELETE /api/transactions/[id]', () => {
   })
 })
 
+describe('GET /api/transactions — draft filtering', () => {
+  // Note: the route also returns IS NULL status rows (pre-migration window) but
+  // the test schema enforces NOT NULL on status, so that branch is production-only.
+  it('does not return draft transactions by default', async () => {
+    seedTransaction('tx-approved', 'acc1', { status: 'approved' })
+    seedTransaction('tx-draft', 'acc1', { status: 'draft' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions'))
+    const data = await res.json()
+    expect(data.total).toBe(1)
+    expect(data.data[0].id).toBe('tx-approved')
+  })
+
+  it('returns only drafts when ?status=draft', async () => {
+    seedTransaction('tx-approved', 'acc1', { status: 'approved' })
+    seedTransaction('tx-draft', 'acc1', { status: 'draft' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions?status=draft'))
+    const data = await res.json()
+    expect(data.total).toBe(1)
+    expect(data.data[0].id).toBe('tx-draft')
+  })
+
+  it('total reflects the filter, not all transactions', async () => {
+    for (let i = 0; i < 3; i++) seedTransaction(`tx-a${i}`, 'acc1', { status: 'approved' })
+    for (let i = 0; i < 2; i++) seedTransaction(`tx-d${i}`, 'acc1', { status: 'draft' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions'))
+    const data = await res.json()
+    expect(data.total).toBe(3)
+  })
+})
+
+describe('PATCH /api/transactions/[id] — status', () => {
+  it('can approve a draft by setting status=approved', async () => {
+    seedTransaction('tx-draft', 'acc1', { status: 'draft' })
+    const { PATCH } = await import('@/app/api/transactions/[id]/route')
+    const res = await PATCH(
+      req('/api/transactions/tx-draft', 'PATCH', { status: 'approved' }),
+      { params: Promise.resolve({ id: 'tx-draft' }) }
+    )
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.status).toBe('approved')
+  })
+})
+
 describe('GET /api/transactions/payees', () => {
   it('returns distinct payees', async () => {
     seedTransaction('tx1', 'acc1', { payee: 'Starbucks' })
