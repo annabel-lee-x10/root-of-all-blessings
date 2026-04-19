@@ -143,3 +143,34 @@ export interface ExportFilters {
   type?: TxType
   tag_id?: string
 }
+
+export interface QsNewsCard {
+  id: string
+  category: string
+  sentiment: Sentiment
+  headline: string
+  catalyst: string
+  summary: string
+  keyPoints: string[]
+  source: string
+  url: string
+  timestamp: string
+  ticker?: string
+  tickerColor?: string
+}
+
+export interface QsBriefSections {
+  world: QsNewsCard[]
+  sg: QsNewsCard[]
+  prop: QsNewsCard[]
+  jobsGlobal: QsNewsCard[]
+  jobsSg: QsNewsCard[]
+  port: QsNewsCard[]
+}
+
+export interface QsNewsBriefRow {
+  id: string
+  generated_at: string
+  brief_json: string
+  tickers: string | null
+}
