@@ -381,6 +381,20 @@ describe('GET /api/transactions — draft filtering', () => {
   })
 })
 
+describe('PATCH /api/transactions/[id] — status', () => {
+  it('can approve a draft by setting status=approved', async () => {
+    seedTransaction('tx-draft', 'acc1', { status: 'draft' })
+    const { PATCH } = await import('@/app/api/transactions/[id]/route')
+    const res = await PATCH(
+      req('/api/transactions/tx-draft', 'PATCH', { status: 'approved' }),
+      { params: Promise.resolve({ id: 'tx-draft' }) }
+    )
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.status).toBe('approved')
+  })
+})
+
 describe('GET /api/transactions/payees', () => {
   it('returns distinct payees', async () => {
     seedTransaction('tx1', 'acc1', { payee: 'Starbucks' })
