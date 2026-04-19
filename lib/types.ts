@@ -24,6 +24,7 @@ export interface Category {
 export interface Tag {
   id: string
   name: string
+  category_id?: string | null
   created_at: string
 }
 

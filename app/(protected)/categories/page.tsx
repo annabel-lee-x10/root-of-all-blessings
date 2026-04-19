@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useToast } from '../components/toast'
-import type { Category } from '@/lib/types'
+import type { Category, Tag } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
 const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
@@ -11,15 +12,17 @@ const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '
 const BTN_ICON = { ...BTN_SEC, padding: '0.3rem 0.6rem', fontSize: '0.85rem' }
 const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 const SELECT = { ...INPUT }
-const CARD = { background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }
+const CARD: React.CSSProperties = { background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '0.5rem' }
 
 type Tab = 'expense' | 'income'
 type CategoryWithCount = Category & { tx_count: number }
+type TagWithCategory = Tag & { category_id: string | null }
 
 export default function CategoriesPage() {
   const { showToast } = useToast()
   const [tab, setTab] = useState<Tab>('expense')
   const [categories, setCategories] = useState<CategoryWithCount[]>([])
+  const [allTags, setAllTags] = useState<TagWithCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -34,13 +37,16 @@ export default function CategoriesPage() {
   async function load() {
     setLoading(true)
     try {
-      const [catRes, statsRes] = await Promise.all([
+      const [catRes, statsRes, tagRes] = await Promise.all([
         fetch('/api/categories'),
         fetch('/api/stats'),
+        fetch('/api/tags'),
       ])
       const cats: Category[] = await catRes.json()
       const s = await statsRes.json()
+      const ts: (Tag & { category_id?: string | null })[] = await tagRes.json()
       setCategories(cats.map(c => ({ ...c, tx_count: s.categories?.[c.id] ?? 0 })))
+      setAllTags(ts.map(t => ({ ...t, category_id: t.category_id ?? null })))
     } catch {
       showToast('Failed to load categories', 'error')
     } finally {
@@ -162,6 +168,15 @@ export default function CategoriesPage() {
     marginBottom: '-1px',
   })
 
+  // Group tags by their linked category_id
+  const tagsByCategory: Record<string, TagWithCategory[]> = {}
+  for (const t of allTags) {
+    if (t.category_id) {
+      if (!tagsByCategory[t.category_id]) tagsByCategory[t.category_id] = []
+      tagsByCategory[t.category_id].push(t)
+    }
+  }
+
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
@@ -202,48 +217,68 @@ export default function CategoriesPage() {
         ) : visible.length === 0 ? (
           <p style={{ color: '#8b949e', margin: 0 }}>No {tab} categories yet.</p>
         ) : (
-          visible.map((c, idx) => (
-            <div key={c.id} style={CARD}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <button style={BTN_ICON} onClick={() => move(c, 'up')} disabled={idx === 0 || movingId === c.id} title="Move up">^</button>
-                <button style={BTN_ICON} onClick={() => move(c, 'down')} disabled={idx === visible.length - 1 || movingId === c.id} title="Move down">v</button>
-              </div>
+          visible.map((c, idx) => {
+            const linkedTags = (tagsByCategory[c.id] ?? []).sort((a, b) => a.name.localeCompare(b.name))
+            return (
+              <div key={c.id} style={CARD}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <button style={BTN_ICON} onClick={() => move(c, 'up')} disabled={idx === 0 || movingId === c.id} title="Move up">^</button>
+                    <button style={BTN_ICON} onClick={() => move(c, 'down')} disabled={idx === visible.length - 1 || movingId === c.id} title="Move down">v</button>
+                  </div>
 
-              {editingId === c.id ? (
-                <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(c.id)} />
-                  <select style={{ ...SELECT, width: 'auto' }} value={editType} onChange={e => setEditType(e.target.value as Tab)}>
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                  </select>
-                  <button style={BTN_PRI} onClick={() => saveEdit(c.id)} disabled={savingId === c.id}>
-                    {savingId === c.id ? '...' : 'Save'}
-                  </button>
-                  <button style={BTN_SEC} onClick={() => setEditingId(null)}>Cancel</button>
+                  {editingId === c.id ? (
+                    <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(c.id)} />
+                      <select style={{ ...SELECT, width: 'auto' }} value={editType} onChange={e => setEditType(e.target.value as Tab)}>
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                      </select>
+                      <button style={BTN_PRI} onClick={() => saveEdit(c.id)} disabled={savingId === c.id}>
+                        {savingId === c.id ? '...' : 'Save'}
+                      </button>
+                      <button style={BTN_SEC} onClick={() => setEditingId(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ color: '#e6edf3', fontWeight: 500 }}>{c.name}</span>
+                        <Link
+                          href={`/transactions?category_id=${c.id}`}
+                          style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem', textDecoration: 'none' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none' }}
+                        >
+                          {c.tx_count} transaction{c.tx_count !== 1 ? 's' : ''}
+                        </Link>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button style={BTN_SEC} onClick={() => startEdit(c)}>Edit</button>
+                        <button
+                          style={BTN_DNG}
+                          onClick={() => deleteCategory(c)}
+                          disabled={deletingId === c.id}
+                          title={c.tx_count > 0 ? `${c.tx_count} transactions use this category` : 'Delete'}
+                        >
+                          {deletingId === c.id ? '...' : 'Delete'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-              ) : (
-                <>
-                  <div style={{ flex: 1 }}>
-                    <span style={{ color: '#e6edf3', fontWeight: 500 }}>{c.name}</span>
-                    <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
-                      {c.tx_count} transaction{c.tx_count !== 1 ? 's' : ''}
-                    </span>
+
+                {editingId !== c.id && linkedTags.length > 0 && (
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem', paddingLeft: '2.75rem' }}>
+                    {linkedTags.map(tag => (
+                      <span key={tag.id} style={{ fontSize: '0.72rem', background: '#21262d', color: '#8b949e', padding: '0.1rem 0.45rem', borderRadius: '4px', border: '1px solid #30363d' }}>
+                        {tag.name}
+                      </span>
+                    ))}
                   </div>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <button style={BTN_SEC} onClick={() => startEdit(c)}>Edit</button>
-                    <button
-                      style={BTN_DNG}
-                      onClick={() => deleteCategory(c)}
-                      disabled={deletingId === c.id}
-                      title={c.tx_count > 0 ? `${c.tx_count} transactions use this category` : 'Delete'}
-                    >
-                      {deletingId === c.id ? '...' : 'Delete'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))
+                )}
+              </div>
+            )
+          })
         )}
       </div>
     </main>
