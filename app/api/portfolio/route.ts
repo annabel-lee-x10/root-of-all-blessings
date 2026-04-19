@@ -156,10 +156,13 @@ const TICKER_META: Record<string, { geo: 'US' | 'SG' | 'UK' | 'HK'; sector: stri
 }
 
 function enrichHolding(h: Holding): Holding {
-  if (!h.ticker) return h
-  const meta = TICKER_META[h.ticker.toUpperCase()]
+  // Syfe HTML stores ticker symbols in the name column (no separate ticker col).
+  // Infer ticker from name when it matches a known symbol so sparklines/badges work.
+  const ticker = h.ticker ?? (TICKER_META[(h.name ?? '').toUpperCase()] ? h.name!.toUpperCase() : undefined)
+  if (!ticker) return h
+  const meta = TICKER_META[ticker]
   if (!meta) return h
-  return { ...h, geo: meta.geo, sector: meta.sector, currency: meta.currency }
+  return { ...h, ticker, geo: meta.geo, sector: meta.sector, currency: meta.currency }
 }
 
 export async function GET() {

@@ -523,8 +523,8 @@ export function NewsClient() {
           display: 'flex', alignItems: 'center', gap: 8,
           overflowX: 'auto', scrollbarWidth: 'none', height: 44,
         }}>
-          {/* Section jump buttons */}
-          {NAV_ITEMS.map(({ id, label }) => (
+          {/* Section jump buttons — hidden in empty state so Upload/Refresh are immediately visible */}
+          {totalCards > 0 && NAV_ITEMS.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => go(id)}

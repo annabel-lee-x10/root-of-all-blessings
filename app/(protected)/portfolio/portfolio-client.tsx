@@ -849,11 +849,27 @@ export function PortfolioClient() {
     border: `1px solid ${theme.border}`,
   }
 
+  const themeToggle = (
+    <button
+      aria-label="toggle theme"
+      onClick={() => setDark(d => !d)}
+      style={{
+        background: 'none', border: `1px solid ${theme.border}`, borderRadius: 6,
+        cursor: 'pointer', fontSize: '1rem', padding: '4px 8px', color: theme.pale,
+      }}
+    >
+      {dark ? '🌙' : '☀️'}
+    </button>
+  )
+
   if (loading) {
     return (
       <ThemeCtx.Provider value={theme}>
         <div style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}>
-          <div style={{ ...WRAP, padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
+          <div style={{ ...WRAP }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
+            <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
+          </div>
         </div>
       </ThemeCtx.Provider>
     )
@@ -863,7 +879,10 @@ export function PortfolioClient() {
     return (
       <ThemeCtx.Provider value={theme}>
         <div style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}>
-          <div style={WRAP}><UploadPanel onUploaded={load} /></div>
+          <div style={WRAP}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
+            <UploadPanel onUploaded={load} />
+          </div>
         </div>
       </ThemeCtx.Provider>
     )
@@ -899,16 +918,7 @@ export function PortfolioClient() {
               <button style={BTN_SEC} onClick={() => fileRef.current?.click()} disabled={uploading}>
                 {uploading ? 'Importing…' : 'Update Snapshot'}
               </button>
-              <button
-                aria-label="toggle theme"
-                onClick={() => setDark(d => !d)}
-                style={{
-                  background: 'none', border: `1px solid ${theme.border}`, borderRadius: 6,
-                  cursor: 'pointer', fontSize: '1rem', padding: '4px 8px', color: theme.pale,
-                }}
-              >
-                {dark ? '🌙' : '☀️'}
-              </button>
+              {themeToggle}
             </div>
           </div>
 
