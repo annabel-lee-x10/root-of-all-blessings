@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
         sql: `SELECT COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
               FROM transactions t
               LEFT JOIN categories c ON t.category_id = c.id
-              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ? AND c.name = ?`,
+              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ? AND c.name = ?
+                AND (t.status IS NULL OR t.status = 'approved')`,
         args: [startDate, endDate, drilldown],
       }),
       db.execute({
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
               LEFT JOIN transaction_tags tt ON t.id = tt.transaction_id
               LEFT JOIN tags tg ON tt.tag_id = tg.id
               WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ? AND c.name = ?
+                AND (t.status IS NULL OR t.status = 'approved')
               GROUP BY tg.id, tg.name
               ORDER BY (tg.id IS NULL), total DESC`,
         args: [startDate, endDate, drilldown],
@@ -86,30 +88,64 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  const [expenseResult, incomeResult, catResult] = await Promise.all([
-    db.execute({
-      sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
-            FROM transactions
-            WHERE type = 'expense' AND datetime >= ? AND datetime <= ?`,
-      args: [startDate, endDate],
-    }),
-    db.execute({
-      sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
-            FROM transactions
-            WHERE type = 'income' AND datetime >= ? AND datetime <= ?`,
-      args: [startDate, endDate],
-    }),
-    db.execute({
-      sql: `SELECT c.name as category_name,
-                   COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
-            FROM transactions t
-            LEFT JOIN categories c ON t.category_id = c.id
-            WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
-            GROUP BY t.category_id, c.name
-            ORDER BY total DESC`,
-      args: [startDate, endDate],
-    }),
-  ])
+  let expenseResult, incomeResult, catResult
+  try {
+    ;[expenseResult, incomeResult, catResult] = await Promise.all([
+      db.execute({
+        sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
+              FROM transactions
+              WHERE type = 'expense' AND datetime >= ? AND datetime <= ?
+                AND (status IS NULL OR status = 'approved')`,
+        args: [startDate, endDate],
+      }),
+      db.execute({
+        sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
+              FROM transactions
+              WHERE type = 'income' AND datetime >= ? AND datetime <= ?
+                AND (status IS NULL OR status = 'approved')`,
+        args: [startDate, endDate],
+      }),
+      db.execute({
+        sql: `SELECT c.name as category_name,
+                     COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+              FROM transactions t
+              LEFT JOIN categories c ON t.category_id = c.id
+              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
+                AND (t.status IS NULL OR t.status = 'approved')
+              GROUP BY t.category_id, c.name
+              ORDER BY total DESC`,
+        args: [startDate, endDate],
+      }),
+    ])
+  } catch {
+    // Fallback for databases where the status column migration has not run yet.
+    // Using plain queries without the status filter means draft transactions may
+    // briefly appear in totals, but the dashboard will not show an error.
+    ;[expenseResult, incomeResult, catResult] = await Promise.all([
+      db.execute({
+        sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
+              FROM transactions
+              WHERE type = 'expense' AND datetime >= ? AND datetime <= ?`,
+        args: [startDate, endDate],
+      }),
+      db.execute({
+        sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
+              FROM transactions
+              WHERE type = 'income' AND datetime >= ? AND datetime <= ?`,
+        args: [startDate, endDate],
+      }),
+      db.execute({
+        sql: `SELECT c.name as category_name,
+                     COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+              FROM transactions t
+              LEFT JOIN categories c ON t.category_id = c.id
+              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
+              GROUP BY t.category_id, c.name
+              ORDER BY total DESC`,
+        args: [startDate, endDate],
+      }),
+    ])
+  }
 
   const totalSpend = Number(expenseResult.rows[0].total)
   const totalIncome = Number(incomeResult.rows[0].total)
