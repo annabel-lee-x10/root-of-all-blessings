@@ -230,3 +230,9 @@ export function seedTransaction(
      VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, status, datetime, n, n)
 }
+
+export function seedTransactionTag(transactionId: string, tagId: string) {
+  testDb.prepare(
+    'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
+  ).run(transactionId, tagId)
+}
