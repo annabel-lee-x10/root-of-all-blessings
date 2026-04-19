@@ -32,14 +32,15 @@ function extractTableRows(html: string): string[][] {
 function detectColumnMap(headers: string[]): Record<string, number> {
   const map: Record<string, number> = {}
   const patterns: [string, RegExp][] = [
-    ['name',          /name|stock|instrument|asset|fund|security/i],
-    ['ticker',        /ticker|symbol|code/i],
-    ['units',         /units|shares|quantity|qty/i],
-    ['avg_cost',      /avg.*cost|average.*cost|cost.*price|purchase.*price/i],
-    ['current_price', /current.*price|last.*price|market.*price|price/i],
-    ['market_value',  /market.*val|current.*val|value|worth/i],
-    ['pnl',           /unrealised|unrealized|^p&l$|gain.*loss|profit.*loss|p\/l/i],
-    ['allocation_pct',/weight|alloc|portion/i],
+    ['name',           /name|stock|instrument|asset|fund|security/i],
+    ['ticker',         /ticker|symbol|code/i],
+    ['units',          /units|shares|quantity|qty/i],
+    ['avg_cost',       /avg.*cost|average.*cost|cost.*price|purchase.*price/i],
+    ['current_price',  /current.*price|last.*price|market.*price|price/i],
+    ['market_value',   /market.*val|current.*val|value|worth/i],
+    ['pnl',            /unrealised|unrealized|^p&l$|gain.*loss|profit.*loss|p\/l/i],
+    ['allocation_pct', /weight|alloc|portion/i],
+    ['change_1d_pct',  /1d\s*%|1d\s+ch|day\s+ch|daily\s+ch/i],
   ]
   headers.forEach((h, i) => {
     for (const [key, re] of patterns) {
@@ -88,6 +89,7 @@ function parseHtml(html: string): { holdings: Holding[]; total_value: number; to
       if (map.current_price !== undefined) holding.current_price = parseNum(row[map.current_price])
       if (map.pnl !== undefined) holding.pnl = parseNum(row[map.pnl])
       if (map.allocation_pct !== undefined) holding.allocation_pct = parseNum(row[map.allocation_pct])
+      if (map.change_1d_pct !== undefined) holding.change_1d_pct = parseNum(row[map.change_1d_pct])
 
       // Derive pnl_pct from actual P&L and cost basis — don't trust a "1D%" column
       if (holding.pnl !== undefined) {
