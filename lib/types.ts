@@ -69,6 +69,10 @@ export interface Holding {
   pnl?: number
   pnl_pct?: number
   allocation_pct?: number
+  // Syfe metadata (populated by API from static lookup)
+  geo?: 'US' | 'SG' | 'UK' | 'HK'
+  sector?: string
+  currency?: string
 }
 
 export interface PortfolioSnapshot {

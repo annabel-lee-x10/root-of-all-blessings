@@ -122,6 +122,44 @@ function parseHtml(html: string): { holdings: Holding[]; total_value: number; to
   return { holdings: allHoldings, total_value, total_pnl }
 }
 
+const TICKER_META: Record<string, { geo: 'US' | 'SG' | 'UK' | 'HK'; sector: string; currency: string }> = {
+  MU:    { geo: 'US', sector: 'Technology',          currency: 'USD' },
+  ABBV:  { geo: 'US', sector: 'Healthcare',           currency: 'USD' },
+  Z74:   { geo: 'SG', sector: 'Telecommunications',   currency: 'SGD' },
+  NEE:   { geo: 'US', sector: 'Utilities',            currency: 'USD' },
+  GOOG:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  GOOGL: { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  SLB:   { geo: 'US', sector: 'Energy',               currency: 'USD' },
+  PG:    { geo: 'US', sector: 'Consumer Staples',     currency: 'USD' },
+  RING:  { geo: 'US', sector: 'Metals',               currency: 'USD' },
+  AGIX:  { geo: 'US', sector: 'ETF',                  currency: 'USD' },
+  NFLX:  { geo: 'US', sector: 'Media',                currency: 'USD' },
+  D05:   { geo: 'SG', sector: 'Financials',           currency: 'SGD' },
+  CMCL:  { geo: 'US', sector: 'Metals',               currency: 'USD' },
+  MOO:   { geo: 'US', sector: 'Agriculture ETF',      currency: 'USD' },
+  FXI:   { geo: 'HK', sector: 'ETF',                  currency: 'USD' },
+  WISE:  { geo: 'UK', sector: 'Financials',           currency: 'GBP' },
+  ICLN:  { geo: 'US', sector: 'ETF',                  currency: 'USD' },
+  QQQ:   { geo: 'US', sector: 'ETF',                  currency: 'USD' },
+  AAPL:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  MSFT:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  AMZN:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  NVDA:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  META:  { geo: 'US', sector: 'Media',                currency: 'USD' },
+  TSLA:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  PLTR:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+  C6L:   { geo: 'SG', sector: 'Telecommunications',   currency: 'SGD' },
+  O39:   { geo: 'SG', sector: 'Financials',           currency: 'SGD' },
+  U11:   { geo: 'SG', sector: 'Financials',           currency: 'SGD' },
+}
+
+function enrichHolding(h: Holding): Holding {
+  if (!h.ticker) return h
+  const meta = TICKER_META[h.ticker.toUpperCase()]
+  if (!meta) return h
+  return { ...h, geo: meta.geo, sector: meta.sector, currency: meta.currency }
+}
+
 export async function GET() {
   const result = await db.execute(
     `SELECT id, snapshot_date, total_value, total_pnl, holdings_json, created_at
@@ -132,14 +170,12 @@ export async function GET() {
   }
   const row = result.rows[0]
 
-  // Re-parse holdings_json and recalculate total_pnl so stale snapshots with corrupt
-  // P&L values (from pre-fix uploads) display correctly without needing a re-upload.
   const holdings: Holding[] = JSON.parse(row.holdings_json as string)
   const sanitized: Holding[] = holdings.map(h => {
-    if (h.pnl !== undefined && Math.abs(h.pnl) > h.market_value * 3) {
-      return { ...h, pnl: undefined, pnl_pct: undefined }
-    }
-    return h
+    const s = (h.pnl !== undefined && Math.abs(h.pnl) > h.market_value * 3)
+      ? { ...h, pnl: undefined, pnl_pct: undefined }
+      : h
+    return enrichHolding(s)
   })
   const pnlValues = sanitized.filter(h => h.pnl !== undefined).map(h => h.pnl!)
   const total_pnl = pnlValues.length > 0 ? pnlValues.reduce((s, v) => s + v, 0) : null
