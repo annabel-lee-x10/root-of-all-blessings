@@ -34,12 +34,93 @@ function getRangeDates(range: Range, start?: string | null, end?: string | null)
   return [s, e, days]
 }
 
+const INCOME_EXPR = `COALESCE(SUM(CASE WHEN type = 'income' THEN CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END ELSE 0 END), 0)`
+const EXPENSE_EXPR = `COALESCE(SUM(CASE WHEN type = 'expense' THEN CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END ELSE 0 END), 0)`
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 export async function GET(request: NextRequest) {
   const p = request.nextUrl.searchParams
   const range = p.get('range') ?? 'monthly'
 
   if (!VALID_RANGES.includes(range as Range)) {
     return Response.json({ error: 'range must be daily, 7day, monthly, or custom' }, { status: 400 })
+  }
+
+  // Trend endpoint - returns last 6 data points grouped by range context
+  if (p.get('trend') === 'true') {
+    const sgt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }))
+    const pad = (n: number) => String(n).padStart(2, '0')
+
+    let groupExpr: string
+    let startStr: string
+    let labelFn: (periodKey: string) => string
+
+    if (range === 'daily') {
+      // Last 6 days
+      const d = new Date(sgt)
+      d.setDate(d.getDate() - 5)
+      startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00+08:00`
+      groupExpr = `strftime('%Y-%m-%d', datetime)`
+      labelFn = (key) => {
+        const [, m, day] = key.split('-').map(Number)
+        return `${MONTHS[m - 1]} ${day}`
+      }
+    } else if (range === '7day') {
+      // Last 6 weeks using a consistent Monday-anchored bucket
+      // 2024-01-01 is a Monday, so julianday buckets align to Monday starts
+      const d = new Date(sgt)
+      d.setDate(d.getDate() - 5 * 7)
+      startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00+08:00`
+      groupExpr = `CAST((julianday(datetime) - julianday('2024-01-01')) / 7 AS INTEGER)`
+      const epoch = new Date('2024-01-01T00:00:00Z')
+      labelFn = (key) => {
+        const bucket = parseInt(key, 10)
+        const weekStart = new Date(epoch)
+        weekStart.setUTCDate(epoch.getUTCDate() + bucket * 7)
+        return `${MONTHS[weekStart.getUTCMonth()]} ${weekStart.getUTCDate()}`
+      }
+    } else {
+      // Monthly (default for monthly and custom)
+      const d = new Date(sgt)
+      d.setMonth(d.getMonth() - 5)
+      d.setDate(1)
+      startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01T00:00:00+08:00`
+      groupExpr = `strftime('%Y-%m', datetime)`
+      labelFn = (key) => {
+        const [, m] = key.split('-').map(Number)
+        return MONTHS[m - 1]
+      }
+    }
+
+    let trendResult
+    try {
+      trendResult = await db.execute({
+        sql: `SELECT ${groupExpr} as period_key,
+                     ${INCOME_EXPR} as income,
+                     ${EXPENSE_EXPR} as expense
+              FROM transactions
+              WHERE (status IS NULL OR status = 'approved') AND datetime >= ?
+              GROUP BY period_key ORDER BY period_key ASC LIMIT 6`,
+        args: [startStr],
+      })
+    } catch {
+      trendResult = await db.execute({
+        sql: `SELECT ${groupExpr} as period_key,
+                     ${INCOME_EXPR} as income,
+                     ${EXPENSE_EXPR} as expense
+              FROM transactions
+              WHERE datetime >= ?
+              GROUP BY period_key ORDER BY period_key ASC LIMIT 6`,
+        args: [startStr],
+      })
+    }
+
+    const trend = trendResult.rows.map((r) => ({
+      label: labelFn(String(r.period_key)),
+      income: Number(r.income),
+      expense: Number(r.expense),
+    }))
+    return Response.json({ trend })
   }
 
   const [startDate, endDate, daysInRange] = getRangeDates(

@@ -22,6 +22,10 @@ export async function POST() {
       name: 'transactions.status',
       sql: "ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
     },
+    {
+      name: 'categories.rename_housing_household',
+      sql: "UPDATE categories SET name = 'Household', updated_at = datetime('now') WHERE name = 'Housing'",
+    },
   ]
 
   for (const m of migrations) {
