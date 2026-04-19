@@ -163,6 +163,10 @@ export function seedTag(id: string, name: string) {
   testDb.prepare('INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)').run(id, name, n)
 }
 
+export function seedTransactionTag(transactionId: string, tagId: string) {
+  testDb.prepare('INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)').run(transactionId, tagId)
+}
+
 export function seedNewsBrief(
   id: string,
   briefJson: object,
