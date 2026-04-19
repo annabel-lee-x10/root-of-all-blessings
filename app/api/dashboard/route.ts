@@ -52,13 +52,15 @@ export async function GET(request: NextRequest) {
     db.execute({
       sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
             FROM transactions
-            WHERE type = 'expense' AND datetime >= ? AND datetime <= ?`,
+            WHERE type = 'expense' AND datetime >= ? AND datetime <= ?
+              AND (status IS NULL OR status = 'approved')`,
       args: [startDate, endDate],
     }),
     db.execute({
       sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
             FROM transactions
-            WHERE type = 'income' AND datetime >= ? AND datetime <= ?`,
+            WHERE type = 'income' AND datetime >= ? AND datetime <= ?
+              AND (status IS NULL OR status = 'approved')`,
       args: [startDate, endDate],
     }),
     db.execute({
@@ -67,6 +69,7 @@ export async function GET(request: NextRequest) {
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
             WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
+              AND (t.status IS NULL OR t.status = 'approved')
             GROUP BY t.category_id, c.name
             ORDER BY total DESC`,
       args: [startDate, endDate],

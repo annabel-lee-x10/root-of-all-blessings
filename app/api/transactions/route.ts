@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const tag_id = p.get('tag_id')
   const start = p.get('start')
   const end = p.get('end')
+  const status = p.get('status')  // 'draft' or null (default = approved)
 
   const where: string[] = []
   const args: InValue[] = []
@@ -26,6 +27,12 @@ export async function GET(request: NextRequest) {
   if (tag_id) {
     where.push('EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)')
     args.push(tag_id)
+  }
+  if (status === 'draft') {
+    where.push("t.status = 'draft'")
+  } else {
+    // Default: exclude drafts (also handles rows without status column during migration window)
+    where.push("(t.status IS NULL OR t.status = 'approved')")
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
@@ -120,8 +127,8 @@ export async function POST(request: NextRequest) {
   await db.execute({
     sql: `INSERT INTO transactions
             (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
-             account_id, to_account_id, category_id, payee, note, payment_method, datetime, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             account_id, to_account_id, category_id, payee, note, payment_method, datetime, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`,
     args: [id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
            account_id, to_account_id, category_id, payee, note, payment_method, datetime, n, n],
   })
