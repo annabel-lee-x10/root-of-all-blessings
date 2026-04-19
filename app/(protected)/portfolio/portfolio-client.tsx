@@ -565,7 +565,7 @@ function GeoTab({ holdings }: { holdings: Holding[] }) {
             </Pie>
             <Tooltip
               contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: '0.8rem' }}
-              formatter={(v: number) => [v.toFixed(1) + '%', 'Allocation']}
+              formatter={(v) => [(v as number).toFixed(1) + '%', 'Allocation']}
             />
           </PieChart>
         </ResponsiveContainer>
