@@ -96,3 +96,21 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** `stripCiteTags()` applied to the text returned by `agenticLoop()` before it is passed to `parseArr()`, ensuring cite tags are removed before JSON parsing and eliminating the malformed-string failure mode.
 
 **Regression test:** `tests/regression/news-cite-tags.test.ts` — "strips cite tags that would break JSON parsing" case.
+
+---
+
+## BUG-007 · Where's My Money: mic button does nothing on mobile
+
+**Status:** Fixed  
+**Reported:** 2026-04-19  
+**Fixed in:** `app/(protected)/components/wheres-my-money.tsx`, `next.config.ts`
+
+**Symptom:** Tapping "Tap mic to log an expense by voice" on mobile did nothing — no permission prompt, no feedback, no error.
+
+**Root cause 1:** The mic button feature was never implemented. No `SpeechRecognition` code existed in `wheres-my-money.tsx`. The button the user expected was simply absent.
+
+**Root cause 2:** `next.config.ts` emitted `Permissions-Policy: microphone=()`, which denies microphone access to all origins including self. Web Speech API silently fails (or throws `NotAllowedError`) when this header is present, regardless of whether the user grants the browser permission prompt.
+
+**Fix:** Added Voice button with `webkitSpeechRecognition` fallback (Safari/iOS, Android Chrome), pulsing listening state, "Listening…" label, tap-to-stop, and error banners for unsupported browser / permission denied / no speech. Transcript fed into `applyPasteData()`. Changed `Permissions-Policy` from `microphone=()` to `microphone=(self)`.
+
+**Regression test:** `tests/regression/voice-input.test.tsx`
