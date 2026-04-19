@@ -120,8 +120,8 @@ export async function POST(request: NextRequest) {
   await db.execute({
     sql: `INSERT INTO transactions
             (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
-             account_id, to_account_id, category_id, payee, note, payment_method, datetime, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             account_id, to_account_id, category_id, payee, note, payment_method, datetime, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`,
     args: [id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
            account_id, to_account_id, category_id, payee, note, payment_method, datetime, n, n],
   })
