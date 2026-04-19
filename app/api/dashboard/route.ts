@@ -56,31 +56,41 @@ export async function GET(request: NextRequest) {
     let labelFn: (periodKey: string) => string
 
     if (range === 'daily') {
-      // Last 6 days
+      // Last 6 hours (each bar = 1 hour in SGT)
+      const startH = new Date(sgt)
+      startH.setHours(startH.getHours() - 5)
+      startStr = `${startH.getFullYear()}-${pad(startH.getMonth() + 1)}-${pad(startH.getDate())}T${pad(startH.getHours())}:00:00+08:00`
+      // strftime + '+8 hours' converts UTC stored datetime to SGT for grouping
+      groupExpr = `strftime('%Y-%m-%d %H', datetime, '+8 hours')`
+      labelFn = (key) => {
+        const hour = parseInt(key.split(' ')[1], 10)
+        const h12 = hour % 12 || 12
+        return `${h12}${hour < 12 ? 'AM' : 'PM'}`
+      }
+    } else if (range === '7day') {
+      // Last 6 days (each bar = 1 day in SGT)
       const d = new Date(sgt)
       d.setDate(d.getDate() - 5)
       startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00+08:00`
-      groupExpr = `strftime('%Y-%m-%d', datetime)`
+      groupExpr = `strftime('%Y-%m-%d', datetime, '+8 hours')`
       labelFn = (key) => {
         const [, m, day] = key.split('-').map(Number)
         return `${MONTHS[m - 1]} ${day}`
       }
-    } else if (range === '7day') {
-      // Last 6 weeks using a consistent Monday-anchored bucket
-      // 2024-01-01 is a Monday, so julianday buckets align to Monday starts
+    } else if (range === 'monthly') {
+      // Last 6 weeks (each bar = 1 week); 2024-01-01 is a Monday, buckets align to Monday starts
       const d = new Date(sgt)
       d.setDate(d.getDate() - 5 * 7)
       startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00+08:00`
       groupExpr = `CAST((julianday(datetime) - julianday('2024-01-01')) / 7 AS INTEGER)`
       const epoch = new Date('2024-01-01T00:00:00Z')
       labelFn = (key) => {
-        const bucket = parseInt(key, 10)
         const weekStart = new Date(epoch)
-        weekStart.setUTCDate(epoch.getUTCDate() + bucket * 7)
+        weekStart.setUTCDate(epoch.getUTCDate() + parseInt(key, 10) * 7)
         return `${MONTHS[weekStart.getUTCMonth()]} ${weekStart.getUTCDate()}`
       }
     } else {
-      // Monthly (default for monthly and custom)
+      // Custom → last 6 months (each bar = 1 month)
       const d = new Date(sgt)
       d.setMonth(d.getMonth() - 5)
       d.setDate(1)
