@@ -114,3 +114,51 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** Added Voice button with `webkitSpeechRecognition` fallback (Safari/iOS, Android Chrome), pulsing listening state, "Listening…" label, tap-to-stop, and error banners for unsupported browser / permission denied / no speech. Transcript fed into `applyPasteData()`. Changed `Permissions-Policy` from `microphone=()` to `microphone=(self)`.
 
 **Regression test:** `tests/regression/voice-input.test.tsx`
+
+---
+
+## BUG-008 · Receipt OCR always creates expense drafts
+
+**Status:** Fixed
+**Reported:** 2026-04-19
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/api/receipts/_lib.ts`, `lib/parse-bless-this.ts`
+
+**Symptom:** Uploading a receipt for income (e.g. "Sold a bag to Mission Control for $760") always created a draft with `type=expense`. Category matching also used expense categories even when the transaction was income.
+
+**Root cause:** `RECEIPT_PROMPT` had no `Type` field; `parseBlessThis` had no type parsing; `insertDraftTransaction` hardcoded `'expense'` in the SQL INSERT.
+
+**Fix:** Added `Type: expense|income` to OCR prompt with inference rules for income keywords (sold, salary, refund, etc.). Added `type?: TxType` to `BlessThisData` and a `case 'type':` to the parser switch. Updated category lookup to filter by parsed type. Updated `insertDraftTransaction` to accept `type` param (default `'expense'`).
+
+**Regression test:** `tests/regression/bug-008-receipt-type.test.ts`
+
+---
+
+## BUG-009 · Draft card edit form missing type selector; category filter hardcoded to expense
+
+**Status:** Fixed
+**Reported:** 2026-04-19
+**Fixed in:** `app/(protected)/components/drafts-card.tsx`
+
+**Symptom:** Editing a draft showed no type selector. The category dropdown always listed expense categories even for income drafts. Income draft amounts were shown in red with a minus sign.
+
+**Root cause:** `EditForm.type` state existed and was populated by `txToForm()`, but no `<select>` rendered it. The `expenseCategories` constant was hardcoded to `categories.filter(c => c.type === 'expense')`. Amount display had no type check.
+
+**Fix:** Added a `Type` `<select>` as the first field in the edit form grid. Replaced `expenseCategories` with `categories.filter((c) => c.type === editForm.type)` at the point of use. Made amount display green with `+` prefix for income drafts.
+
+**Regression test:** `tests/regression/bug-009-draft-category-filter.test.tsx`
+
+---
+
+## BUG-010 · Paste/voice entry ignores transaction type
+
+**Status:** Fixed
+**Reported:** 2026-04-19
+**Fixed in:** `lib/parse-bless-this.ts`, `app/(protected)/components/wheres-my-money.tsx`
+
+**Symptom:** Pasting or dictating "Sold a bag for $760" always set the manual entry form to `type=expense`, regardless of whether the text indicated income.
+
+**Root cause:** `BlessThisData` had no `type` field; `applyPasteData` never called `setType()`. The type toggle buttons also lacked `aria-pressed` attributes.
+
+**Fix:** Added `type?: TxType` to `BlessThisData`; added `case 'type':` to the parser switch (accepts `expense`, `income`, `transfer`). Added `if (data.type) setType(data.type)` in `applyPasteData`. Added `aria-pressed` to type toggle buttons for accessibility.
+
+**Regression test:** `tests/regression/bug-010-paste-type.test.tsx`
