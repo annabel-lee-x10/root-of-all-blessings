@@ -172,6 +172,22 @@ describe('POST /api/receipts/process', () => {
     expect(data.draft.account_id).toBe('acc1')
   })
 
+  it('returns 422 when Claude cannot extract amount', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Merchant/Payee: Cafe\nCategory: Food' }],
+      }),
+    } as Response))
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(422)
+  })
+
   it('returns 500 when Anthropic API call fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,

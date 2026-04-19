@@ -19,7 +19,6 @@ Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subsc
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description of the purchase context]
 Payment Method: [cash/credit card/debit card/e-wallet]
-Notes: [any extra detail]
 
 Rules:
 - Amount is the grand total (GST-inclusive if shown)
@@ -127,6 +126,10 @@ export async function POST(request: NextRequest) {
 
   const tagIds = parsed.tags ? await resolveTagIds(parsed.tags) : []
 
+  if (parsed.amount == null) {
+    return Response.json({ error: 'Could not extract amount from receipt', parsed }, { status: 422 })
+  }
+
   // Build note: merchant description + parsed notes
   const noteText = [merchantNote, parsed.notes].filter(Boolean).join(' ') || null
 
@@ -134,7 +137,9 @@ export async function POST(request: NextRequest) {
   let datetime = new Date().toISOString()
   if (parsed.date) {
     const timePart = parsed.time ?? '00:00'
-    datetime = `${parsed.date}T${timePart}:00+08:00`
+    // Parse as SGT (UTC+8), then store as UTC ISO string for consistent string-sort
+    const sgtDate = new Date(`${parsed.date}T${timePart}:00+08:00`)
+    datetime = sgtDate.toISOString()
   }
 
   const draft = await insertDraftTransaction({
@@ -143,7 +148,7 @@ export async function POST(request: NextRequest) {
     payee: parsed.payee ?? null,
     note: noteText,
     paymentMethod: parsed.payment_method ?? null,
-    amount: parsed.amount ?? 0,
+    amount: parsed.amount,
     currency: parsed.currency ?? 'SGD',
     datetime,
     tagIds,
