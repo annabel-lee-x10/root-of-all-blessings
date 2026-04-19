@@ -4,10 +4,16 @@ import { useState, useEffect, useCallback } from 'react'
 
 type Range = 'daily' | '7day' | 'monthly' | 'custom'
 
+interface TagBreakdownEntry {
+  tag_name: string
+  total: number
+}
+
 interface CategoryEntry {
   category_name: string
   total: number
   pct: number
+  tag_breakdown: TagBreakdownEntry[]
 }
 
 interface DashboardData {
@@ -63,6 +69,7 @@ export function ExpenseDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -92,6 +99,10 @@ export function ExpenseDashboard() {
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)
   }, [load])
+
+  function toggleCategory(name: string) {
+    setExpandedCategory((prev) => (prev === name ? null : name))
+  }
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -215,21 +226,73 @@ export function ExpenseDashboard() {
             {!loading && data && data.category_breakdown.length > 0 && (
               <div>
                 <div style={{ ...labelStyle, marginBottom: '8px' }}>Category Breakdown</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {data.category_breakdown.slice(0, 6).map((cat) => (
-                    <div key={cat.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
-                      <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {data.category_breakdown.slice(0, 6).map((cat) => {
+                    const isExpanded = expandedCategory === cat.category_name
+                    return (
+                      <div key={cat.category_name}>
+                        <button
+                          role="button"
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleCategory(cat.category_name)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '4px 0',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                          <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                            {fmt(cat.total)}
+                          </span>
+                          <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                            {cat.pct.toFixed(1)}%
+                          </span>
+                          <span style={{ color: '#484f58', fontSize: '10px', minWidth: '10px', display: 'inline-block', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                            ▾
+                          </span>
+                        </button>
+
+                        {/* Accordion panel */}
+                        <div
+                          style={{
+                            overflow: 'hidden',
+                            maxHeight: isExpanded ? `${cat.tag_breakdown.length * 28 + 12}px` : '0px',
+                            transition: 'max-height 0.25s ease-in-out',
+                            marginLeft: '110px',
+                          }}
+                        >
+                          <div style={{ paddingBottom: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {cat.tag_breakdown.map((tag) => (
+                              <div key={tag.tag_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ color: '#6e7681', fontSize: '12px', minWidth: '90px' }}>{tag.tag_name}</span>
+                                <div style={{ flex: 1, background: '#161b22', borderRadius: '3px', height: '4px', overflow: 'hidden' }}>
+                                  <div style={{
+                                    width: `${cat.total > 0 ? Math.min(100, (tag.total / cat.total) * 100) : 0}%`,
+                                    height: '100%',
+                                    background: '#388bfd',
+                                    borderRadius: '3px',
+                                  }} />
+                                </div>
+                                <span style={{ color: '#6e7681', fontSize: '11px', minWidth: '48px', textAlign: 'right' }}>
+                                  {fmt(tag.total)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                      <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
-                        {fmt(cat.total)}
-                      </span>
-                      <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
-                        {cat.pct.toFixed(1)}%
-                      </span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}

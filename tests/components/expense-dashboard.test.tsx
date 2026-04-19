@@ -8,8 +8,23 @@ const mockDashboardData = {
   total_income: 5000,
   daily_average: 88.18,
   category_breakdown: [
-    { category_name: 'Food', total: 800, pct: 64.8 },
-    { category_name: 'Transport', total: 434.56, pct: 35.2 },
+    {
+      category_name: 'Food',
+      total: 800,
+      pct: 64.8,
+      tag_breakdown: [
+        { tag_name: 'Lunch', total: 500 },
+        { tag_name: 'Dinner', total: 300 },
+      ],
+    },
+    {
+      category_name: 'Transport',
+      total: 434.56,
+      pct: 35.2,
+      tag_breakdown: [
+        { tag_name: 'Untagged', total: 434.56 },
+      ],
+    },
   ],
   days_in_range: 14,
   budget_remaining: null,
@@ -131,5 +146,44 @@ describe('ExpenseDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument()
     })
+  })
+
+  it('category bar has aria-expanded=false by default', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    const foodBtn = screen.getByRole('button', { name: /food/i })
+    expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('clicking a category bar expands its tag breakdown', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Lunch')).toBeInTheDocument()
+    expect(screen.getByText('Dinner')).toBeInTheDocument()
+  })
+
+  it('clicking expanded category bar collapses it', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    const foodBtn = screen.getByRole('button', { name: /food/i })
+    fireEvent.click(foodBtn)
+    fireEvent.click(foodBtn)
+    expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('clicking a different category collapses the previous one', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByRole('button', { name: /transport/i }))
+    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /transport/i })).toHaveAttribute('aria-expanded', 'true')
   })
 })
