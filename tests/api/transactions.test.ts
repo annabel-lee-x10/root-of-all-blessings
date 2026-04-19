@@ -349,6 +349,8 @@ describe('DELETE /api/transactions/[id]', () => {
 })
 
 describe('GET /api/transactions — draft filtering', () => {
+  // Note: the route also returns IS NULL status rows (pre-migration window) but
+  // the test schema enforces NOT NULL on status, so that branch is production-only.
   it('does not return draft transactions by default', async () => {
     seedTransaction('tx-approved', 'acc1', { status: 'approved' })
     seedTransaction('tx-draft', 'acc1', { status: 'draft' })
