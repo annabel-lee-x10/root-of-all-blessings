@@ -243,4 +243,11 @@ describe('theme toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
     expect(document.querySelector('[data-theme="light"]')).toBeInTheDocument()
   })
+
+  it('theme toggle is visible in empty state (null snapshot — no portfolio uploaded yet)', async () => {
+    mockFetch(null)
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument())
+  })
 })

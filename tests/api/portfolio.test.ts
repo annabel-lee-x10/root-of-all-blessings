@@ -28,6 +28,22 @@ describe('GET /api/portfolio', () => {
     expect(mu?.currency).toBe('USD')
   })
 
+  it('infers ticker from name when name is a known symbol (Syfe stores ticker in name col)', async () => {
+    // Syfe HTML uses a "Stock" column header → matches `name` pattern, not `ticker`.
+    // Holdings are stored with name="MU" and no ticker field. GET must infer the ticker.
+    seedPortfolioSnapshot('snap1', [
+      { name: 'MU', market_value: 1600 },
+    ])
+    const { GET } = await import('@/app/api/portfolio/route')
+    const res = await GET()
+    const snap = await res.json()
+    const mu = snap.holdings.find((h: { ticker?: string }) => h.ticker === 'MU')
+    expect(mu).toBeDefined()
+    expect(mu?.geo).toBe('US')
+    expect(mu?.sector).toBe('Technology')
+    expect(mu?.currency).toBe('USD')
+  })
+
   it('returns change_1d_pct when stored in holdings_json', async () => {
     seedPortfolioSnapshot('snap1', [
       { name: 'Micron Technology', ticker: 'MU', market_value: 1600, change_1d_pct: -2.5 },
