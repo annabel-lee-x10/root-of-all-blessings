@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import type { TransactionRow } from '@/lib/types'
+import type { TransactionRow, TxType } from '@/lib/types'
 
 export async function resolveAccount(accountId?: string): Promise<string | null> {
   if (accountId) {
@@ -49,6 +49,7 @@ export async function insertDraftTransaction(opts: {
   currency: string
   datetime: string
   tagIds: string[]
+  type?: TxType
 }): Promise<TransactionRow> {
   const id = crypto.randomUUID()
   const n = new Date().toISOString()
@@ -57,9 +58,10 @@ export async function insertDraftTransaction(opts: {
             (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
              account_id, to_account_id, category_id, payee, note, payment_method,
              status, datetime, created_at, updated_at)
-          VALUES (?, 'expense', ?, ?, NULL, NULL, NULL, ?, NULL, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
     args: [
       id,
+      opts.type ?? 'expense',
       opts.amount,
       opts.currency,
       opts.accountId,
