@@ -3,6 +3,7 @@
  *
  * Expected input (any subset of fields, any order):
  *
+ *   Type: expense
  *   Amount: 23.50
  *   Currency: SGD
  *   Merchant/Payee: NTUC FairPrice
@@ -15,6 +16,8 @@
  *   Notes: weekly groceries run
  */
 
+import type { TxType } from './types'
+
 export interface BlessThisData {
   amount?: number
   currency?: string
@@ -26,6 +29,7 @@ export interface BlessThisData {
   payment_method?: string
   account?: string
   notes?: string
+  type?: TxType
 }
 
 export function parseBlessThis(text: string): BlessThisData {
@@ -91,6 +95,11 @@ export function parseBlessThis(text: string): BlessThisData {
       case 'memo':
         result.notes = value
         break
+      case 'type': {
+        const v = value.toLowerCase()
+        if (v === 'income' || v === 'expense' || v === 'transfer') result.type = v as TxType
+        break
+      }
     }
   }
 
