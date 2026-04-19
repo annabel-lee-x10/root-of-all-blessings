@@ -22,6 +22,18 @@ interface DashboardData {
   end_date: string
 }
 
+interface TagEntry {
+  tag_name: string
+  total: number
+  pct: number
+}
+
+interface DrilldownData {
+  category_name: string
+  total: number
+  tag_breakdown: TagEntry[]
+}
+
 const RANGES: { id: Range; label: string }[] = [
   { id: 'daily', label: 'Daily' },
   { id: '7day', label: '7-day' },
@@ -63,6 +75,9 @@ export function ExpenseDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [drilldown, setDrilldown] = useState<string | null>(null)
+  const [drilldownData, setDrilldownData] = useState<DrilldownData | null>(null)
+  const [drilldownLoading, setDrilldownLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -81,6 +96,30 @@ export function ExpenseDashboard() {
       setLoading(false)
     }
   }, [range, customStart, customEnd])
+
+  const openDrilldown = useCallback(async (categoryName: string) => {
+    setDrilldown(categoryName)
+    setDrilldownLoading(true)
+    setDrilldownData(null)
+    try {
+      let url = `/api/dashboard?range=${range}&drilldown=${encodeURIComponent(categoryName)}`
+      if (range === 'custom' && customStart && customEnd) {
+        url += `&start=${encodeURIComponent(customStart + 'T00:00:00+08:00')}&end=${encodeURIComponent(customEnd + 'T23:59:59+08:00')}`
+      }
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Failed')
+      setDrilldownData(await res.json())
+    } catch {
+      setDrilldown(null)
+    } finally {
+      setDrilldownLoading(false)
+    }
+  }, [range, customStart, customEnd])
+
+  const closeDrilldown = useCallback(() => {
+    setDrilldown(null)
+    setDrilldownData(null)
+  }, [])
 
   useEffect(() => {
     if (range === 'custom' && (!customStart || !customEnd)) return
@@ -114,7 +153,7 @@ export function ExpenseDashboard() {
                 key={r.id}
                 role="button"
                 aria-pressed={range === r.id ? 'true' : 'false'}
-                onClick={() => setRange(r.id)}
+                onClick={() => { setRange(r.id); setDrilldown(null); setDrilldownData(null) }}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '6px',
@@ -174,7 +213,13 @@ export function ExpenseDashboard() {
           </p>
         )}
 
-        {!error && (
+        {!error && !loading && data?.total_spend === 0 && data?.total_income === 0 && data?.category_breakdown.length === 0 && (
+          <p style={{ color: '#8b949e', fontSize: '13px', textAlign: 'center', padding: '1.5rem 0' }}>
+            No transactions yet in this period.
+          </p>
+        )}
+
+        {!error && (loading || !data || data.total_spend > 0 || data.total_income > 0 || data.category_breakdown.length > 0) && (
           <>
             {/* Widgets row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '1rem' }}>
@@ -211,13 +256,21 @@ export function ExpenseDashboard() {
               </div>
             </div>
 
-            {/* Category breakdown */}
-            {!loading && data && data.category_breakdown.length > 0 && (
+            {/* Category breakdown — hidden when drilldown is active */}
+            {!drilldown && !loading && data && data.category_breakdown.length > 0 && (
               <div>
                 <div style={{ ...labelStyle, marginBottom: '8px' }}>Category Breakdown</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {data.category_breakdown.slice(0, 6).map((cat) => (
-                    <div key={cat.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div
+                      key={cat.category_name}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={cat.category_name}
+                      onClick={() => openDrilldown(cat.category_name)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openDrilldown(cat.category_name) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', borderRadius: '6px', padding: '3px 4px', margin: '-3px -4px' }}
+                    >
                       <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
                       <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
@@ -231,6 +284,62 @@ export function ExpenseDashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Drilldown panel */}
+            {drilldown && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <button
+                    role="button"
+                    aria-label="Back"
+                    onClick={closeDrilldown}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#8b949e', fontSize: '13px', padding: '2px 0', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    ← Back
+                  </button>
+                  <span style={{ color: '#e6edf3', fontSize: '13px', fontWeight: 600 }}>
+                    {drilldown}{drilldownData ? ` · ${fmt(drilldownData.total)}` : ''}
+                  </span>
+                </div>
+
+                {drilldownLoading && (
+                  <div data-testid="drilldown-loading" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {[60, 40, 30].map((w) => (
+                      <div key={w} style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: 0.5 }}>
+                        <div style={{ minWidth: '100px', height: '12px', background: '#21262d', borderRadius: '4px' }} />
+                        <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px' }}>
+                          <div style={{ width: `${w}%`, height: '100%', background: '#30363d', borderRadius: '4px' }} />
+                        </div>
+                        <div style={{ width: '48px', height: '12px', background: '#21262d', borderRadius: '4px' }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!drilldownLoading && drilldownData && drilldownData.tag_breakdown.length === 0 && (
+                  <p style={{ color: '#8b949e', fontSize: '13px', textAlign: 'center', padding: '0.5rem 0' }}>No tags found</p>
+                )}
+
+                {!drilldownLoading && drilldownData && drilldownData.tag_breakdown.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {drilldownData.tag_breakdown.map((tag) => (
+                      <div key={tag.tag_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{tag.tag_name}</span>
+                        <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(100, tag.pct)}%`, height: '100%', background: '#79c0ff', borderRadius: '4px' }} />
+                        </div>
+                        <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                          {fmt(tag.total)}
+                        </span>
+                        <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                          {tag.pct.toFixed(1)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </>

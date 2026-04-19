@@ -1,9 +1,11 @@
 # Test Strategy
 
 ## Stack
-- **Runner:** Vitest
-- **Component tests:** `@vitest-environment jsdom` + `@testing-library/react` + `@testing-library/jest-dom`
-- **API/unit tests:** `@vitest-environment node` with a real in-memory SQLite DB via `better-sqlite3` (see `tests/helpers.ts`)
+
+- **Test runner**: Vitest (`vitest.config.ts`)
+- **API tests**: `@vitest-environment node` — test route handlers directly, no HTTP server
+- **Component tests**: `@vitest-environment jsdom` — `@testing-library/react` + `@testing-library/jest-dom`
+- **In-memory DB**: `better-sqlite3` via `tests/helpers.ts`, wired to mock `@/lib/db`
 
 ## File Layout
 ```
@@ -16,29 +18,52 @@ tests/
   *.test.ts                  # Cross-cutting: auth, middleware, parse-bless-this, etc.
 ```
 
-## Rules
+## Conventions
 
-### Always
-- Add a regression test for every bug fix in `tests/regression/` named after the feature (`voice-input.test.tsx`, `wmm-page.test.ts`).
-- API tests import route handlers directly and call them with `req()` helper — no HTTP.
-- Component tests mock `fetch` with `vi.stubGlobal` and restore with `vi.unstubAllGlobals()` in `afterEach`.
-- Use `// @vitest-environment jsdom` at the top of every component test file.
-- Mark exactly one task `in_progress` in TodoWrite at a time.
+### API tests
 
-### Never
-- Don't test implementation details (internal state shape, private functions).
-- Don't use `setTimeout` / real timers in tests — use `vi.useFakeTimers()` if timing matters.
-- Don't hit the real Turso DB; `tests/setup.ts` mocks `@/lib/db` globally for node-env tests.
-- Don't write tests that only pass because an error was swallowed.
+1. Import the route handler directly: `const { GET } = await import('@/app/api/...')`
+2. Use `req(url, method, body)` from `tests/helpers.ts` to build `NextRequest`
+3. Use `initTestDb()` / `clearTestDb()` / `resetTestDb()` in `beforeAll/afterAll/beforeEach`
+4. Mock external services (Anthropic, fetch) with `vi.fn()` / `vi.spyOn(global, 'fetch')`
+5. All happy-path tests seed required data first (account, category, etc.)
+6. One `describe` block per HTTP method per route
 
-## Running Tests
+### Component tests
+
+1. Mock API calls with `vi.stubGlobal('fetch', ...)` and restore with `vi.unstubAllGlobals()` in `afterEach`
+2. Use `// @vitest-environment jsdom` at the top of the file
+3. Test user-visible behaviour, not implementation details
+4. Prefer `getByRole` / `getByText` over `getByTestId`
+
+### Regression tests
+
+- Add a regression test for every bug fix in `tests/regression/` named after the feature (`voice-input.test.tsx`, `wmm-page.test.ts`)
+- The test must fail on the original code and pass after the fix
+
+### Always / Never
+
+- **Always** use `function` or `class` syntax (not arrow functions) when `vi.fn()` is used as a `new`-able constructor
+- **Never** test implementation details (internal state shape, private functions)
+- **Never** use real timers in tests — use `vi.useFakeTimers()` if timing matters
+- **Never** hit the real Turso DB; `tests/setup.ts` mocks `@/lib/db` globally for node-env tests
+- **Never** write tests that only pass because an error was swallowed
+
+### TDD order
+
+Write test cases first (all failing), then implement until green. Never mark a test as skipped unless the feature is explicitly deferred.
+
+## Coverage priorities
+
+1. All API route handlers — every status code path
+2. Parsing logic (already covered: `parse-bless-this.test.ts`)
+3. Component tests for stateful UI (dropzone upload flow, draft approve)
+
+## Running tests
+
 ```bash
-npx vitest run            # all tests
+npx vitest run                                          # all tests
 npx vitest run tests/regression/voice-input.test.tsx   # single file
-npx vitest --ui           # interactive
+npx vitest --coverage                                   # coverage report
+npx vitest --ui                                         # interactive
 ```
-
-## Coverage Targets (aspirational)
-- API routes: 80%+ line coverage
-- Core parse/utility logic: 100%
-- UI components: critical paths (render, user interactions, error states)

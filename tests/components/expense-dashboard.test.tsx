@@ -29,6 +29,25 @@ function mockFetchError() {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 }
 
+const emptyDashboardData = {
+  total_spend: 0,
+  total_income: 0,
+  daily_average: 0,
+  category_breakdown: [],
+  days_in_range: 19,
+  budget_remaining: null,
+  range: 'monthly',
+  start_date: '2026-04-01T00:00:00+08:00',
+  end_date: '2026-04-19T23:59:59+08:00',
+}
+
+function mockFetchEmpty() {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(emptyDashboardData),
+  }))
+}
+
 beforeEach(() => {
   mockFetchSuccess()
 })
@@ -130,6 +149,111 @@ describe('ExpenseDashboard', () => {
     render(<ExpenseDashboard />)
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument()
+    })
+  })
+})
+
+const mockDrilldownData = {
+  category_name: 'Food',
+  total: 800,
+  tag_breakdown: [
+    { tag_name: 'Dining Out', total: 500, pct: 62.5 },
+    { tag_name: '(untagged)', total: 300, pct: 37.5 },
+  ],
+}
+
+function mockDrilldownFetch() {
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve(mockDrilldownData),
+  } as Response)
+}
+
+describe('ExpenseDashboard drilldown', () => {
+  it('category rows have role="button"', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Food' })).toBeInTheDocument()
+  })
+
+  it('clicking a category fetches drilldown with drilldown param', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    mockDrilldownFetch()
+    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
+    await waitFor(() => {
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('drilldown=Food'))
+    })
+  })
+
+  it('drilldown fetch includes current range param', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    mockDrilldownFetch()
+    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
+    await waitFor(() => {
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('range=monthly'))
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('drilldown=Food'))
+    })
+  })
+
+  it('shows tag names in drilldown panel after fetch', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    mockDrilldownFetch()
+    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
+    await waitFor(() => {
+      expect(screen.getByText('Dining Out')).toBeInTheDocument()
+      expect(screen.getByText('(untagged)')).toBeInTheDocument()
+    })
+  })
+
+  it('shows loading skeleton while drilldown fetch is in progress', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    vi.mocked(fetch).mockReturnValueOnce(new Promise(() => {}) as Promise<Response>)
+    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
+    expect(screen.getByTestId('drilldown-loading')).toBeInTheDocument()
+  })
+
+  it('back button restores category overview', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    mockDrilldownFetch()
+    fireEvent.click(screen.getByRole('button', { name: 'Food' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Food' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
+    })
+  })
+})
+
+describe('ExpenseDashboard - empty state (BUG-005)', () => {
+  beforeEach(() => {
+    mockFetchEmpty()
+  })
+
+  it('shows a no-data message when all values are zero (regression: was showing error)', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => {
+      expect(screen.getByText(/no transactions/i)).toBeInTheDocument()
+    })
+  })
+
+  it('does not show the error banner when data loads but is all zero', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => {
+      expect(screen.queryByText(/failed to load/i)).not.toBeInTheDocument()
     })
   })
 })
