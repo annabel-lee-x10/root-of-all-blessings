@@ -218,14 +218,14 @@ function NewsCard({ item, showTicker }: { item: QsNewsCard; showTicker?: boolean
         {/* Catalyst */}
         {item.catalyst && (
           <div style={{ color: ACCENT, fontSize: '0.78rem', fontStyle: 'italic', marginBottom: 7 }}>
-            ◆ {item.catalyst}
+            ◆ {stripCiteTags(item.catalyst)}
           </div>
         )}
 
         {/* Summary + key points (collapsible on mobile) */}
         {item.summary && (
           <p style={{ margin: '0 0 6px', color: MUTED, fontSize: '0.82rem', lineHeight: 1.6, fontFamily: 'system-ui, sans-serif' }}>
-            {item.summary}
+            {stripCiteTags(item.summary)}
           </p>
         )}
 
@@ -241,7 +241,7 @@ function NewsCard({ item, showTicker }: { item: QsNewsCard; showTicker?: boolean
               <ul style={{ margin: '0 0 6px', padding: 0, listStyle: 'none' }}>
                 {item.keyPoints.map((pt, i) => (
                   <li key={i} style={{ color: MUTED, fontSize: '0.78rem', lineHeight: 1.55, marginBottom: 3, fontFamily: 'system-ui, sans-serif' }}>
-                    <span style={{ color: ACCENT, marginRight: 5 }}>›</span>{pt}
+                    <span style={{ color: ACCENT, marginRight: 5 }}>›</span>{stripCiteTags(pt)}
                   </li>
                 ))}
               </ul>

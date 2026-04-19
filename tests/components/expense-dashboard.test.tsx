@@ -29,6 +29,25 @@ function mockFetchError() {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 }
 
+const emptyDashboardData = {
+  total_spend: 0,
+  total_income: 0,
+  daily_average: 0,
+  category_breakdown: [],
+  days_in_range: 19,
+  budget_remaining: null,
+  range: 'monthly',
+  start_date: '2026-04-01T00:00:00+08:00',
+  end_date: '2026-04-19T23:59:59+08:00',
+}
+
+function mockFetchEmpty() {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(emptyDashboardData),
+  }))
+}
+
 beforeEach(() => {
   mockFetchSuccess()
 })
@@ -130,6 +149,28 @@ describe('ExpenseDashboard', () => {
     render(<ExpenseDashboard />)
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument()
+    })
+  })
+})
+
+describe('ExpenseDashboard - empty state (BUG-005)', () => {
+  beforeEach(() => {
+    mockFetchEmpty()
+  })
+
+  it('shows a no-data message when all values are zero (regression: was showing error)', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => {
+      expect(screen.getByText(/no transactions/i)).toBeInTheDocument()
+    })
+  })
+
+  it('does not show the error banner when data loads but is all zero', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => {
+      expect(screen.queryByText(/failed to load/i)).not.toBeInTheDocument()
     })
   })
 })
