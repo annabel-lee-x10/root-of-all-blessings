@@ -348,6 +348,37 @@ describe('DELETE /api/transactions/[id]', () => {
   })
 })
 
+describe('GET /api/transactions — draft filtering', () => {
+  it('does not return draft transactions by default', async () => {
+    seedTransaction('tx-approved', 'acc1', { status: 'approved' })
+    seedTransaction('tx-draft', 'acc1', { status: 'draft' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions'))
+    const data = await res.json()
+    expect(data.total).toBe(1)
+    expect(data.data[0].id).toBe('tx-approved')
+  })
+
+  it('returns only drafts when ?status=draft', async () => {
+    seedTransaction('tx-approved', 'acc1', { status: 'approved' })
+    seedTransaction('tx-draft', 'acc1', { status: 'draft' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions?status=draft'))
+    const data = await res.json()
+    expect(data.total).toBe(1)
+    expect(data.data[0].id).toBe('tx-draft')
+  })
+
+  it('total reflects the filter, not all transactions', async () => {
+    for (let i = 0; i < 3; i++) seedTransaction(`tx-a${i}`, 'acc1', { status: 'approved' })
+    for (let i = 0; i < 2; i++) seedTransaction(`tx-d${i}`, 'acc1', { status: 'draft' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions'))
+    const data = await res.json()
+    expect(data.total).toBe(3)
+  })
+})
+
 describe('GET /api/transactions/payees', () => {
   it('returns distinct payees', async () => {
     seedTransaction('tx1', 'acc1', { payee: 'Starbucks' })
