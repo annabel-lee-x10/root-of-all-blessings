@@ -8,14 +8,21 @@ const mockDashboardData = {
   total_income: 5000,
   daily_average: 88.18,
   category_breakdown: [
-    { category_name: 'Food', total: 800, pct: 64.8 },
-    { category_name: 'Transport', total: 434.56, pct: 35.2 },
+    { category_id: 'cat1', category_name: 'Food', total: 800, pct: 64.8 },
+    { category_id: 'cat2', category_name: 'Transport', total: 434.56, pct: 35.2 },
   ],
   days_in_range: 14,
   budget_remaining: null,
   range: 'monthly',
   start_date: '2026-04-01T00:00:00+08:00',
   end_date: '2026-04-19T23:59:59+08:00',
+}
+
+const mockDrillData = {
+  tag_breakdown: [
+    { tag_name: 'Lunch', total: 500, pct: 62.5 },
+    { tag_name: 'Groceries', total: 300, pct: 37.5 },
+  ],
 }
 
 function mockFetchSuccess() {
@@ -130,6 +137,71 @@ describe('ExpenseDashboard', () => {
     render(<ExpenseDashboard />)
     await waitFor(() => {
       expect(screen.getByText(/failed to load/i)).toBeInTheDocument()
+    })
+  })
+
+  it('category bars are rendered as clickable buttons', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Food/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Transport/i })).toBeInTheDocument()
+    })
+  })
+
+  it('clicking a category bar fetches drill-down data with drilldown param', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDashboardData) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDrillData) } as Response)
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => screen.getByRole('button', { name: /Food/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('drilldown=cat1'))
+    })
+  })
+
+  it('shows tag breakdown entries after drilling into a category', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDashboardData) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDrillData) } as Response)
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => screen.getByRole('button', { name: /Food/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Lunch')).toBeInTheDocument()
+      expect(screen.getByText('Groceries')).toBeInTheDocument()
+    })
+  })
+
+  it('shows a back button in drill-down view', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDashboardData) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDrillData) } as Response)
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => screen.getByRole('button', { name: /Food/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument()
+    })
+  })
+
+  it('clicking back returns to top-level category view', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDashboardData) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockDrillData) } as Response)
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => screen.getByRole('button', { name: /Food/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Food/i }))
+    await waitFor(() => screen.getByRole('button', { name: /back/i }))
+    fireEvent.click(screen.getByRole('button', { name: /back/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Food/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument()
     })
   })
 })

@@ -5,7 +5,14 @@ import { useState, useEffect, useCallback } from 'react'
 type Range = 'daily' | '7day' | 'monthly' | 'custom'
 
 interface CategoryEntry {
+  category_id: string | null
   category_name: string
+  total: number
+  pct: number
+}
+
+interface TagEntry {
+  tag_name: string
   total: number
   pct: number
 }
@@ -64,15 +71,25 @@ export function ExpenseDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  const [drillCategory, setDrillCategory] = useState<{ id: string; name: string } | null>(null)
+  const [drillData, setDrillData] = useState<TagEntry[] | null>(null)
+  const [drillLoading, setDrillLoading] = useState(false)
+
+  const buildBaseUrl = useCallback(() => {
+    let url = `/api/dashboard?range=${range}`
+    if (range === 'custom' && customStart && customEnd) {
+      url += `&start=${encodeURIComponent(customStart + 'T00:00:00+08:00')}&end=${encodeURIComponent(customEnd + 'T23:59:59+08:00')}`
+    }
+    return url
+  }, [range, customStart, customEnd])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
+    setDrillCategory(null)
+    setDrillData(null)
     try {
-      let url = `/api/dashboard?range=${range}`
-      if (range === 'custom' && customStart && customEnd) {
-        url += `&start=${encodeURIComponent(customStart + 'T00:00:00+08:00')}&end=${encodeURIComponent(customEnd + 'T23:59:59+08:00')}`
-      }
-      const res = await fetch(url)
+      const res = await fetch(buildBaseUrl())
       if (!res.ok) throw new Error('Failed')
       setData(await res.json())
     } catch {
@@ -80,7 +97,7 @@ export function ExpenseDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [range, customStart, customEnd])
+  }, [buildBaseUrl])
 
   useEffect(() => {
     if (range === 'custom' && (!customStart || !customEnd)) return
@@ -92,6 +109,29 @@ export function ExpenseDashboard() {
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)
   }, [load])
+
+  const handleCategoryClick = useCallback(async (cat: CategoryEntry) => {
+    if (!cat.category_id) return
+    setDrillCategory({ id: cat.category_id, name: cat.category_name })
+    setDrillData(null)
+    setDrillLoading(true)
+    try {
+      const url = `${buildBaseUrl()}&drilldown=${encodeURIComponent(cat.category_id)}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Failed')
+      const json = await res.json()
+      setDrillData(json.tag_breakdown ?? [])
+    } catch {
+      setDrillData([])
+    } finally {
+      setDrillLoading(false)
+    }
+  }, [buildBaseUrl])
+
+  const handleBack = useCallback(() => {
+    setDrillCategory(null)
+    setDrillData(null)
+  }, [])
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -211,26 +251,92 @@ export function ExpenseDashboard() {
               </div>
             </div>
 
-            {/* Category breakdown */}
+            {/* Category breakdown / drill-down */}
             {!loading && data && data.category_breakdown.length > 0 && (
               <div>
-                <div style={{ ...labelStyle, marginBottom: '8px' }}>Category Breakdown</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {data.category_breakdown.slice(0, 6).map((cat) => (
-                    <div key={cat.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
-                      <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
-                      </div>
-                      <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
-                        {fmt(cat.total)}
-                      </span>
-                      <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
-                        {cat.pct.toFixed(1)}%
-                      </span>
+                {drillCategory ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <button
+                        onClick={handleBack}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #30363d',
+                          borderRadius: '6px',
+                          color: '#8b949e',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: '2px 8px',
+                        }}
+                      >
+                        ← Back
+                      </button>
+                      <span style={{ ...labelStyle, marginBottom: 0 }}>{drillCategory.name} — Tags</span>
                     </div>
-                  ))}
-                </div>
+                    {drillLoading && (
+                      <div style={{ color: '#484f58', fontSize: '13px', padding: '8px 0' }}>Loading…</div>
+                    )}
+                    {!drillLoading && drillData && (
+                      drillData.length === 0
+                        ? <div style={{ color: '#484f58', fontSize: '13px', padding: '8px 0' }}>No tag data</div>
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {drillData.map((tag) => (
+                              <div key={tag.tag_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{tag.tag_name}</span>
+                                <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${Math.min(100, tag.pct)}%`, height: '100%', background: '#58a6ff', borderRadius: '4px' }} />
+                                </div>
+                                <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                                  {fmt(tag.total)}
+                                </span>
+                                <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                                  {tag.pct.toFixed(1)}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ ...labelStyle, marginBottom: '8px' }}>Category Breakdown</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {data.category_breakdown.slice(0, 6).map((cat) => (
+                        <button
+                          key={cat.category_name}
+                          onClick={() => handleCategoryClick(cat)}
+                          disabled={!cat.category_id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '2px 0',
+                            cursor: cat.category_id ? 'pointer' : 'default',
+                            width: '100%',
+                            textAlign: 'left',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                          <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                            {fmt(cat.total)}
+                          </span>
+                          <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                            {cat.pct.toFixed(1)}%
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </>

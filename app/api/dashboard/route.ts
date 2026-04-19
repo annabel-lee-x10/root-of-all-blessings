@@ -48,6 +48,35 @@ export async function GET(request: NextRequest) {
     p.get('end'),
   )
 
+  const drilldownCategoryId = p.get('drilldown')
+
+  if (drilldownCategoryId) {
+    const tagResult = await db.execute({
+      sql: `SELECT COALESCE(tg.name, 'Untagged') as tag_name,
+                   COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+            FROM transactions t
+            LEFT JOIN transaction_tags tt ON t.id = tt.transaction_id
+            LEFT JOIN tags tg ON tt.tag_id = tg.id
+            WHERE t.type = 'expense'
+              AND t.category_id = ?
+              AND t.datetime >= ?
+              AND t.datetime <= ?
+            GROUP BY tg.id, tg.name
+            ORDER BY total DESC`,
+      args: [drilldownCategoryId, startDate, endDate],
+    })
+
+    const totalTagged = tagResult.rows.reduce((sum, r) => sum + Number(r.total), 0)
+
+    const tagBreakdown = tagResult.rows.map((r) => ({
+      tag_name: (r.tag_name as string),
+      total: Number(r.total),
+      pct: totalTagged > 0 ? Math.round((Number(r.total) / totalTagged) * 1000) / 10 : 0,
+    }))
+
+    return Response.json({ tag_breakdown: tagBreakdown })
+  }
+
   const [expenseResult, incomeResult, catResult] = await Promise.all([
     db.execute({
       sql: `SELECT COALESCE(SUM(CASE WHEN currency = 'SGD' THEN amount ELSE COALESCE(sgd_equivalent, amount) END), 0) as total
@@ -62,7 +91,8 @@ export async function GET(request: NextRequest) {
       args: [startDate, endDate],
     }),
     db.execute({
-      sql: `SELECT c.name as category_name,
+      sql: `SELECT t.category_id,
+                   c.name as category_name,
                    COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
@@ -77,6 +107,7 @@ export async function GET(request: NextRequest) {
   const totalIncome = Number(incomeResult.rows[0].total)
 
   const categoryBreakdown = catResult.rows.map((r) => ({
+    category_id: (r.category_id as string | null) ?? null,
     category_name: (r.category_name as string | null) ?? 'Uncategorised',
     total: Number(r.total),
     pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,

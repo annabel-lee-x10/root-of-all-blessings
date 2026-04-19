@@ -193,6 +193,12 @@ export function seedPortfolioSnapshot(
     .run(id, snapshot_date, total_value, total_pnl, JSON.stringify(holdings), n)
 }
 
+export function seedTransactionTag(transactionId: string, tagId: string) {
+  testDb.prepare(
+    'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
+  ).run(transactionId, tagId)
+}
+
 export function seedTransaction(
   id: string,
   accountId: string,
