@@ -3,26 +3,35 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
-const NAV_LINKS = [
-  { href: '/', label: "Where's My Money" },
+const TOP_TABS = [
+  {
+    href: '/',
+    label: "Where's My Money",
+    matchPaths: ['/', '/transactions', '/accounts', '/categories', '/tax', '/tags', '/settings', '/dashboard'],
+  },
+  { href: '/news', label: 'News', matchPaths: ['/news'] },
+  { href: '/portfolio', label: 'Portfolio', matchPaths: ['/portfolio'] },
+]
+
+const WMM_SUB = [
   { href: '/transactions', label: 'Transactions' },
-  { href: '/portfolio', label: 'Portfolio' },
-  { href: '/news', label: 'News' },
   { href: '/accounts', label: 'Accounts' },
   { href: '/categories', label: 'Categories' },
-  { href: '/tags', label: 'Tags' },
-  { href: '/settings', label: 'Settings' },
+  { href: '/tax', label: 'Tax' },
 ]
 
 export function NavBar() {
   const pathname = usePathname()
-  const [open, setOpen] = useState(false)
+  const [subOpen, setSubOpen] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
-  function isActive(href: string) {
-    return href === '/' ? pathname === '/' || pathname === '/dashboard' : pathname.startsWith(href)
+  function isTabActive(tab: (typeof TOP_TABS)[0]) {
+    return tab.matchPaths.some((p) =>
+      p === '/' ? pathname === '/' || pathname === '/dashboard' : pathname.startsWith(p)
+    )
   }
 
-  function linkStyle(active: boolean): React.CSSProperties {
+  function tabStyle(active: boolean): React.CSSProperties {
     return {
       color: active ? '#f0b429' : '#8b949e',
       textDecoration: 'none',
@@ -33,6 +42,7 @@ export function NavBar() {
       background: active ? 'rgba(240,180,41,0.08)' : 'transparent',
       whiteSpace: 'nowrap',
       transition: 'color 0.1s',
+      display: 'inline-block',
     }
   }
 
@@ -68,16 +78,67 @@ export function NavBar() {
           <span style={{ color: '#e6edf3', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
         </div>
 
-        {/* Desktop nav links */}
+        {/* Desktop tabs */}
         <div
           className="hidden sm:flex"
-          style={{ alignItems: 'center', gap: '2px', flex: 1, padding: '0 0.75rem', overflow: 'hidden' }}
+          style={{ alignItems: 'center', gap: '2px', flex: 1, padding: '0 0.75rem' }}
         >
-          {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} style={linkStyle(isActive(link.href))}>
-              {link.label}
-            </Link>
-          ))}
+          {TOP_TABS.map((tab) => {
+            const active = isTabActive(tab)
+            if (tab.href === '/') {
+              return (
+                <div key={tab.href} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                  <Link href={tab.href} style={tabStyle(active)} data-active={String(active)}>
+                    {tab.label}
+                  </Link>
+                  <button
+                    aria-label="Where's My Money sub-menu"
+                    onClick={() => setSubOpen((v) => !v)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: active ? '#f0b429' : '#8b949e',
+                      padding: '2px 4px', fontSize: '10px', lineHeight: 1,
+                    }}
+                  >
+                    {subOpen ? '▲' : '▼'}
+                  </button>
+                  {subOpen && (
+                    <div
+                      style={{
+                        position: 'absolute', top: '100%', left: 0,
+                        background: '#1c2128', border: '1px solid #30363d',
+                        borderRadius: '8px', padding: '4px 0',
+                        marginTop: '4px', minWidth: '140px', zIndex: 50,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                      }}
+                    >
+                      {WMM_SUB.map((sub) => (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          onClick={() => setSubOpen(false)}
+                          style={{
+                            display: 'block',
+                            color: pathname.startsWith(sub.href) ? '#f0b429' : '#e6edf3',
+                            textDecoration: 'none',
+                            padding: '8px 14px',
+                            fontSize: '13px',
+                          }}
+                        >
+                          {sub.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+            return (
+              <Link key={tab.href} href={tab.href} style={tabStyle(active)} data-active={String(active)}>
+                {tab.label}
+              </Link>
+            )
+          })}
         </div>
 
         {/* Right side */}
@@ -93,11 +154,9 @@ export function NavBar() {
               Sign out
             </button>
           </form>
-
-          {/* Mobile menu button */}
           <button
             className="sm:hidden"
-            onClick={() => setOpen(!open)}
+            onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
             style={{
               background: 'none', border: '1px solid #30363d', color: '#8b949e',
@@ -105,13 +164,13 @@ export function NavBar() {
               fontSize: '16px', lineHeight: 1,
             }}
           >
-            {open ? '×' : '≡'}
+            {mobileOpen ? '×' : '≡'}
           </button>
         </div>
       </nav>
 
       {/* Mobile dropdown */}
-      {open && (
+      {mobileOpen && (
         <div
           className="sm:hidden"
           style={{
@@ -123,22 +182,42 @@ export function NavBar() {
             zIndex: 39,
           }}
         >
-          {NAV_LINKS.map((link) => (
+          {TOP_TABS.map((tab) => {
+            const active = isTabActive(tab)
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                onClick={() => setMobileOpen(false)}
+                style={{
+                  display: 'block',
+                  color: active ? '#f0b429' : '#e6edf3',
+                  textDecoration: 'none',
+                  padding: '11px 1rem',
+                  fontSize: '14px',
+                  fontWeight: active ? 500 : 400,
+                  borderLeft: `3px solid ${active ? '#f0b429' : 'transparent'}`,
+                }}
+              >
+                {tab.label}
+              </Link>
+            )
+          })}
+          <div style={{ borderTop: '1px solid #30363d', margin: '4px 0' }} />
+          {WMM_SUB.map((sub) => (
             <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setOpen(false)}
+              key={sub.href}
+              href={sub.href}
+              onClick={() => setMobileOpen(false)}
               style={{
                 display: 'block',
-                color: isActive(link.href) ? '#f0b429' : '#e6edf3',
+                color: pathname.startsWith(sub.href) ? '#f0b429' : '#8b949e',
                 textDecoration: 'none',
-                padding: '11px 1rem',
-                fontSize: '14px',
-                fontWeight: isActive(link.href) ? 500 : 400,
-                borderLeft: `3px solid ${isActive(link.href) ? '#f0b429' : 'transparent'}`,
+                padding: '9px 1.5rem',
+                fontSize: '13px',
               }}
             >
-              {link.label}
+              {sub.label}
             </Link>
           ))}
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import type { TransactionRow } from '@/lib/types'
 import { useToast } from './toast'
 
@@ -35,7 +36,7 @@ export function RecentTransactions() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/transactions?limit=20')
+      const res = await fetch('/api/transactions?limit=5')
       const data = await res.json()
       setTransactions(data.data ?? [])
     } catch {
@@ -97,86 +98,93 @@ export function RecentTransactions() {
             No transactions yet. Add one above.
           </div>
         ) : (
-          transactions.map((tx, i) => (
-            <div
-              key={tx.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '11px 16px',
-                borderBottom: i < transactions.length - 1 ? '1px solid #21262d' : 'none',
-              }}
-            >
-              {/* Type indicator */}
+          <>
+            {transactions.map((tx) => (
               <div
+                key={tx.id}
+                data-tx-row
                 style={{
-                  width: '8px', height: '8px', borderRadius: '50%',
-                  background: typeColor(tx.type), flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '11px 16px',
+                  borderBottom: '1px solid #21262d',
                 }}
-              />
-
-              {/* Main info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 500 }}>
-                    {tx.payee ?? tx.category_name ?? tx.account_name}
-                  </span>
-                  {tx.tags && tx.tags.length > 0 && (
-                    <span style={{ color: '#8b949e', fontSize: '11px' }}>
-                      {tx.tags.map((t) => t.name).join(', ')}
+              >
+                <div
+                  style={{
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    background: typeColor(tx.type), flexShrink: 0,
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 500 }}>
+                      {tx.payee ?? tx.category_name ?? tx.account_name}
                     </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '2px', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#484f58', fontSize: '12px' }}>
-                    {formatDatetime(tx.datetime)}
-                  </span>
-                  <span style={{ color: '#484f58', fontSize: '12px' }}>
-                    {tx.type === 'transfer'
-                      ? `${tx.account_name} → ${tx.to_account_name ?? ''}`
-                      : tx.account_name}
-                  </span>
-                  {tx.note && (
-                    <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
-                      {(tx.note as string).length > 50
-                        ? (tx.note as string).slice(0, 50) + '...'
-                        : tx.note as string}
+                    {tx.tags && tx.tags.length > 0 && (
+                      <span style={{ color: '#8b949e', fontSize: '11px' }}>
+                        {tx.tags.map((t) => t.name).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '2px', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#484f58', fontSize: '12px' }}>
+                      {formatDatetime(tx.datetime)}
                     </span>
-                  )}
+                    <span style={{ color: '#484f58', fontSize: '12px' }}>
+                      {tx.type === 'transfer'
+                        ? `${tx.account_name} → ${tx.to_account_name ?? ''}`
+                        : tx.account_name}
+                    </span>
+                    {tx.note && (
+                      <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
+                        {(tx.note as string).length > 50
+                          ? (tx.note as string).slice(0, 50) + '...'
+                          : tx.note as string}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                <span
+                  style={{
+                    fontSize: '14px', fontWeight: 600, flexShrink: 0,
+                    color: typeColor(tx.type), textAlign: 'right',
+                  }}
+                >
+                  {formatAmount(tx)}
+                </span>
+                <button
+                  onClick={() => deleteTransaction(tx.id)}
+                  disabled={deletingId === tx.id}
+                  title="Delete transaction"
+                  style={{
+                    background: 'none', border: 'none',
+                    color: '#484f58',
+                    cursor: deletingId === tx.id ? 'not-allowed' : 'pointer',
+                    padding: '4px 6px', fontSize: '16px', lineHeight: 1,
+                    flexShrink: 0, borderRadius: '4px',
+                    transition: 'color 0.1s',
+                  }}
+                  onMouseEnter={(e) => { if (deletingId !== tx.id) (e.currentTarget as HTMLElement).style.color = '#f85149' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#484f58' }}
+                >
+                  {deletingId === tx.id ? '...' : '×'}
+                </button>
               </div>
-
-              {/* Amount */}
-              <span
+            ))}
+            <div style={{ padding: '10px 16px', textAlign: 'center' }}>
+              <Link
+                href="/transactions"
                 style={{
-                  fontSize: '14px', fontWeight: 600, flexShrink: 0,
-                  color: typeColor(tx.type), textAlign: 'right',
+                  color: '#8b949e', fontSize: '12px', textDecoration: 'none',
+                  fontWeight: 500,
                 }}
               >
-                {formatAmount(tx)}
-              </span>
-
-              {/* Delete */}
-              <button
-                onClick={() => deleteTransaction(tx.id)}
-                disabled={deletingId === tx.id}
-                title="Delete transaction"
-                style={{
-                  background: 'none', border: 'none',
-                  color: deletingId === tx.id ? '#484f58' : '#484f58',
-                  cursor: deletingId === tx.id ? 'not-allowed' : 'pointer',
-                  padding: '4px 6px', fontSize: '16px', lineHeight: 1,
-                  flexShrink: 0, borderRadius: '4px',
-                  transition: 'color 0.1s',
-                }}
-                onMouseEnter={(e) => { if (deletingId !== tx.id) (e.currentTarget as HTMLElement).style.color = '#f85149' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#484f58' }}
-              >
-                {deletingId === tx.id ? '...' : '×'}
-              </button>
+                Show more →
+              </Link>
             </div>
-          ))
+          </>
         )}
       </div>
     </section>
