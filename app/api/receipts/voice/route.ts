@@ -75,6 +75,10 @@ export async function POST(request: NextRequest) {
     if (match) categoryId = match.id as string
   }
 
+  if (parsed.amount == null) {
+    return Response.json({ error: 'Could not extract amount from transcript', parsed }, { status: 422 })
+  }
+
   const tagIds = parsed.tags ? await resolveTagIds(parsed.tags) : []
 
   let datetime = new Date().toISOString()
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest) {
     payee: parsed.payee ?? null,
     note: parsed.notes ?? null,
     paymentMethod: parsed.payment_method ?? null,
-    amount: parsed.amount ?? 0,
+    amount: parsed.amount,
     currency: parsed.currency ?? 'SGD',
     datetime,
     tagIds,

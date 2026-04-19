@@ -96,6 +96,21 @@ describe('POST /api/receipts/voice', () => {
     expect(data.draft.account_id).toBe('acc1')
   })
 
+  it('returns 422 when Claude cannot extract amount', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Merchant/Payee: Kopitiam\nCategory: Food' }],
+      }),
+    } as Response))
+    const { POST } = await import('@/app/api/receipts/voice/route')
+    const res = await POST(req('/api/receipts/voice', 'POST', {
+      text: 'lunch at kopitiam',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(422)
+  })
+
   it('falls back to first active account when accountId not provided', async () => {
     const { POST } = await import('@/app/api/receipts/voice/route')
     const res = await POST(req('/api/receipts/voice', 'POST', {
