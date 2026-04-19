@@ -6,6 +6,13 @@ import { db } from '@/lib/db'
 let testDb: Database.Database
 
 const SCHEMA = `
+CREATE TABLE IF NOT EXISTS news_briefs (
+  id TEXT PRIMARY KEY,
+  brief_date TEXT NOT NULL,
+  content_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  tickers TEXT
+);
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
@@ -71,6 +78,7 @@ export function resetTestDb() {
       DELETE FROM tags;
       DELETE FROM categories;
       DELETE FROM accounts;
+      DELETE FROM news_briefs;
     `)
   }
 }
@@ -142,6 +150,21 @@ export function seedCategory(id: string, name: string, type: 'expense' | 'income
 export function seedTag(id: string, name: string) {
   const n = new Date().toISOString()
   testDb.prepare('INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)').run(id, name, n)
+}
+
+export function seedNewsBrief(
+  id: string,
+  briefJson: object,
+  tickers: string[] | null = null,
+  createdAt?: string
+) {
+  const n = createdAt ?? new Date().toISOString()
+  const date = n.slice(0, 10)
+  testDb
+    .prepare(
+      'INSERT INTO news_briefs (id, brief_date, content_json, created_at, tickers) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(id, date, JSON.stringify(briefJson), n, tickers ? JSON.stringify(tickers) : null)
 }
 
 export function seedTransaction(

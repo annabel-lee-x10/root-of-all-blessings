@@ -66,7 +66,8 @@ async function migrate() {
       id TEXT PRIMARY KEY,
       brief_date TEXT NOT NULL,
       content_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      tickers TEXT
     )`,
     `CREATE INDEX IF NOT EXISTS idx_news_date ON news_briefs(brief_date DESC)`,
     `CREATE TABLE IF NOT EXISTS andromoney_imports (
@@ -74,6 +75,13 @@ async function migrate() {
       imported_at TEXT NOT NULL
     )`,
   ])
+
+  // Idempotent: add tickers column to existing news_briefs tables
+  try {
+    await db.execute('ALTER TABLE news_briefs ADD COLUMN tickers TEXT')
+  } catch {
+    // Column already exists — safe to ignore
+  }
 
   console.log('Migrations complete.')
   process.exit(0)
