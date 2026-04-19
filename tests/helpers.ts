@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   category_id TEXT REFERENCES categories(id),
   payee TEXT,
   note TEXT,
+  payment_method TEXT,
   datetime TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
