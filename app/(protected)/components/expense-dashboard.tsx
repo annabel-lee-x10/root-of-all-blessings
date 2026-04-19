@@ -222,6 +222,13 @@ export function ExpenseDashboard() {
               </div>
             </div>
 
+            {/* Empty state */}
+            {!loading && data && data.total_spend === 0 && data.total_income === 0 && (
+              <p style={{ color: '#484f58', fontSize: '13px', textAlign: 'center', padding: '0.5rem 0' }}>
+                No transactions in this period
+              </p>
+            )}
+
             {/* Category breakdown */}
             {!loading && data && data.category_breakdown.length > 0 && (
               <div>
