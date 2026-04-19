@@ -26,6 +26,10 @@ export async function POST() {
       name: 'categories.rename_housing_household',
       sql: "UPDATE categories SET name = 'Household', updated_at = datetime('now') WHERE name = 'Housing'",
     },
+    {
+      name: 'tags.category_id',
+      sql: 'ALTER TABLE tags ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL',
+    },
   ]
 
   for (const m of migrations) {

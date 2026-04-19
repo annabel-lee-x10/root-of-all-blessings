@@ -88,9 +88,24 @@ export default function TransactionsPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState<Filters>({ start: '', end: '', accountId: '', categoryId: '', type: '', tagId: '' })
+  const [filters, setFilters] = useState<Filters>(() => {
+    if (typeof window === 'undefined') return { start: '', end: '', accountId: '', categoryId: '', type: '', tagId: '' }
+    const p = new URLSearchParams(window.location.search)
+    return {
+      start: p.get('start') ?? '',
+      end: p.get('end') ?? '',
+      accountId: p.get('account_id') ?? '',
+      categoryId: p.get('category_id') ?? '',
+      type: (p.get('type') ?? '') as '' | TxType,
+      tagId: p.get('tag_id') ?? '',
+    }
+  })
   const [draftDates, setDraftDates] = useState({ start: '', end: '' })
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const p = new URLSearchParams(window.location.search)
+    return !!(p.get('account_id') || p.get('category_id') || p.get('type') || p.get('tag_id'))
+  })
 
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
