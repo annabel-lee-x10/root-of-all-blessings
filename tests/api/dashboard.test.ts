@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTransaction } from '../helpers'
+import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTag, seedTransaction, seedTransactionTag } from '../helpers'
 
 beforeAll(() => initTestDb())
 afterAll(() => clearTestDb())
@@ -107,5 +107,78 @@ describe('GET /api/dashboard', () => {
     const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
     const data = await res.json()
     expect(data.total_spend).toBeCloseTo(100)
+  })
+
+  it('category_breakdown includes category_id for each entry', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
+    const data = await res.json()
+    expect(data.category_breakdown[0].category_id).toBe('cat1')
+  })
+})
+
+describe('GET /api/dashboard?drilldown', () => {
+  it('returns empty tag_breakdown when category has no transactions', async () => {
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=cat1'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.tag_breakdown).toEqual([])
+  })
+
+  it('returns tag totals for tagged transactions in the category', async () => {
+    seedTag('tag1', 'groceries')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 60, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=cat1'))
+    const data = await res.json()
+    const groceries = data.tag_breakdown.find((t: { tag_name: string }) => t.tag_name === 'groceries')
+    expect(groceries).toBeDefined()
+    expect(groceries.total).toBeCloseTo(60)
+  })
+
+  it('includes Untagged bucket for transactions with no tags', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 40, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=cat1'))
+    const data = await res.json()
+    const untagged = data.tag_breakdown.find((t: { tag_name: string }) => t.tag_name === 'Untagged')
+    expect(untagged).toBeDefined()
+    expect(untagged.total).toBeCloseTo(40)
+  })
+
+  it('excludes transfers from drilldown', async () => {
+    seedAccount('acc2', 'Cash', 'cash')
+    seedTransaction('tx1', 'acc1', { type: 'transfer', amount: 200, toAccountId: 'acc2', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=cat1'))
+    const data = await res.json()
+    expect(data.tag_breakdown).toEqual([])
+  })
+
+  it('excludes transactions outside the date range', async () => {
+    seedTag('tag1', 'groceries')
+    seedTransaction('tx_old', 'acc1', { type: 'expense', amount: 999, categoryId: 'cat1', datetime: '2026-01-01T10:00:00+08:00' })
+    seedTransactionTag('tx_old', 'tag1')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=cat1'))
+    const data = await res.json()
+    expect(data.tag_breakdown).toEqual([])
+  })
+
+  it('returns tag pct relative to category total', async () => {
+    seedTag('tag1', 'groceries')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-04-19T11:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=cat1'))
+    const data = await res.json()
+    const groceries = data.tag_breakdown.find((t: { tag_name: string }) => t.tag_name === 'groceries')
+    expect(groceries.pct).toBeCloseTo(50)
+    const untagged = data.tag_breakdown.find((t: { tag_name: string }) => t.tag_name === 'Untagged')
+    expect(untagged.pct).toBeCloseTo(50)
   })
 })
