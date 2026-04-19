@@ -145,6 +145,7 @@ export function WheresMyMoney() {
       return
     }
 
+    if (data.type) setType(data.type)
     if (data.amount) setAmount(String(data.amount))
     if (data.currency) setCurrency(data.currency)
     if (data.payee) setPayee(data.payee)

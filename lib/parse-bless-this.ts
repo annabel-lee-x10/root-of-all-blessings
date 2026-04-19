@@ -26,6 +26,7 @@ export interface BlessThisData {
   payment_method?: string
   account?: string
   notes?: string
+  type?: 'expense' | 'income' | 'transfer'
 }
 
 export function parseBlessThis(text: string): BlessThisData {
@@ -91,6 +92,27 @@ export function parseBlessThis(text: string): BlessThisData {
       case 'memo':
         result.notes = value
         break
+      case 'type':
+      case 'transaction type': {
+        const t = value.toLowerCase()
+        if (t === 'expense' || t === 'income' || t === 'transfer') result.type = t
+        break
+      }
+    }
+  }
+
+  if (!result.type) {
+    const haystack = [result.tags?.join(' '), result.notes, result.payee, result.category]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    const incomeKeywords = [
+      'sold', 'sale', 'resale', 'repayment', 'refund', 'rebate', 'cashback',
+      'reimbursement', 'payout', 'dividend', 'salary', 'bonus', 'freelance',
+      'commission', 'rental income', 'interest earned',
+    ]
+    if (incomeKeywords.some((kw) => haystack.includes(kw))) {
+      result.type = 'income'
     }
   }
 
