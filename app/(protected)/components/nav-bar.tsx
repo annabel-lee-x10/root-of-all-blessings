@@ -1,31 +1,36 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ThemeToggle } from './theme-toggle'
 
-const TOP_TABS = [
-  {
-    href: '/',
-    label: "Where's My Money",
-    matchPaths: ['/', '/transactions', '/accounts', '/categories', '/tax', '/tags', '/settings', '/dashboard'],
-  },
-  { href: '/news', label: 'News', matchPaths: ['/news'] },
-  { href: '/portfolio', label: 'Portfolio', matchPaths: ['/portfolio'] },
-]
+// ── View types ────────────────────────────────────────────────────────────────
 
-const WMM_SUB = [
-  { href: '/transactions', label: 'Transactions' },
-  { href: '/accounts', label: 'Accounts' },
-  { href: '/categories', label: 'Categories' },
-  { href: '/tax', label: 'Tax' },
-]
+type View = 'budget' | 'portfolio' | 'news'
 
-const MORE_ITEMS = [
-  { href: '/categories', label: 'Categories' },
+const VIEW_LABELS: Record<View, string> = {
+  budget: 'Budget',
+  portfolio: 'Portfolio',
+  news: 'News',
+}
+
+const VIEW_HOME: Record<View, string> = {
+  budget: '/dashboard',
+  portfolio: '/portfolio',
+  news: '/news',
+}
+
+function getView(pathname: string): View {
+  if (pathname.startsWith('/portfolio')) return 'portfolio'
+  if (pathname.startsWith('/news')) return 'news'
+  return 'budget'
+}
+
+const BUDGET_MORE = [
   { href: '/accounts', label: 'Accounts' },
   { href: '/tags', label: 'Tags' },
   { href: '/news', label: 'News' },
+  { href: '/portfolio', label: 'Portfolio' },
 ]
 
 // ── Inline SVG icons ──────────────────────────────────────────────────────────
@@ -58,12 +63,13 @@ function PlusIcon({ size = 22 }: { size?: number }) {
   )
 }
 
-function ChartIcon() {
+function CategoryIcon() {
   return (
     <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="10" width="5" height="11" rx="0.5" />
-      <rect x="9" y="4" width="5" height="17" rx="0.5" />
-      <rect x="16" y="7" width="5" height="14" rx="0.5" />
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
     </svg>
   )
 }
@@ -82,37 +88,23 @@ function DotsIcon() {
 
 export function NavBar() {
   const pathname = usePathname()
-  const [subOpen, setSubOpen] = useState(false)
+  const router = useRouter()
+  const view = getView(pathname)
+  const [viewOpen, setViewOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
 
-  function isTabActive(tab: (typeof TOP_TABS)[0]) {
-    return tab.matchPaths.some((p) =>
-      p === '/' ? pathname === '/' || pathname === '/dashboard' : pathname.startsWith(p)
-    )
+  function switchView(v: View) {
+    setViewOpen(false)
+    if (v !== view) router.push(VIEW_HOME[v])
   }
 
-  function tabStyle(active: boolean): React.CSSProperties {
-    return {
-      color: active ? 'var(--accent)' : 'var(--text-muted)',
-      textDecoration: 'none',
-      fontSize: '13px',
-      fontWeight: active ? 500 : 400,
-      padding: '4px 10px',
-      borderRadius: '6px',
-      background: active ? 'var(--accent-faint)' : 'transparent',
-      whiteSpace: 'nowrap',
-      transition: 'color 0.1s',
-      display: 'inline-block',
-    }
-  }
-
-  function isBottomTabActive(matchPaths: string[]) {
+  function isActive(matchPaths: string[]) {
     return matchPaths.some((p) =>
       p === '/' ? pathname === '/' || pathname === '/dashboard' : pathname.startsWith(p)
     )
   }
 
-  function bottomTabLinkStyle(active: boolean): React.CSSProperties {
+  function bottomTabStyle(active: boolean): React.CSSProperties {
     return {
       flex: 1,
       display: 'flex',
@@ -127,6 +119,23 @@ export function NavBar() {
       transition: 'color 0.15s',
       WebkitTapHighlightColor: 'transparent',
     }
+  }
+
+  const fabStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: '50%',
+    background: 'var(--accent-gradient)',
+    color: 'white',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+    transform: 'translateY(-10px)',
+    textDecoration: 'none',
+    flexShrink: 0,
+    WebkitTapHighlightColor: 'transparent',
+    transition: 'opacity 0.15s',
   }
 
   return (
@@ -147,76 +156,88 @@ export function NavBar() {
           zIndex: 40,
         }}
       >
-        {/* Logo */}
-        <div style={{ flexShrink: 0 }}>
+        {/* Logo + View Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-dark" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-light.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-light" />
-        </div>
 
-        {/* Desktop tabs */}
-        <div
-          className="hidden sm:flex"
-          style={{ alignItems: 'center', gap: '2px', flex: 1, padding: '0 0.75rem' }}
-        >
-          {TOP_TABS.map((tab) => {
-            const active = isTabActive(tab)
-            if (tab.href === '/') {
-              return (
-                <div key={tab.href} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-                  <Link href={tab.href} style={tabStyle(active)} data-active={String(active)}>
-                    {tab.label}
-                  </Link>
-                  <button
-                    aria-label="Where's My Money sub-menu"
-                    onClick={() => setSubOpen((v) => !v)}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      color: active ? 'var(--accent)' : 'var(--text-muted)',
-                      padding: '4px 8px', fontSize: '12px', lineHeight: 1,
-                      minHeight: '44px', display: 'inline-flex', alignItems: 'center',
-                    }}
-                  >
-                    {subOpen ? '▲' : '▼'}
-                  </button>
-                  {subOpen && (
-                    <div
+          {/* View Switcher */}
+          <div style={{ position: 'relative' }}>
+            <button
+              aria-label="Switch view"
+              aria-expanded={viewOpen}
+              onClick={() => setViewOpen((v) => !v)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                color: 'var(--text)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                padding: '4px 10px',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {VIEW_LABELS[view]}
+              <span style={{ fontSize: '10px', opacity: 0.7 }}>{viewOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {viewOpen && (
+              <>
+                {/* Click-away backdrop */}
+                <div
+                  onClick={() => setViewOpen(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+                />
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '4px 0',
+                    minWidth: '140px',
+                    zIndex: 50,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {(['budget', 'portfolio', 'news'] as View[]).map((v) => (
+                    <button
+                      key={v}
+                      role="menuitem"
+                      onClick={() => switchView(v)}
                       style={{
-                        position: 'absolute', top: '100%', left: 0,
-                        background: 'var(--bg-subtle)', border: '1px solid var(--border)',
-                        borderRadius: '8px', padding: '4px 0',
-                        marginTop: '4px', minWidth: '140px', zIndex: 50,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                        display: 'flex',
+                        width: '100%',
+                        background: 'none',
+                        border: 'none',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        color: view === v ? 'var(--accent)' : 'var(--text)',
+                        fontWeight: view === v ? 500 : 400,
+                        padding: '10px 14px',
+                        fontSize: '13px',
+                        minHeight: '44px',
+                        alignItems: 'center',
                       }}
                     >
-                      {WMM_SUB.map((sub) => (
-                        <Link
-                          key={sub.href}
-                          href={sub.href}
-                          onClick={() => setSubOpen(false)}
-                          style={{
-                            display: 'block',
-                            color: pathname.startsWith(sub.href) ? 'var(--accent)' : 'var(--text)',
-                            textDecoration: 'none',
-                            padding: '8px 14px',
-                            fontSize: '13px',
-                          }}
-                        >
-                          {sub.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+                      {VIEW_LABELS[v]}
+                    </button>
+                  ))}
                 </div>
-              )
-            }
-            return (
-              <Link key={tab.href} href={tab.href} style={tabStyle(active)} data-active={String(active)}>
-                {tab.label}
-              </Link>
-            )
-          })}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Right side */}
@@ -226,9 +247,15 @@ export function NavBar() {
             <button
               type="submit"
               style={{
-                background: 'none', border: 'none', color: 'var(--text-muted)',
-                fontSize: '13px', cursor: 'pointer', padding: '4px 8px',
-                minHeight: '44px', display: 'inline-flex', alignItems: 'center',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '13px',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                minHeight: '44px',
+                display: 'inline-flex',
+                alignItems: 'center',
               }}
             >
               Sign out
@@ -254,79 +281,75 @@ export function NavBar() {
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
-        {/* Dashboard */}
-        <Link
-          href="/dashboard"
-          data-active={String(isBottomTabActive(['/', '/dashboard']))}
-          style={bottomTabLinkStyle(isBottomTabActive(['/', '/dashboard']))}
-        >
-          <HomeIcon />
-          <span style={{ fontSize: '10px', fontWeight: 500 }}>Dashboard</span>
-        </Link>
+        {view === 'budget' ? (
+          <>
+            {/* Dashboard */}
+            <Link
+              href="/dashboard"
+              data-active={String(isActive(['/', '/dashboard']))}
+              style={bottomTabStyle(isActive(['/', '/dashboard']))}
+            >
+              <HomeIcon />
+              <span style={{ fontSize: '10px', fontWeight: 500 }}>Dashboard</span>
+            </Link>
 
-        {/* Transactions */}
-        <Link
-          href="/transactions"
-          data-active={String(isBottomTabActive(['/transactions']))}
-          style={bottomTabLinkStyle(isBottomTabActive(['/transactions']))}
-        >
-          <ListIcon />
-          <span style={{ fontSize: '10px', fontWeight: 500 }}>Transactions</span>
-        </Link>
+            {/* Transactions */}
+            <Link
+              href="/transactions"
+              data-active={String(isActive(['/transactions']))}
+              style={bottomTabStyle(isActive(['/transactions']))}
+            >
+              <ListIcon />
+              <span style={{ fontSize: '10px', fontWeight: 500 }}>Transactions</span>
+            </Link>
 
-        {/* Add — raised accent FAB */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Link
-            href="/dashboard"
-            aria-label="Add transaction"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: 'var(--accent-gradient)',
-              color: 'white',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-              transform: 'translateY(-10px)',
-              textDecoration: 'none',
-              flexShrink: 0,
-              WebkitTapHighlightColor: 'transparent',
-              transition: 'opacity 0.15s',
-            }}
-          >
-            <PlusIcon size={26} />
-          </Link>
-        </div>
+            {/* Add — raised accent FAB */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Link href="/dashboard" aria-label="Add transaction" style={fabStyle}>
+                <PlusIcon size={26} />
+              </Link>
+            </div>
 
-        {/* Portfolio */}
-        <Link
-          href="/portfolio"
-          data-active={String(isBottomTabActive(['/portfolio']))}
-          style={bottomTabLinkStyle(isBottomTabActive(['/portfolio']))}
-        >
-          <ChartIcon />
-          <span style={{ fontSize: '10px', fontWeight: 500 }}>Portfolio</span>
-        </Link>
+            {/* Categories */}
+            <Link
+              href="/categories"
+              data-active={String(isActive(['/categories']))}
+              style={bottomTabStyle(isActive(['/categories']))}
+            >
+              <CategoryIcon />
+              <span style={{ fontSize: '10px', fontWeight: 500 }}>Categories</span>
+            </Link>
 
-        {/* More */}
-        <button
-          onClick={() => setMoreOpen(true)}
-          style={{
-            ...bottomTabLinkStyle(moreOpen),
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-          } as React.CSSProperties}
-        >
-          <DotsIcon />
-          <span style={{ fontSize: '10px', fontWeight: 500 }}>More</span>
-        </button>
+            {/* More */}
+            <button
+              onClick={() => setMoreOpen(true)}
+              style={{
+                ...bottomTabStyle(moreOpen),
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+              } as React.CSSProperties}
+            >
+              <DotsIcon />
+              <span style={{ fontSize: '10px', fontWeight: 500 }}>More</span>
+            </button>
+          </>
+        ) : (
+          /* Portfolio / News — FAB only */
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Link
+              href={VIEW_HOME[view]}
+              aria-label={view === 'portfolio' ? 'Upload portfolio snapshot' : 'Add news'}
+              style={fabStyle}
+            >
+              <PlusIcon size={26} />
+            </Link>
+          </div>
+        )}
       </nav>
 
-      {/* ── More sheet — mobile only ── */}
-      {moreOpen && (
+      {/* ── Budget More sheet — mobile only ── */}
+      {moreOpen && view === 'budget' && (
         <div className="sm:hidden">
           {/* Backdrop */}
           <div
@@ -361,7 +384,7 @@ export function NavBar() {
             <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 12px' }}>
               <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border)' }} />
             </div>
-            {MORE_ITEMS.map((item) => (
+            {BUDGET_MORE.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -391,6 +414,9 @@ export function NavBar() {
                   cursor: 'pointer',
                   padding: '14px 20px',
                   textAlign: 'left',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
               >
                 Sign out
