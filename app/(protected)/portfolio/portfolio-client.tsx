@@ -534,6 +534,7 @@ function OrdersTab({ holdings }: { holdings: Holding[] }) {
 // ── Tab: Geo ──────────────────────────────────────────────────────────────────
 function GeoTab({ holdings }: { holdings: Holding[] }) {
   const T = useTheme()
+  const isMobile = useMobile()
   function lb(col: string): React.CSSProperties {
     return {
       borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
@@ -556,7 +557,7 @@ function GeoTab({ holdings }: { holdings: Holding[] }) {
 
   return (
     <div style={{ padding: '0 12px' }}>
-      <div style={{ height: 220, marginBottom: 16 }}>
+      <div style={{ height: isMobile ? 180 : 220, marginBottom: 16 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={pieData} cx="50%" cy="50%" innerRadius="55%" outerRadius="78%"
@@ -806,9 +807,23 @@ function ThesisTab({ holdings }: { holdings: Holding[] }) {
   )
 }
 
+function useMobile(bp = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`)
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [bp])
+  return mobile
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export function PortfolioClient() {
   const { showToast } = useToast()
+  const isMobile = useMobile()
   const fileRef = useRef<HTMLInputElement>(null)
   const [snapshot, setSnapshot] = useState<SnapResponse | null | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -935,7 +950,7 @@ export function PortfolioClient() {
           </div>
 
           {/* KPI row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 6, padding: '10px 12px' }}>
             {[
               {
                 label: 'Value',
