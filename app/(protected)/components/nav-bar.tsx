@@ -21,10 +21,69 @@ const WMM_SUB = [
   { href: '/tax', label: 'Tax' },
 ]
 
+const MORE_ITEMS = [
+  { href: '/categories', label: 'Categories' },
+  { href: '/accounts', label: 'Accounts' },
+  { href: '/tags', label: 'Tags' },
+  { href: '/news', label: 'News' },
+]
+
+// ── Inline SVG icons ──────────────────────────────────────────────────────────
+
+function HomeIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  )
+}
+
+function ListIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden="true">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  )
+}
+
+function PlusIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
+function ChartIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="10" width="5" height="11" rx="0.5" />
+      <rect x="9" y="4" width="5" height="17" rx="0.5" />
+      <rect x="16" y="7" width="5" height="14" rx="0.5" />
+    </svg>
+  )
+}
+
+function DotsIcon() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="19" cy="12" r="2" />
+    </svg>
+  )
+}
+
+// ── NavBar ────────────────────────────────────────────────────────────────────
+
 export function NavBar() {
   const pathname = usePathname()
   const [subOpen, setSubOpen] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   function isTabActive(tab: (typeof TOP_TABS)[0]) {
     return tab.matchPaths.some((p) =>
@@ -47,9 +106,34 @@ export function NavBar() {
     }
   }
 
+  function isBottomTabActive(matchPaths: string[]) {
+    return matchPaths.some((p) =>
+      p === '/' ? pathname === '/' || pathname === '/dashboard' : pathname.startsWith(p)
+    )
+  }
+
+  function bottomTabLinkStyle(active: boolean): React.CSSProperties {
+    return {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 3,
+      minHeight: 56,
+      textDecoration: 'none',
+      color: active ? 'var(--accent)' : 'var(--text-muted)',
+      padding: '4px 0',
+      transition: 'color 0.15s',
+      WebkitTapHighlightColor: 'transparent',
+    }
+  }
+
   return (
     <>
+      {/* ── Top nav ── */}
       <nav
+        aria-label="Top navigation"
         style={{
           background: 'var(--bg-card)',
           borderBottom: '1px solid var(--border)',
@@ -148,72 +232,169 @@ export function NavBar() {
               Sign out
             </button>
           </form>
-          <button
-            className="sm:hidden"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
-            style={{
-              background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)',
-              cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
-              fontSize: '16px', lineHeight: 1,
-            }}
-          >
-            {mobileOpen ? '×' : '≡'}
-          </button>
         </div>
       </nav>
 
-      {/* Mobile dropdown */}
-      {mobileOpen && (
-        <div
-          className="sm:hidden"
-          style={{
-            background: 'var(--bg-card)',
-            borderBottom: '1px solid var(--border)',
-            padding: '4px 0',
-            position: 'sticky',
-            top: '52px',
-            zIndex: 39,
-          }}
+      {/* ── Bottom tab bar — mobile only ── */}
+      <nav
+        aria-label="Bottom navigation"
+        className="sm:hidden"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          background: 'var(--bg-card)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'stretch',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
+        {/* Dashboard */}
+        <Link
+          href="/dashboard"
+          data-active={String(isBottomTabActive(['/', '/dashboard']))}
+          style={bottomTabLinkStyle(isBottomTabActive(['/', '/dashboard']))}
         >
-          {TOP_TABS.map((tab) => {
-            const active = isTabActive(tab)
-            return (
+          <HomeIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>Dashboard</span>
+        </Link>
+
+        {/* Transactions */}
+        <Link
+          href="/transactions"
+          data-active={String(isBottomTabActive(['/transactions']))}
+          style={bottomTabLinkStyle(isBottomTabActive(['/transactions']))}
+        >
+          <ListIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>Transactions</span>
+        </Link>
+
+        {/* Add — raised accent FAB */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Link
+            href="/transactions"
+            aria-label="Add transaction"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: 'var(--accent-gradient)',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+              transform: 'translateY(-10px)',
+              textDecoration: 'none',
+              flexShrink: 0,
+              WebkitTapHighlightColor: 'transparent',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            <PlusIcon size={26} />
+          </Link>
+        </div>
+
+        {/* Portfolio */}
+        <Link
+          href="/portfolio"
+          data-active={String(isBottomTabActive(['/portfolio']))}
+          style={bottomTabLinkStyle(isBottomTabActive(['/portfolio']))}
+        >
+          <ChartIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>Portfolio</span>
+        </Link>
+
+        {/* More */}
+        <button
+          onClick={() => setMoreOpen(true)}
+          style={{
+            ...bottomTabLinkStyle(moreOpen),
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+          } as React.CSSProperties}
+        >
+          <DotsIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>More</span>
+        </button>
+      </nav>
+
+      {/* ── More sheet — mobile only ── */}
+      {moreOpen && (
+        <div className="sm:hidden">
+          {/* Backdrop */}
+          <div
+            onClick={() => setMoreOpen(false)}
+            role="presentation"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 60,
+              background: 'rgba(0,0,0,0.5)',
+            }}
+          />
+          {/* Sheet */}
+          <div
+            role="dialog"
+            aria-label="More options"
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 61,
+              background: 'var(--bg-card)',
+              borderRadius: '16px 16px 0 0',
+              borderTop: '1px solid var(--border)',
+              paddingTop: 8,
+              paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
+              boxShadow: '0 -4px 24px rgba(0,0,0,0.4)',
+            }}
+          >
+            {/* Drag handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 12px' }}>
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border)' }} />
+            </div>
+            {MORE_ITEMS.map((item) => (
               <Link
-                key={tab.href}
-                href={tab.href}
-                onClick={() => setMobileOpen(false)}
+                key={item.href}
+                href={item.href}
+                onClick={() => setMoreOpen(false)}
                 style={{
                   display: 'block',
-                  color: active ? 'var(--accent)' : 'var(--text)',
+                  color: pathname.startsWith(item.href) ? 'var(--accent)' : 'var(--text)',
                   textDecoration: 'none',
-                  padding: '11px 1rem',
-                  fontSize: '14px',
-                  fontWeight: active ? 500 : 400,
-                  borderLeft: `3px solid ${active ? 'var(--accent)' : 'transparent'}`,
+                  padding: '14px 20px',
+                  fontSize: '15px',
+                  fontWeight: pathname.startsWith(item.href) ? 500 : 400,
                 }}
               >
-                {tab.label}
+                {item.label}
               </Link>
-            )
-          })}
-          <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-          {WMM_SUB.map((sub) => (
-            <Link
-              key={sub.href}
-              href={sub.href}
-              onClick={() => setMobileOpen(false)}
-              style={{
-                display: 'block',
-                color: pathname.startsWith(sub.href) ? 'var(--accent)' : 'var(--text-muted)',
-                textDecoration: 'none',
-                padding: '9px 1.5rem',
-                fontSize: '13px',
-              }}
-            >
-              {sub.label}
-            </Link>
-          ))}
+            ))}
+            <div style={{ borderTop: '1px solid var(--border)', margin: '8px 0' }} />
+            <form action="/api/auth/logout" method="POST">
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  padding: '14px 20px',
+                  textAlign: 'left',
+                }}
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </>
