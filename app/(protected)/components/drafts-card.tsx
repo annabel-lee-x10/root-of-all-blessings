@@ -23,7 +23,7 @@ const BTN: React.CSSProperties = {
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontSize: '12px', fontWeight: 500, padding: '6px 12px',
 }
-const BTN_PRI: React.CSSProperties = { ...BTN, background: '#f0b429', color: '#0d1117' }
+const BTN_PRI: React.CSSProperties = { ...BTN, background: '#CC5500', color: '#0d1117' }
 const BTN_SEC: React.CSSProperties = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
 const BTN_DNG: React.CSSProperties = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f8514940' }
 const BTN_GRN: React.CSSProperties = { ...BTN, background: '#3fb88420', color: '#3fb884', border: '1px solid #3fb88440' }
@@ -245,13 +245,13 @@ export function DraftsCard() {
             {drafts.length > 0 && (
               <span
                 style={{
-                  background: '#f0b42920',
-                  border: '1px solid #f0b42960',
+                  background: '#CC550020',
+                  border: '1px solid #CC550060',
                   borderRadius: '12px',
                   padding: '1px 8px',
                   fontSize: '11px',
                   fontWeight: 600,
-                  color: '#f0b429',
+                  color: '#CC5500',
                 }}
               >
                 {loading ? '…' : drafts.length}
@@ -479,9 +479,9 @@ export function DraftsCard() {
                                   ...BTN,
                                   padding: '3px 10px',
                                   fontSize: '12px',
-                                  background: selected ? '#f0b42920' : '#21262d',
-                                  color: selected ? '#f0b429' : '#8b949e',
-                                  border: `1px solid ${selected ? '#f0b42960' : '#30363d'}`,
+                                  background: selected ? '#CC550020' : '#21262d',
+                                  color: selected ? '#CC5500' : '#8b949e',
+                                  border: `1px solid ${selected ? '#CC550060' : '#30363d'}`,
                                 }}
                               >
                                 {tag.name}

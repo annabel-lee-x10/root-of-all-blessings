@@ -65,7 +65,7 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
   const color =
     savingsPct === null ? '#484f58'
     : savingsPct > 20 ? '#3fb884'
-    : savingsPct > 10 ? '#f0b429'
+    : savingsPct > 10 ? '#CC5500'
     : '#f85149'
 
   const progress = savingsPct !== null ? Math.max(0, Math.min(100, savingsPct)) : 0
@@ -215,9 +215,9 @@ export function ExpenseDashboard() {
                   fontSize: '12px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  border: range === r.id ? '1px solid #f0b429' : '1px solid #30363d',
-                  background: range === r.id ? 'rgba(240,180,41,0.12)' : 'transparent',
-                  color: range === r.id ? '#f0b429' : '#8b949e',
+                  border: range === r.id ? '1px solid #CC5500' : '1px solid #30363d',
+                  background: range === r.id ? 'rgba(204,85,0,0.12)' : 'transparent',
+                  color: range === r.id ? '#CC5500' : '#8b949e',
                 }}
               >
                 {r.label}
@@ -399,7 +399,7 @@ export function ExpenseDashboard() {
                         >
                           <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
                           <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
+                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#CC5500', borderRadius: '4px' }} />
                           </div>
                           <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
                             {fmt(cat.total)}

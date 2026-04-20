@@ -6,7 +6,7 @@
   --border: #30363d;
   --text: #e6edf3;
   --text-muted: #8b949e;
-  --accent: #f0b429;
+  --accent: #CC5500;
 }
 
 [data-theme="light"] {
@@ -15,7 +15,7 @@
   --border: #d0d7de;
   --text: #1f2328;
   --text-muted: #636c76;
-  --accent: #d4a017;
+  --accent: #B34700;
 }
 
 *,

@@ -6,7 +6,7 @@ import { useToast } from '../components/toast'
 import type { Tag, Category } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
-const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
+const BTN_PRI = { ...BTN, background: '#CC5500', color: '#0d1117' }
 const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
 const BTN_WARN = { ...BTN, background: 'transparent', color: '#e3b341', border: '1px solid #e3b341' }

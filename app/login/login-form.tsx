@@ -93,10 +93,11 @@ export function LoginForm() {
         {/* Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
-            style={{ background: 'linear-gradient(135deg, #f0b429 0%, #d4a017 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #CC5500 0%, #A34400 100%)' }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9"/>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3,17 8,12 12,14 18,7 21,10"/>
+              <polyline points="18,7 21,7 21,10"/>
             </svg>
           </div>
           <h1
@@ -136,7 +137,7 @@ export function LoginForm() {
                 color: isDark ? '#e6edf3' : '#1f2328',
               }}
               onFocus={(e) => {
-                e.target.style.border = `1px solid ${error ? '#f85149' : '#f0b429'}`
+                e.target.style.border = `1px solid ${error ? '#f85149' : '#CC5500'}`
               }}
               onBlur={(e) => {
                 e.target.style.border = `1px solid ${error ? '#f85149' : isDark ? '#30363d' : '#d0d7de'}`
@@ -155,7 +156,7 @@ export function LoginForm() {
             disabled={loading || !password}
             className="w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
             style={{
-              background: loading || !password ? (isDark ? '#21262d' : '#e1e4e8') : '#f0b429',
+              background: loading || !password ? (isDark ? '#21262d' : '#e1e4e8') : '#CC5500',
               color: loading || !password ? (isDark ? '#484f58' : '#8c959f') : '#0d1117',
               cursor: loading || !password ? 'not-allowed' : 'pointer',
             }}
