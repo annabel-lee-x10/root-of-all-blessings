@@ -185,14 +185,14 @@ describe('Budget More sheet', () => {
     expect(screen.getByRole('dialog', { name: 'More options' })).toBeInTheDocument()
   })
 
-  it('contains Accounts, Tags, News, Portfolio links', () => {
+  it('contains Accounts and Tags links (News and Portfolio removed)', () => {
     render(<NavBar />)
     fireEvent.click(within(getBottomNav()).getByRole('button', { name: /More/i }))
     const sheet = screen.getByRole('dialog', { name: 'More options' })
     expect(within(sheet).getByRole('link', { name: 'Accounts' })).toHaveAttribute('href', '/accounts')
     expect(within(sheet).getByRole('link', { name: 'Tags' })).toHaveAttribute('href', '/tags')
-    expect(within(sheet).getByRole('link', { name: 'News' })).toHaveAttribute('href', '/news')
-    expect(within(sheet).getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/portfolio')
+    expect(within(sheet).queryByRole('link', { name: 'News' })).not.toBeInTheDocument()
+    expect(within(sheet).queryByRole('link', { name: 'Portfolio' })).not.toBeInTheDocument()
   })
 
   it('does NOT contain Dashboard, Transactions, or Categories links', () => {

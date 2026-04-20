@@ -140,11 +140,11 @@ export async function POST(request: NextRequest) {
   }
 
   const sgd_equivalent = currency !== 'SGD' && fx_rate != null ? amount * fx_rate : null
-  const id = crypto.randomUUID()
+  const id: string = body.id ?? crypto.randomUUID()
   const n = new Date().toISOString()
 
   await db.execute({
-    sql: `INSERT INTO transactions
+    sql: `INSERT OR REPLACE INTO transactions
             (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
              account_id, to_account_id, category_id, payee, note, payment_method, datetime, status, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`,
