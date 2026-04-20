@@ -38,11 +38,20 @@ vi.mock('next/link', () => ({
 
 const sevenTxs = [1, 2, 3, 4, 5, 6, 7].map((n) => makeTx(String(n)))
 
+function makeFetch(txs: ReturnType<typeof makeTx>[], total?: number) {
+  return vi.fn().mockImplementation((url: string) => {
+    if (typeof url === 'string' && url.includes('/api/accounts')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ data: txs, total: total ?? txs.length }),
+    })
+  })
+}
+
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ data: sevenTxs, total: 7 }),
-  }))
+  vi.stubGlobal('fetch', makeFetch(sevenTxs, 7))
 })
 
 afterEach(() => {
@@ -84,10 +93,7 @@ describe('RecentTransactions', () => {
   })
 
   it('shows empty state when no transactions', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: [], total: 0 }),
-    }))
+    vi.stubGlobal('fetch', makeFetch([], 0))
     const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
     render(<RecentTransactions />)
     await waitFor(() => {
@@ -97,10 +103,7 @@ describe('RecentTransactions', () => {
 
   it('shows payment_method when present', async () => {
     const txWithPayment = { ...makeTx('pm1'), payment_method: 'credit card' }
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: [txWithPayment], total: 1 }),
-    }))
+    vi.stubGlobal('fetch', makeFetch([txWithPayment], 1))
     const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
     render(<RecentTransactions />)
     await waitFor(() => {
@@ -109,10 +112,7 @@ describe('RecentTransactions', () => {
   })
 
   it('does not show payment_method label when absent', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: [makeTx('no-pm')], total: 1 }),
-    }))
+    vi.stubGlobal('fetch', makeFetch([makeTx('no-pm')], 1))
     const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
     render(<RecentTransactions />)
     await waitFor(() => {
@@ -121,10 +121,7 @@ describe('RecentTransactions', () => {
   })
 
   it('does not show Show more when no transactions', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: [], total: 0 }),
-    }))
+    vi.stubGlobal('fetch', makeFetch([], 0))
     const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
     render(<RecentTransactions />)
     await waitFor(() => {
