@@ -292,7 +292,7 @@ export default function CategoriesPage() {
 
               {/* Subcategories — indented */}
               {(subcatsByParent.get(c.id) ?? []).map(sub => (
-                <div key={sub.id} style={{ ...CARD, marginLeft: '1.5rem', background: 'var(--bg)', border: '1px dashed var(--border)' }}>
+                <div key={sub.id} style={{ ...CARD, marginLeft: '1.5rem', background: 'var(--bg-dim)', border: '1px dashed var(--border)' }}>
                   {editingId === sub.id ? (
                     <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(sub.id)} />
