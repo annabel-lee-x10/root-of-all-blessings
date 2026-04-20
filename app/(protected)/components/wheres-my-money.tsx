@@ -55,7 +55,7 @@ const selectStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-export function WheresMyMoney() {
+export function WheresMyMoney({ onCollapse }: { onCollapse?: () => void } = {}) {
   const { showToast } = useToast()
 
   const [type, setType] = useState<TxType>('expense')
@@ -380,7 +380,22 @@ export function WheresMyMoney() {
           <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Where's My Money
           </h2>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onCollapse && (
+              <button
+                type="button"
+                onClick={onCollapse}
+                aria-label="Collapse entry form"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                  padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border)',
+                  background: 'transparent', color: 'var(--text-muted)',
+                  fontSize: '12px', fontWeight: 500, cursor: 'pointer', minHeight: '36px',
+                }}
+              >
+                <span style={{ fontSize: '9px' }}>▲</span> Less
+              </button>
+            )}
             <button
               type="button"
               onClick={startVoice}
