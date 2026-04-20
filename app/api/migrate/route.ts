@@ -18,6 +18,10 @@ export async function POST() {
       name: 'news_briefs.tickers',
       sql: 'ALTER TABLE news_briefs ADD COLUMN tickers TEXT',
     },
+    {
+      name: 'accounts.delete_vallow',
+      sql: "DELETE FROM accounts WHERE LOWER(name) = 'vallow'",
+    },
   ]
 
   for (const m of migrations) {
