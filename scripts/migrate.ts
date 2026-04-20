@@ -43,6 +43,7 @@ async function migrate() {
       note TEXT,
       payment_method TEXT,
       datetime TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('draft','approved')),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,

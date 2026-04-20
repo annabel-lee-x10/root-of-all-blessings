@@ -82,7 +82,7 @@ export function RecentTransactions() {
   useEffect(() => {
     fetch('/api/accounts')
       .then((r) => r.json())
-      .then((data: Account[]) => setAccounts(data))
+      .then((data: unknown) => setAccounts(Array.isArray(data) ? data as Account[] : []))
       .catch(() => {})
   }, [])
 

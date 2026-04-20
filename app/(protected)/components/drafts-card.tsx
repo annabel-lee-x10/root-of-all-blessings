@@ -23,7 +23,7 @@ const BTN: React.CSSProperties = {
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontSize: '12px', fontWeight: 500, padding: '6px 12px',
 }
-const BTN_PRI: React.CSSProperties = { ...BTN, background: '#CC5500', color: '#0d1117' }
+const BTN_PRI: React.CSSProperties = { ...BTN, background: '#f0b429', color: '#0d1117' }
 const BTN_SEC: React.CSSProperties = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
 const BTN_DNG: React.CSSProperties = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f8514940' }
 const BTN_GRN: React.CSSProperties = { ...BTN, background: '#3fb88420', color: '#3fb884', border: '1px solid #3fb88440' }
@@ -246,13 +246,13 @@ export function DraftsCard() {
             {drafts.length > 0 && (
               <span
                 style={{
-                  background: '#CC550020',
-                  border: '1px solid #CC550060',
+                  background: '#f0b42920',
+                  border: '1px solid #f0b42960',
                   borderRadius: '12px',
                   padding: '1px 8px',
                   fontSize: '11px',
                   fontWeight: 600,
-                  color: '#CC5500',
+                  color: '#f0b429',
                 }}
               >
                 {loading ? '…' : drafts.length}
@@ -297,15 +297,8 @@ export function DraftsCard() {
 
             {/* Empty state */}
             {!loading && drafts.length === 0 && (
-              <div
-                style={{
-                  padding: '3rem',
-                  textAlign: 'center',
-                  color: '#8b949e',
-                  fontSize: '14px',
-                }}
-              >
-                No drafts. Upload receipts above to get started.
+              <div style={{ padding: '3rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
+                No drafts pending review.
               </div>
             )}
 
@@ -319,8 +312,7 @@ export function DraftsCard() {
                     alignItems: 'center',
                     gap: '12px',
                     padding: '10px 1.5rem',
-                    borderBottom:
-                      i < drafts.length - 1 || editingId === tx.id ? '1px solid #21262d' : 'none',
+                    borderBottom: i < drafts.length - 1 || editingId === tx.id ? '1px solid #21262d' : 'none',
                     flexWrap: 'wrap',
                   }}
                 >
@@ -328,24 +320,12 @@ export function DraftsCard() {
                     <div style={{ color: '#e6edf3', fontSize: '13px', fontWeight: 500 }}>
                       {tx.payee ?? tx.category_name ?? '(unnamed)'}
                     </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '8px',
-                        marginTop: '2px',
-                        flexWrap: 'wrap',
-                      }}
-                    >
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
                       <span style={{ color: '#484f58', fontSize: '12px' }}>
-                        {new Date(tx.datetime).toLocaleDateString('en-SG', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
+                        {new Date(tx.datetime).toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })}
                       </span>
                       {tx.category_name && (
-                        <span style={{ color: '#484f58', fontSize: '12px' }}>
-                          {tx.category_name}
-                        </span>
+                        <span style={{ color: '#484f58', fontSize: '12px' }}>{tx.category_name}</span>
                       )}
                       {tx.tags.length > 0 && (
                         <span style={{ color: '#484f58', fontSize: '11px' }}>
@@ -485,20 +465,15 @@ export function DraftsCard() {
                                 key={tag.id}
                                 type="button"
                                 onClick={() =>
-                                  ef(
-                                    'tag_ids',
-                                    selected
-                                      ? editForm.tag_ids.filter((id) => id !== tag.id)
-                                      : [...editForm.tag_ids, tag.id]
-                                  )
+                                  ef('tag_ids', selected
+                                    ? editForm.tag_ids.filter((id) => id !== tag.id)
+                                    : [...editForm.tag_ids, tag.id])
                                 }
                                 style={{
-                                  ...BTN,
-                                  padding: '3px 10px',
-                                  fontSize: '12px',
-                                  background: selected ? '#CC550020' : '#21262d',
-                                  color: selected ? '#CC5500' : '#8b949e',
-                                  border: `1px solid ${selected ? '#CC550060' : '#30363d'}`,
+                                  ...BTN, padding: '3px 10px', fontSize: '12px',
+                                  background: selected ? '#f0b42920' : '#21262d',
+                                  color: selected ? '#f0b429' : '#8b949e',
+                                  border: `1px solid ${selected ? '#f0b42960' : '#30363d'}`,
                                 }}
                               >
                                 {tag.name}
@@ -509,19 +484,12 @@ export function DraftsCard() {
                       </div>
                     )}
 
-                    {/* Form action buttons — full width on mobile */}
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         onClick={() => saveEdit(tx.id)}
                         disabled={savingId === tx.id}
-                        style={{
-                          ...BTN_PRI,
-                          flex: 1,
-                          minWidth: '100px',
-                          padding: '10px',
-                          opacity: savingId === tx.id ? 0.6 : 1,
-                        }}
+                        style={{ ...BTN_PRI, flex: 1, minWidth: '100px', padding: '10px', opacity: savingId === tx.id ? 0.6 : 1 }}
                       >
                         {savingId === tx.id ? 'Saving...' : 'Save changes'}
                       </button>
@@ -529,13 +497,7 @@ export function DraftsCard() {
                         type="button"
                         onClick={() => approveDraft(tx.id)}
                         disabled={approvingId === tx.id}
-                        style={{
-                          ...BTN_GRN,
-                          flex: 1,
-                          minWidth: '100px',
-                          padding: '10px',
-                          opacity: approvingId === tx.id ? 0.6 : 1,
-                        }}
+                        style={{ ...BTN_GRN, flex: 1, minWidth: '100px', padding: '10px', opacity: approvingId === tx.id ? 0.6 : 1 }}
                       >
                         {approvingId === tx.id ? 'Approving...' : 'Approve'}
                       </button>

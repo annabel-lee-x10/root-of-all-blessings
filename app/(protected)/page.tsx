@@ -1,8 +1,8 @@
 import { WheresMyMoney } from './components/wheres-my-money'
 import { ReceiptDropzone } from './components/receipt-dropzone'
 import { ExpenseDashboard } from './components/expense-dashboard'
-import { RecentTransactions } from './components/recent-transactions'
 import { DraftsCard } from './components/drafts-card'
+import { RecentTransactions } from './components/recent-transactions'
 
 export const metadata = {
   title: "Where's My Money - Root OS",
