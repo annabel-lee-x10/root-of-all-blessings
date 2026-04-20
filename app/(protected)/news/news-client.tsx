@@ -6,12 +6,12 @@ import type { QsNewsCard, QsBriefSections, QsNewsBriefRow, Sentiment } from '@/l
 import { stripCiteTags } from '@/lib/news-utils'
 
 // ── design tokens ─────────────────────────────────────────────────────────────
-const BG = '#0f0f1a'
-const CARD = '#111520'
-const BORDER = '#1C2333'
-const ACCENT = '#E8520A'
-const TEXT = '#e6edf3'
-const MUTED = '#8b949e'
+const BG = 'var(--bg)'
+const CARD = 'var(--bg-card)'
+const BORDER = 'var(--border)'
+const ACCENT = 'var(--accent)'
+const TEXT = 'var(--text)'
+const MUTED = 'var(--text-muted)'
 const BLUE = '#4A6FA5'
 
 const SENT_COLOR: Record<string, string> = {
@@ -153,7 +153,7 @@ function Skeleton() {
       {[70, 180, 110, 220, 150, 90].map((w, i) => (
         <div key={i} style={{
           height: i === 2 ? 18 : 10, width: w, maxWidth: '92%',
-          background: '#1C2333', borderRadius: 4, marginBottom: 10,
+          background: 'var(--bg-dim)', borderRadius: 4, marginBottom: 10,
           animation: 'qs-pulse 1.4s ease-in-out infinite',
           animationDelay: `${i * 0.08}s`,
         }} />
@@ -518,7 +518,7 @@ export function NewsClient() {
       {/* ── sticky sub-nav ───────────────────────────────────────────────────── */}
       <div style={{
         position: 'sticky', top: 52, zIndex: 30,
-        background: '#0a0a14', borderBottom: `1px solid ${BORDER}`,
+        background: BG, borderBottom: `1px solid ${BORDER}`,
         padding: '0 1rem',
       }}>
         <div style={{
@@ -547,7 +547,7 @@ export function NewsClient() {
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
             style={{
-              background: uploading ? '#1C2333' : '#1a1f2e',
+              background: uploading ? 'var(--bg-dim)' : 'var(--bg-dim)',
               border: `1px solid ${BORDER}`, color: uploading ? MUTED : TEXT,
               borderRadius: 6, padding: '3px 10px',
               fontSize: 'calc(13px - 2px)', cursor: uploading ? 'not-allowed' : 'pointer',
@@ -562,7 +562,7 @@ export function NewsClient() {
             onClick={handleRefresh}
             disabled={refreshing}
             style={{
-              background: refreshing ? '#1C2333' : ACCENT,
+              background: refreshing ? 'var(--bg-dim)' : ACCENT,
               border: 'none', color: refreshing ? MUTED : '#fff',
               borderRadius: 6, padding: '3px 12px',
               fontSize: 'calc(13px - 2px)', cursor: refreshing ? 'not-allowed' : 'pointer',
@@ -618,7 +618,7 @@ export function NewsClient() {
                   key={s}
                   onClick={() => setSentFilter(s)}
                   style={{
-                    background: active ? (s === 'all' ? '#1C2333' : color + '22') : 'none',
+                    background: active ? (s === 'all' ? 'var(--bg-dim)' : color + '22') : 'none',
                     border: `1px solid ${active ? (s === 'all' ? BORDER : color) : BORDER}`,
                     color: active ? (s === 'all' ? TEXT : color) : MUTED,
                     borderRadius: 20, padding: '3px 12px',
