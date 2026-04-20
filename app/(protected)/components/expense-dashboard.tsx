@@ -10,6 +10,7 @@ interface TagBreakdownEntry {
 }
 
 interface CategoryEntry {
+  category_id: string | null
   category_name: string
   total: number
   pct: number
@@ -117,7 +118,10 @@ export function ExpenseDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
+
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null)
+  const [drillData, setDrillData] = useState<CategoryEntry[] | null>(null)
+  const [drillLoading, setDrillLoading] = useState(false)
 
   const [showTrend, setShowTrend] = useState(false)
   const [trendData, setTrendData] = useState<TrendPoint[]>([])
@@ -181,8 +185,28 @@ export function ExpenseDashboard() {
     }
   }
 
-  function toggleCategory(name: string) {
-    setExpandedCategory((prev) => (prev === name ? null : name))
+  async function drillInto(categoryId: string | null) {
+    if (!categoryId) return
+    if (expandedCategoryId === categoryId) {
+      setExpandedCategoryId(null)
+      setDrillData(null)
+      return
+    }
+    setExpandedCategoryId(categoryId)
+    setDrillLoading(true)
+    try {
+      let url = `/api/dashboard?range=${range}&parent_category_id=${categoryId}`
+      if (range === 'custom' && customStart && customEnd) {
+        url += `&start=${encodeURIComponent(customStart + 'T00:00:00+08:00')}&end=${encodeURIComponent(customEnd + 'T23:59:59+08:00')}`
+      }
+      const res = await fetch(url)
+      const d = await res.json()
+      setDrillData(d.category_breakdown ?? [])
+    } catch {
+      setDrillData(null)
+    } finally {
+      setDrillLoading(false)
+    }
   }
 
   const trendMax = trendData.reduce((m, d) => Math.max(m, d.income, d.expense), 1)
@@ -376,24 +400,23 @@ export function ExpenseDashboard() {
             {!loading && data && data.category_breakdown.length > 0 && (
               <div>
                 <div style={{ ...labelStyle, marginBottom: '8px' }}>Top Expenses</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                   {data.category_breakdown.slice(0, 6).map((cat) => {
-                    const isExpanded = expandedCategory === cat.category_name
+                    const isExpanded = expandedCategoryId === cat.category_id
                     return (
                       <div key={cat.category_name}>
                         <button
                           role="button"
                           aria-expanded={isExpanded}
-                          onClick={() => toggleCategory(cat.category_name)}
+                          onClick={() => drillInto(cat.category_id)}
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
+                            display: 'flex', alignItems: 'center', gap: '10px',
                             width: '100%',
                             background: 'transparent',
                             border: 'none',
-                            padding: '4px 0',
-                            cursor: 'pointer',
+                            padding: '5px 0',
+                            cursor: cat.category_id ? 'pointer' : 'default',
+                            borderRadius: '4px',
                             textAlign: 'left',
                           }}
                         >
@@ -407,39 +430,32 @@ export function ExpenseDashboard() {
                           <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
                             {cat.pct.toFixed(1)}%
                           </span>
-                          <span style={{ color: '#484f58', fontSize: '10px', minWidth: '10px', display: 'inline-block', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                            ▾
-                          </span>
+                          {cat.category_id && (
+                            <span style={{ color: '#484f58', fontSize: '11px', width: '16px', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                          )}
                         </button>
 
-                        {/* Accordion panel */}
-                        <div
-                          style={{
-                            overflow: 'hidden',
-                            maxHeight: isExpanded ? `${cat.tag_breakdown.length * 28 + 12}px` : '0px',
-                            transition: 'max-height 0.25s ease-in-out',
-                            marginLeft: '110px',
-                          }}
-                        >
-                          <div style={{ paddingBottom: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {cat.tag_breakdown.map((tag) => (
-                              <div key={tag.tag_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ color: '#6e7681', fontSize: '12px', minWidth: '90px' }}>{tag.tag_name}</span>
-                                <div style={{ flex: 1, background: '#161b22', borderRadius: '3px', height: '4px', overflow: 'hidden' }}>
-                                  <div style={{
-                                    width: `${cat.total > 0 ? Math.min(100, (tag.total / cat.total) * 100) : 0}%`,
-                                    height: '100%',
-                                    background: '#388bfd',
-                                    borderRadius: '3px',
-                                  }} />
+                        {isExpanded && (
+                          <div style={{ marginBottom: '4px', paddingLeft: '0' }}>
+                            {drillLoading ? (
+                              <div style={{ color: '#8b949e', fontSize: '12px', padding: '4px 0' }}>Loading...</div>
+                            ) : !drillData || drillData.length === 0 ? (
+                              <div style={{ color: '#484f58', fontSize: '12px', padding: '4px 0' }}>No subcategories</div>
+                            ) : (
+                              drillData.map(sub => (
+                                <div key={sub.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '3px 0' }}>
+                                  <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '100px' }}>{sub.category_name}</span>
+                                  <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(100, sub.pct)}%`, height: '100%', background: '#CC550080', borderRadius: '4px' }} />
+                                  </div>
+                                  <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>{fmt(sub.total)}</span>
+                                  <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>{sub.pct.toFixed(1)}%</span>
+                                  <span style={{ width: '16px', flexShrink: 0 }} />
                                 </div>
-                                <span style={{ color: '#6e7681', fontSize: '11px', minWidth: '48px', textAlign: 'right' }}>
-                                  {fmt(tag.total)}
-                                </span>
-                              </div>
-                            ))}
+                              ))
+                            )}
                           </div>
-                        </div>
+                        )}
                       </div>
                     )
                   })}

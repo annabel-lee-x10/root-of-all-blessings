@@ -139,6 +139,8 @@ export async function GET(request: NextRequest) {
     p.get('end'),
   )
 
+  const parentCategoryId = p.get('parent_category_id')
+
   const drilldown = p.get('drilldown')
   if (drilldown) {
     const [totalResult, tagResult] = await Promise.all([
@@ -179,6 +181,29 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  const catQuerySql = parentCategoryId
+    ? `SELECT t.category_id,
+              c.name as category_name,
+              COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+       FROM transactions t
+       LEFT JOIN categories c ON t.category_id = c.id
+       WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
+         AND c.parent_id = ?
+       GROUP BY t.category_id, c.name
+       ORDER BY total DESC`
+    : `SELECT t.category_id,
+              c.name as category_name,
+              COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
+       FROM transactions t
+       LEFT JOIN categories c ON t.category_id = c.id
+       WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
+       GROUP BY t.category_id, c.name
+       ORDER BY total DESC`
+
+  const catQueryArgs = parentCategoryId
+    ? [startDate, endDate, parentCategoryId]
+    : [startDate, endDate]
+
   let expenseResult, incomeResult, catResult, taggedResult, untaggedResult
   try {
     ;[expenseResult, incomeResult, catResult, taggedResult, untaggedResult] = await Promise.all([
@@ -197,15 +222,8 @@ export async function GET(request: NextRequest) {
         args: [startDate, endDate],
       }),
       db.execute({
-        sql: `SELECT c.name as category_name,
-                     COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
-              FROM transactions t
-              LEFT JOIN categories c ON t.category_id = c.id
-              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
-                AND (t.status IS NULL OR t.status = 'approved')
-              GROUP BY t.category_id, c.name
-              ORDER BY total DESC`,
-        args: [startDate, endDate],
+        sql: catQuerySql,
+        args: catQueryArgs,
       }),
       db.execute({
         sql: `SELECT c.name as category_name, tg.name as tag_name,
@@ -249,14 +267,8 @@ export async function GET(request: NextRequest) {
         args: [startDate, endDate],
       }),
       db.execute({
-        sql: `SELECT c.name as category_name,
-                     COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
-              FROM transactions t
-              LEFT JOIN categories c ON t.category_id = c.id
-              WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
-              GROUP BY t.category_id, c.name
-              ORDER BY total DESC`,
-        args: [startDate, endDate],
+        sql: catQuerySql,
+        args: catQueryArgs,
       }),
       db.execute({
         sql: `SELECT c.name as category_name, tg.name as tag_name,
@@ -298,15 +310,16 @@ export async function GET(request: NextRequest) {
     arr.sort((a, b) => b.total - a.total)
   }
 
-  const categoryBreakdown = catResult.rows.map((r) => {
-    const catName = (r.category_name as string | null) ?? 'Uncategorised'
-    return {
-      category_name: catName,
-      total: Number(r.total),
-      pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,
-      tag_breakdown: tagMap.get(catName) ?? [],
-    }
-  })
+  const categoryBreakdown = catResult.rows.map((r) => ({
+    category_id: (r.category_id as string | null) ?? null,
+    category_name: (r.category_name as string | null) ?? 'Uncategorised',
+    total: Number(r.total),
+    pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,
+    tag_breakdown: (() => {
+      const catName = (r.category_name as string | null) ?? 'Uncategorised'
+      return tagMap.get(catName) ?? []
+    })(),
+  }))
 
   return Response.json({
     total_spend: totalSpend,

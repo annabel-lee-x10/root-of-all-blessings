@@ -3,12 +3,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
+const mockDrillData = {
+  category_breakdown: [
+    { category_id: null, category_name: 'Lunch', total: 500, pct: 62.5, tag_breakdown: [] },
+    { category_id: null, category_name: 'Dinner', total: 300, pct: 37.5, tag_breakdown: [] },
+  ],
+}
+
 const mockDashboardData = {
   total_spend: 1234.56,
   total_income: 5000,
   daily_average: 88.18,
   category_breakdown: [
     {
+      category_id: 'cat-food',
       category_name: 'Food',
       total: 800,
       pct: 64.8,
@@ -18,6 +26,7 @@ const mockDashboardData = {
       ],
     },
     {
+      category_id: 'cat-transport',
       category_name: 'Transport',
       total: 434.56,
       pct: 35.2,
@@ -34,9 +43,9 @@ const mockDashboardData = {
 }
 
 function mockFetchSuccess() {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(mockDashboardData),
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+    const data = url.includes('parent_category_id') ? mockDrillData : mockDashboardData
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
   }))
 }
 
@@ -175,14 +184,18 @@ describe('ExpenseDashboard', () => {
     expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('clicking a category bar expands its tag breakdown', async () => {
+  it('clicking a category bar expands its subcategory drilldown', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /food/i }))
-    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('Lunch')).toBeInTheDocument()
-    expect(screen.getByText('Dinner')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Lunch')).toBeInTheDocument()
+      expect(screen.getByText('Dinner')).toBeInTheDocument()
+    })
   })
 
   it('clicking expanded category bar collapses it', async () => {
@@ -191,8 +204,13 @@ describe('ExpenseDashboard', () => {
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
     const foodBtn = screen.getByRole('button', { name: /food/i })
     fireEvent.click(foodBtn)
+    await waitFor(() => {
+      expect(foodBtn).toHaveAttribute('aria-expanded', 'true')
+    })
     fireEvent.click(foodBtn)
-    expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
+    await waitFor(() => {
+      expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
+    })
   })
 
   it('clicking a different category collapses the previous one', async () => {
@@ -200,10 +218,14 @@ describe('ExpenseDashboard', () => {
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: /food/i }))
-    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+    })
     fireEvent.click(screen.getByRole('button', { name: /transport/i }))
-    expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByRole('button', { name: /transport/i })).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('button', { name: /transport/i })).toHaveAttribute('aria-expanded', 'true')
+    })
   })
 })
 
