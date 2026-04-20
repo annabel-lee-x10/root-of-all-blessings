@@ -64,17 +64,8 @@ export function NavBar() {
       >
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <div
-            style={{
-              width: '28px', height: '28px', borderRadius: '8px',
-              background: 'linear-gradient(135deg, #f0b429 0%, #d4a017 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9" />
-            </svg>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo-mark.svg" alt="" width={28} height={28} style={{ flexShrink: 0 }} />
           <span style={{ color: 'var(--root-paper)', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
         </div>
 
