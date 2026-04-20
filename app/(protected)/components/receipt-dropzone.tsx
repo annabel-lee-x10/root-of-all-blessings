@@ -1,11 +1,9 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { useToast } from './toast'
 
 type FileStatus = 'waiting' | 'uploading' | 'done' | 'error'
-type VoiceStatus = 'idle' | 'recording' | 'processing' | 'done' | 'error'
-
 interface FileItem {
   id: string
   file: File
@@ -19,17 +17,13 @@ function getStoredAccountId(): string {
   return localStorage.getItem('wmm_last_account') ?? ''
 }
 
-export function ReceiptDropzone() {
+export function ReceiptDropzone({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void } = {}) {
   const { showToast } = useToast()
   const [files, setFiles] = useState<FileItem[]>([])
   const [merchantLookup, setMerchantLookup] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
-  const [voiceTranscript, setVoiceTranscript] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null)
 
   function addFiles(newFiles: File[]) {
     const imageFiles = newFiles.filter((f) => f.type.startsWith('image/'))
@@ -100,88 +94,9 @@ export function ReceiptDropzone() {
     setUploading(false)
   }
 
-  const processVoice = useCallback(
-    async (text: string) => {
-      setVoiceStatus('processing')
-      const accountId = getStoredAccountId()
-      try {
-        const res = await fetch('/api/receipts/voice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, accountId }),
-        })
-        const data = await res.json()
-        if (res.ok && data.draft) {
-          setVoiceStatus('done')
-          window.dispatchEvent(new CustomEvent('drafts-updated'))
-          showToast('Voice entry captured as draft', 'success')
-          setTimeout(() => {
-            setVoiceStatus('idle')
-            setVoiceTranscript('')
-          }, 2000)
-        } else {
-          setVoiceStatus('error')
-          showToast(data.error ?? 'Processing failed', 'error')
-          setTimeout(() => setVoiceStatus('idle'), 2000)
-        }
-      } catch {
-        setVoiceStatus('error')
-        showToast('Network error', 'error')
-        setTimeout(() => setVoiceStatus('idle'), 2000)
-      }
-    },
-    [showToast]
-  )
-
-  function startRecording() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any
-    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition
-    if (!SR) {
-      showToast('Voice input not supported in this browser', 'error')
-      return
-    }
-    const recognition = new SR()
-    recognition.lang = 'en-SG'
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-    let finalTranscript = ''
-
-    recognition.onstart = () => setVoiceStatus('recording')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (e: any) => {
-      finalTranscript = e.results[0][0].transcript
-      setVoiceTranscript(finalTranscript)
-    }
-    recognition.onend = () => {
-      if (finalTranscript) {
-        processVoice(finalTranscript)
-      } else {
-        setVoiceStatus('idle')
-      }
-    }
-    recognition.onerror = () => {
-      setVoiceStatus('error')
-      setTimeout(() => setVoiceStatus('idle'), 2000)
-    }
-    recognitionRef.current = recognition
-    recognition.start()
-  }
-
-  function stopRecording() {
-    recognitionRef.current?.stop()
-  }
-
   const hasPending = files.some((f) => f.status === 'waiting')
   const allDone = files.length > 0 && files.every((f) => f.status === 'done')
   const pendingCount = files.filter((f) => f.status === 'waiting').length
-
-  const voiceBorderColor =
-    voiceStatus === 'recording' ? 'var(--red)' : voiceStatus === 'done' ? 'var(--green)' : 'var(--border)'
-  const voiceBg =
-    voiceStatus === 'recording' ? 'var(--red-faint)' : 'transparent'
-  const voiceColor =
-    voiceStatus === 'recording' ? 'var(--red)' : voiceStatus === 'done' ? 'var(--green)' : 'var(--text-muted)'
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -190,8 +105,10 @@ export function ReceiptDropzone() {
           background: 'var(--bg-card)',
           border: '1px solid var(--border)',
           borderRadius: '12px',
-          padding: '1.5rem',
+          padding: collapsed ? '1rem 1.5rem' : '1.5rem',
+          cursor: onToggle ? 'pointer' : undefined,
         }}
+        onClick={collapsed ? onToggle : undefined}
       >
         {/* Header */}
         <div
@@ -199,35 +116,41 @@ export function ReceiptDropzone() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: '1rem',
+            marginBottom: collapsed ? 0 : '1rem',
             flexWrap: 'wrap',
             gap: '8px',
           }}
         >
-          <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+          <h2 style={{ color: collapsed ? 'var(--text-muted)' : 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Upload Receipts
           </h2>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={merchantLookup}
-              onChange={(e) => setMerchantLookup(e.target.checked)}
-              style={{ accentColor: '#CC5500', width: '14px', height: '14px' }}
-            />
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-              Merchant lookup
-              {merchantLookup && <span style={{ color: 'var(--accent)' }}> (adds ~5s)</span>}
-            </span>
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {!collapsed && (
+              <label
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={merchantLookup}
+                  onChange={(e) => setMerchantLookup(e.target.checked)}
+                  style={{ accentColor: '#CC5500', width: '14px', height: '14px' }}
+                />
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Merchant lookup
+                  {merchantLookup && <span style={{ color: 'var(--accent)' }}> (adds ~5s)</span>}
+                </span>
+              </label>
+            )}
+            {onToggle && (
+              <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                {collapsed ? '▼' : '▲'}
+              </span>
+            )}
+          </div>
         </div>
+
+        {!collapsed && <>
 
         {/* Drop zone */}
         <div
@@ -385,128 +308,34 @@ export function ReceiptDropzone() {
           </div>
         )}
 
-        {/* Bottom action bar */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Voice mic button — always visible */}
+        {/* Process button */}
+        {files.length > 0 && (
           <button
             type="button"
-            onClick={voiceStatus === 'recording' ? stopRecording : startRecording}
-            disabled={voiceStatus === 'processing' || uploading}
-            title={
-              voiceStatus === 'recording'
-                ? 'Tap to stop recording'
-                : 'Tap to log an expense by voice'
-            }
+            onClick={processFiles}
+            disabled={!hasPending || uploading}
             style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '50%',
-              border: `2px solid ${voiceBorderColor}`,
-              background: voiceBg,
-              color: voiceColor,
-              cursor: voiceStatus === 'processing' || uploading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
+              width: '100%',
+              padding: '13px',
+              borderRadius: '8px',
+              border: 'none',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: hasPending && !uploading ? 'pointer' : 'not-allowed',
+              background: hasPending && !uploading ? 'var(--accent)' : 'var(--bg-dim)',
+              color: hasPending && !uploading ? '#fff' : 'var(--text-dim)',
               transition: 'all 0.15s',
+              minHeight: '48px',
             }}
           >
-            {voiceStatus === 'processing' ? (
-              <svg
-                style={{ animation: 'spin 1s linear infinite' }}
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-                <path
-                  d="M12 2a10 10 0 0110 10"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </svg>
-            ) : (
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            )}
+            {uploading
+              ? 'Processing...'
+              : allDone
+              ? 'All processed ✓'
+              : `Process ${pendingCount} receipt${pendingCount !== 1 ? 's' : ''}`}
           </button>
-
-          {/* Upload button — only when files added */}
-          {files.length > 0 ? (
-            <button
-              type="button"
-              onClick={processFiles}
-              disabled={!hasPending || uploading}
-              style={{
-                flex: 1,
-                padding: '13px',
-                borderRadius: '8px',
-                border: 'none',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: hasPending && !uploading ? 'pointer' : 'not-allowed',
-                background: hasPending && !uploading ? 'var(--accent)' : 'var(--bg-dim)',
-                color: hasPending && !uploading ? '#fff' : 'var(--text-dim)',
-                transition: 'all 0.15s',
-                minHeight: '48px',
-              }}
-            >
-              {uploading
-                ? 'Processing...'
-                : allDone
-                ? 'All processed ✓'
-                : `Process ${pendingCount} receipt${pendingCount !== 1 ? 's' : ''}`}
-            </button>
-          ) : (
-            <span style={{ color: 'var(--text-dim)', fontSize: '12px', flex: 1 }}>
-              {voiceStatus === 'recording'
-                ? '● Recording... tap mic to stop'
-                : voiceStatus === 'processing'
-                ? 'Processing voice input...'
-                : 'Tap mic to log an expense by voice'}
-            </span>
-          )}
-        </div>
-
-        {/* Voice transcript preview */}
-        {voiceTranscript && voiceStatus !== 'idle' && (
-          <div
-            style={{
-              marginTop: '8px',
-              padding: '8px 12px',
-              background: 'var(--bg-subtle)',
-              borderRadius: '6px',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
-              &ldquo;{voiceTranscript}&rdquo;
-            </span>
-          </div>
         )}
+        </>}
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </section>

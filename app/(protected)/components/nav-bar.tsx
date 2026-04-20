@@ -29,8 +29,6 @@ function getView(pathname: string): View {
 const BUDGET_MORE = [
   { href: '/accounts', label: 'Accounts' },
   { href: '/tags', label: 'Tags' },
-  { href: '/news', label: 'News' },
-  { href: '/portfolio', label: 'Portfolio' },
 ]
 
 // ── Inline SVG icons ──────────────────────────────────────────────────────────

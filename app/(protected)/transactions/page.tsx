@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { TransactionRow, Account, Category, Tag, TxType } from '@/lib/types'
 import { useToast } from '../components/toast'
+import { ConfirmDialog } from '../components/confirm-dialog'
 
 
-const LIMIT = 20
+const LIMIT = 50
 
 interface Filters {
   start: string; end: string
@@ -158,10 +159,13 @@ export default function TransactionsPage() {
   const [bulkAddTagId, setBulkAddTagId] = useState('')
   const [bulkRemoveTagId, setBulkRemoveTagId] = useState('')
 
+  const [exportOpen, setExportOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<TransactionRow | null>(null)
+  const [undoStack, setUndoStack] = useState<TransactionRow[]>([])
 
   useEffect(() => {
     // Read URL search params on mount
@@ -207,7 +211,11 @@ export default function TransactionsPage() {
       if (sortBy && sortBy !== 'date-desc') p.set('sort', sortBy)
       const res = await fetch(`/api/transactions?${p}`)
       const data = await res.json()
-      setTransactions(data.data ?? [])
+      if (page === 1) {
+        setTransactions(data.data ?? [])
+      } else {
+        setTransactions(prev => [...prev, ...(data.data ?? [])])
+      }
       setTotal(data.total ?? 0)
     } finally {
       setLoading(false)
@@ -281,20 +289,54 @@ export default function TransactionsPage() {
     }
   }
 
-  async function deleteTransaction(id: string) {
-    if (!confirm('Delete this transaction?')) return
-    setDeletingId(id)
+  async function confirmAndDelete(tx: TransactionRow) {
+    setConfirmDelete(tx)
+  }
+
+  async function executeDelete(tx: TransactionRow) {
+    setConfirmDelete(null)
+    setDeletingId(tx.id)
     try {
-      const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/transactions/${tx.id}`, { method: 'DELETE' })
       if (res.ok) {
-        showToast('Transaction deleted', 'success')
-        setTransactions((prev) => prev.filter((t) => t.id !== id))
+        setTransactions((prev) => prev.filter((t) => t.id !== tx.id))
         setTotal((prev) => prev - 1)
+        setUndoStack(prev => [tx, ...prev].slice(0, 5))
+        showToast(`Deleted "${tx.payee || 'transaction'}"`, 'success', {
+          label: 'Undo',
+          onClick: () => undoDelete(tx),
+        })
       } else {
         showToast('Failed to delete', 'error')
       }
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  async function undoDelete(tx: TransactionRow) {
+    try {
+      const body = {
+        id: tx.id, type: tx.type, amount: tx.amount, currency: tx.currency,
+        fx_rate: tx.fx_rate, fx_date: tx.fx_date, account_id: tx.account_id,
+        to_account_id: tx.to_account_id, category_id: tx.category_id,
+        payee: tx.payee, note: tx.note, datetime: tx.datetime,
+        tag_ids: tx.tags.map(t => t.id),
+      }
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        showToast('Transaction restored', 'success')
+        setUndoStack(prev => prev.filter(t => t.id !== tx.id))
+        setPage(1)
+      } else {
+        showToast('Failed to restore', 'error')
+      }
+    } catch {
+      showToast('Failed to restore', 'error')
     }
   }
 
@@ -397,13 +439,42 @@ export default function TransactionsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
         <h1 style={{ margin: 0, color: 'var(--text)', fontSize: '18px', fontWeight: 600 }}>Transactions</h1>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <a href={exportUrl('csv')} download style={{ ...BTN_SEC, textDecoration: 'none', display: 'inline-block' }}>
-            Export CSV
-          </a>
-          <a href={exportUrl('xlsx')} download style={{ ...BTN_SEC, textDecoration: 'none', display: 'inline-block' }}>
-            Export XLSX
-          </a>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {/* Export dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setExportOpen(v => !v)}
+              style={{ ...BTN_SEC, gap: '4px' }}
+            >
+              Export <span style={{ fontSize: '10px', opacity: 0.7 }}>{exportOpen ? '▲' : '▼'}</span>
+            </button>
+            {exportOpen && (
+              <>
+                <div onClick={() => setExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 49 }} />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+                  background: 'var(--bg-subtle)', border: '1px solid var(--border)',
+                  borderRadius: '8px', zIndex: 50, minWidth: '120px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                }}>
+                  <a
+                    href={exportUrl('csv')} download
+                    onClick={() => setExportOpen(false)}
+                    style={{ display: 'block', padding: '10px 14px', color: 'var(--text)', textDecoration: 'none', fontSize: '13px' }}
+                  >
+                    CSV
+                  </a>
+                  <a
+                    href={exportUrl('xlsx')} download
+                    onClick={() => setExportOpen(false)}
+                    style={{ display: 'block', padding: '10px 14px', color: 'var(--text)', textDecoration: 'none', fontSize: '13px' }}
+                  >
+                    Excel (XLSX)
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={() => setShowFilters(!showFilters)} style={BTN_SEC}>
             {showFilters ? 'Hide Filters' : 'Filters'}
           </button>
@@ -411,7 +482,7 @@ export default function TransactionsPage() {
             onClick={() => { setSelectMode(v => !v); setSelected(new Set()) }}
             style={selectMode ? { ...BTN_SEC, color: 'var(--accent)', borderColor: 'var(--accent)' } : BTN_SEC}
           >
-            {selectMode ? 'Cancel select' : 'Select'}
+            {selectMode ? 'Cancel' : 'Select'}
           </button>
         </div>
       </div>
@@ -610,7 +681,7 @@ export default function TransactionsPage() {
                     {editingId === tx.id ? 'Cancel' : 'Edit'}
                   </button>
                   <button
-                    onClick={() => deleteTransaction(tx.id)}
+                    onClick={() => confirmAndDelete(tx)}
                     disabled={deletingId === tx.id}
                     style={{ ...BTN_DNG, padding: '4px 8px', fontSize: '12px' }}
                   >
@@ -756,15 +827,15 @@ export default function TransactionsPage() {
         ))}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '1rem' }}>
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} style={BTN_SEC}>
-            Prev
-          </button>
-          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Page {page} of {totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={BTN_SEC}>
-            Next
+      {/* Load more */}
+      {transactions.length < total && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={loading}
+            style={{ ...BTN_SEC, minWidth: '140px' }}
+          >
+            {loading ? 'Loading...' : `Load more (${total - transactions.length} remaining)`}
           </button>
         </div>
       )}
@@ -871,6 +942,15 @@ export default function TransactionsPage() {
           {bulkLoading && <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Updating...</span>}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete transaction?"
+        message={confirmDelete ? `Delete "${confirmDelete.payee || 'this transaction'}" for ${formatAmt(confirmDelete)}? This cannot be undone (but you'll have 5s to undo via the notification).` : ''}
+        confirmLabel="Delete"
+        onConfirm={() => confirmDelete && executeDelete(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

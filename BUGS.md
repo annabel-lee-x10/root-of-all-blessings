@@ -132,3 +132,127 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** Added Voice button with `webkitSpeechRecognition` fallback (Safari/iOS, Android Chrome), pulsing listening state, "Listening…" label, tap-to-stop, and error banners for unsupported browser / permission denied / no speech. Transcript fed into `applyPasteData()`. Changed `Permissions-Policy` from `microphone=()` to `microphone=(self)`.
 
 **Regression test:** `tests/regression/voice-input.test.tsx`
+
+---
+
+## BUG-011 · Expense Dashboard: Top Expenses shows subcategories instead of parent categories
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/api/dashboard/route.ts`
+
+**Symptom:** The Top Expenses section on the dashboard listed individual subcategories (e.g. "Vet", "Grooming", "Food") instead of their parent category (e.g. "Pet"), making it hard to understand spending at a glance.
+
+**Root cause:** The top-level `catQuerySql` in the dashboard route grouped by `t.category_id, c.name`, which is the subcategory level. No join to the parent categories table was performed.
+
+**Fix:** Updated the top-level category query (and tag aggregation queries) to `LEFT JOIN categories p ON c.parent_id = p.id` and group by `COALESCE(p.id, c.id), COALESCE(p.name, c.name)`, rolling all subcategory spend up to the parent.
+
+---
+
+## BUG-012 · Categories page: search input below tabs, doesn't filter subcategories
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/categories/page.tsx`
+
+**Symptom:** The search box appeared inside the tab panel (below the Expense/Income switcher) and only filtered top-level category names — typing a subcategory name returned no results.
+
+**Fix:** Moved search input above the tab switcher. Updated `topLevel` filter to also show parent categories that have at least one matching subcategory; shows matching subcategories inline under their parent.
+
+---
+
+## BUG-013 · Transactions page loads all 7,040 records at once
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/transactions/page.tsx`
+
+**Symptom:** The transactions page fetched all transactions on load (effectively no pagination UX), making the page slow and the list unwieldy.
+
+**Fix:** Changed `LIMIT` from 20 to 50, replaced page-prev/next pagination with a "Load more" append pattern — initial load shows 50, each "Load more" appends the next 50.
+
+---
+
+## BUG-014 · Dashboard time period labels not compact; missing 3-month option
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/components/expense-dashboard.tsx`, `app/api/dashboard/route.ts`
+
+**Symptom:** Period tabs showed verbose labels "Daily / 7-day / Monthly" and had no 3-month option.
+
+**Fix:** Renamed periods to 1D/7D/1M/3M/Custom in both the component and API. Added 3M range that covers the last 3 calendar months.
+
+---
+
+## BUG-015 · Delete actions use native browser confirm() dialog
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/transactions/page.tsx`, `app/(protected)/categories/page.tsx`
+
+**Symptom:** Deleting a transaction or category triggered the browser's native `window.confirm()` popup, which looks out of place on mobile and cannot be styled.
+
+**Fix:** Replaced `window.confirm()` with a custom `ConfirmDialog` React component that renders a styled modal matching the app's design system.
+
+---
+
+## BUG-016 · No undo after delete
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/components/toast.tsx`, `app/(protected)/transactions/page.tsx`, `app/(protected)/categories/page.tsx`, `app/api/transactions/route.ts`
+
+**Symptom:** Deleting a transaction or category was immediately permanent with no recovery path.
+
+**Fix:** Extended the Toast system to support action buttons. After each confirmed delete, a toast with an "Undo" button appears for 5.5 seconds. Clicking Undo re-inserts the deleted item (transactions restore with original ID via modified POST handler; categories re-POST with same data). Keeps a stack of up to 5 undoable deletes per page.
+
+---
+
+## BUG-017 · Transactions toolbar buttons misaligned and clunky on mobile
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/transactions/page.tsx`
+
+**Symptom:** The action toolbar (Export CSV, Export XLSX, Filters, Select) was misaligned on mobile, with inconsistent button sizes and two separate export buttons.
+
+**Fix:** Merged Export CSV + XLSX into a single "Export ▾" button with an inline dropdown. Standardised button sizing and alignment across the toolbar.
+
+---
+
+## BUG-018 · More sheet includes News and Portfolio links
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/components/nav-bar.tsx`
+
+**Symptom:** The bottom-nav "More" slide-up sheet showed "News" and "Portfolio" links, which are already accessible via the View Switcher dropdown in the top nav.
+
+**Fix:** Removed News and Portfolio from `BUDGET_MORE`; sheet now contains only Accounts, Tags, and Sign out.
+
+---
+
+## BUG-019 · /add page: both cards not collapsible; wrong order
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/add/page.tsx`, `app/(protected)/components/wheres-my-money.tsx`, `app/(protected)/components/receipt-dropzone.tsx`
+
+**Symptom:** The /add page showed both WheresMyMoney (manual entry) and ReceiptDropzone (OCR) fully expanded with no way to collapse either. OCR card appeared below the manual form despite being the primary entry method.
+
+**Fix:** Converted /add to a client component managing accordion state. OCR card moved to top and opens by default; manual form starts collapsed. Tapping either card's header expands it and collapses the other.
+
+---
+
+## BUG-020 · Duplicate voice input buttons on /add page
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/components/receipt-dropzone.tsx`
+
+**Symptom:** Two voice mic buttons appeared on the /add page — one in the WheresMyMoney form, one in the ReceiptDropzone card.
+
+**Root cause:** Both components independently implemented voice input. WheresMyMoney's voice button fills the form via `applyPasteData()`. ReceiptDropzone had a second voice button that sent audio to `/api/receipts/voice`.
+
+**Fix:** Removed the voice button from ReceiptDropzone. Voice input is handled exclusively by WheresMyMoney; ReceiptDropzone focuses on image OCR.

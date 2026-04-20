@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/toast'
+import { ConfirmDialog } from '../components/confirm-dialog'
 import type { Category, Tag } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }
@@ -49,6 +50,8 @@ export default function CategoriesPage() {
   const [creating, setCreating] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('name-asc')
   const [search, setSearch] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<CategoryWithCount | null>(null)
+  const [undoStack, setUndoStack] = useState<CategoryWithCount[]>([])
 
   async function load() {
     setLoading(true)
@@ -72,9 +75,15 @@ export default function CategoriesPage() {
 
   useEffect(() => { load() }, [])
 
+  const searchLower = search.trim().toLowerCase()
   const topLevel = categories
     .filter(c => c.type === tab && c.parent_id == null)
-    .filter(c => !search.trim() || c.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter(c => {
+      if (!searchLower) return true
+      if (c.name.toLowerCase().includes(searchLower)) return true
+      // include parent if any subcategory matches
+      return categories.some(sub => sub.parent_id === c.id && sub.name.toLowerCase().includes(searchLower))
+    })
     .sort((a, b) => {
       if (sortBy === 'name-asc') return a.name.localeCompare(b.name)
       if (sortBy === 'name-desc') return b.name.localeCompare(a.name)
@@ -85,6 +94,8 @@ export default function CategoriesPage() {
 
   const subcatsByParent = new Map<string, CategoryWithCount[]>()
   for (const c of categories.filter(x => x.type === tab && x.parent_id != null)) {
+    if (searchLower && !c.name.toLowerCase().includes(searchLower) &&
+        !categories.find(p => p.id === c.parent_id)?.name.toLowerCase().includes(searchLower)) continue
     const pid = c.parent_id!
     if (!subcatsByParent.has(pid)) subcatsByParent.set(pid, [])
     subcatsByParent.get(pid)!.push(c)
@@ -116,22 +127,46 @@ export default function CategoriesPage() {
     }
   }
 
-  async function deleteCategory(c: CategoryWithCount) {
+  function requestDeleteCategory(c: CategoryWithCount) {
     if (c.tx_count > 0) {
-      showToast(`Cannot delete - ${c.tx_count} transaction${c.tx_count !== 1 ? 's' : ''} use this category`, 'error')
+      showToast(`Cannot delete — ${c.tx_count} transaction${c.tx_count !== 1 ? 's' : ''} use this category`, 'error')
       return
     }
-    if (!window.confirm(`Delete "${c.name}"?`)) return
+    setConfirmDelete(c)
+  }
+
+  async function executeDeleteCategory(c: CategoryWithCount) {
+    setConfirmDelete(null)
     setDeletingId(c.id)
     try {
       const res = await fetch(`/api/categories/${c.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      showToast('Category deleted', 'success')
+      setUndoStack(prev => [c, ...prev].slice(0, 5))
+      showToast(`Deleted "${c.name}"`, 'success', {
+        label: 'Undo',
+        onClick: () => undoDeleteCategory(c),
+      })
       await load()
     } catch {
       showToast('Failed to delete category', 'error')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  async function undoDeleteCategory(c: CategoryWithCount) {
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: c.name, type: c.type, sort_order: c.sort_order ?? 0, parent_id: c.parent_id ?? null }),
+      })
+      if (!res.ok) throw new Error()
+      showToast(`Restored "${c.name}"`, 'success')
+      setUndoStack(prev => prev.filter(x => x.id !== c.id))
+      await load()
+    } catch {
+      showToast('Failed to restore category', 'error')
     }
   }
 
@@ -192,6 +227,26 @@ export default function CategoriesPage() {
         </button>
       </div>
 
+      {/* Search + sort controls — above tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+        <input
+          style={{ ...INPUT, flex: '1 1 180px', minWidth: 0 }}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search categories..."
+        />
+        <select
+          style={{ ...SELECT, flex: '0 0 auto', width: 'auto' }}
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as SortBy)}
+        >
+          <option value="name-asc">Name A-Z</option>
+          <option value="name-desc">Name Z-A</option>
+          <option value="volume-desc">Volume high-low</option>
+          <option value="volume-asc">Volume low-high</option>
+        </select>
+      </div>
+
       <div style={{ display: 'flex', marginBottom: 0 }}>
         <button style={TAB_STYLE(tab === 'expense')} onClick={() => { setTab('expense'); setShowCreate(false) }}>
           Expense
@@ -232,26 +287,6 @@ export default function CategoriesPage() {
             </div>
           </div>
         )}
-
-        {/* Sort + search controls */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-          <input
-            style={{ ...INPUT, flex: '1 1 180px', minWidth: 0 }}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search categories..."
-          />
-          <select
-            style={{ ...SELECT, flex: '0 0 auto', width: 'auto' }}
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortBy)}
-          >
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="volume-desc">Volume high-low</option>
-            <option value="volume-asc">Volume low-high</option>
-          </select>
-        </div>
 
         {loading ? (
           <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading...</p>
@@ -296,7 +331,7 @@ export default function CategoriesPage() {
                       <button style={BTN_SEC} onClick={() => startEdit(c)}>Edit</button>
                       <button
                         style={BTN_DNG}
-                        onClick={() => deleteCategory(c)}
+                        onClick={() => requestDeleteCategory(c)}
                         disabled={deletingId === c.id}
                         title={c.tx_count > 0 ? `${c.tx_count} transactions use this category` : 'Delete'}
                       >
@@ -342,7 +377,7 @@ export default function CategoriesPage() {
                       </div>
                       <div style={{ display: 'flex', gap: '0.4rem' }}>
                         <button style={BTN_SEC} onClick={() => startEdit(sub)}>Edit</button>
-                        <button style={BTN_DNG} onClick={() => deleteCategory(sub)} disabled={deletingId === sub.id}>
+                        <button style={BTN_DNG} onClick={() => requestDeleteCategory(sub)} disabled={deletingId === sub.id}>
                           {deletingId === sub.id ? '...' : 'Delete'}
                         </button>
                       </div>
@@ -354,6 +389,15 @@ export default function CategoriesPage() {
           ))
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete category?"
+        message={confirmDelete ? `Delete "${confirmDelete.name}"? This cannot be undone (but you'll have 5s to undo via the notification).` : ''}
+        confirmLabel="Delete"
+        onConfirm={() => confirmDelete && executeDeleteCategory(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </main>
   )
 }
