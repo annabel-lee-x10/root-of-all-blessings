@@ -92,13 +92,14 @@ export function LoginForm() {
       >
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
-            style={{ background: 'var(--accent-gradient)' }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3,17 8,12 12,14 18,7 21,10"/>
-              <polyline points="18,7 21,7 21,10"/>
-            </svg>
+          <div className="mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/logo-mark.svg"
+              alt="Root OS"
+              width={48}
+              height={48}
+            />
           </div>
           <h1
             className="text-xl font-semibold tracking-tight"

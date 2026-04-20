@@ -64,20 +64,11 @@ export function NavBar() {
         }}
       >
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <div
-            style={{
-              width: '28px', height: '28px', borderRadius: '8px',
-              background: 'var(--accent-gradient)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3,17 8,12 12,14 18,7 21,10"/>
-              <polyline points="18,7 21,7 21,10"/>
-            </svg>
-          </div>
-          <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
+        <div style={{ flexShrink: 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo.svg" alt="Root OS" height={28} className="logo-dark" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo-light.svg" alt="Root OS" height={28} className="logo-light" />
         </div>
 
         {/* Desktop tabs */}

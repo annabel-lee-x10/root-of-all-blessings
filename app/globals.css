@@ -1,12 +1,13 @@
 @import "tailwindcss";
+@import "/brand/tokens.css";
 
 :root {
-  --bg: #0d1117;
-  --bg-card: #161b22;
-  --border: #30363d;
-  --text: #e6edf3;
+  --bg:         var(--root-ink);
+  --bg-card:    var(--root-graphite);
+  --border:     #30363d;
+  --text:       var(--root-paper);
   --text-muted: #8b949e;
-  --accent: #CC5500;
+  --accent:     var(--root-ember);
 
   --bg-subtle: #1c2128;
   --bg-dim: #21262d;
@@ -18,9 +19,9 @@
   --bg-error: #4a1717;
   --border-success: rgba(46, 160, 67, 0.5);
   --border-error: rgba(248, 81, 73, 0.5);
-  --accent-faint: rgba(204, 85, 0, 0.10);
-  --accent-muted: rgba(204, 85, 0, 0.25);
-  --accent-soft: rgba(204, 85, 0, 0.40);
+  --accent-faint: rgba(244, 165, 66, 0.10);
+  --accent-muted: rgba(244, 165, 66, 0.25);
+  --accent-soft: rgba(244, 165, 66, 0.40);
   --red-faint: rgba(248, 81, 73, 0.10);
   --red-muted: rgba(248, 81, 73, 0.25);
   --green-faint: rgba(63, 184, 132, 0.10);
@@ -29,12 +30,12 @@
 }
 
 [data-theme="light"] {
-  --bg: #f6f8fa;
-  --bg-card: #ffffff;
-  --border: #d0d7de;
-  --text: #1f2328;
+  --bg:         var(--root-cream);
+  --bg-card:    #ffffff;
+  --border:     #d0d7de;
+  --text:       var(--root-ink);
   --text-muted: #636c76;
-  --accent: #B34700;
+  --accent:     var(--root-orange);
 
   --bg-subtle: #f0f2f5;
   --bg-dim: #e1e4e8;
@@ -46,9 +47,9 @@
   --bg-error: #ffebe9;
   --border-success: rgba(46, 160, 67, 0.5);
   --border-error: rgba(207, 34, 46, 0.5);
-  --accent-faint: rgba(179, 71, 0, 0.10);
-  --accent-muted: rgba(179, 71, 0, 0.25);
-  --accent-soft: rgba(179, 71, 0, 0.40);
+  --accent-faint: rgba(204, 85, 0, 0.10);
+  --accent-muted: rgba(204, 85, 0, 0.25);
+  --accent-soft: rgba(204, 85, 0, 0.40);
   --red-faint: rgba(207, 34, 46, 0.10);
   --red-muted: rgba(207, 34, 46, 0.25);
   --green-faint: rgba(26, 127, 55, 0.10);
@@ -69,3 +70,9 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Logo swap: show dark logo by default, light logo when [data-theme="light"] */
+.logo-dark  { display: block; }
+.logo-light { display: none;  }
+[data-theme="light"] .logo-dark  { display: none;  }
+[data-theme="light"] .logo-light { display: block; }
