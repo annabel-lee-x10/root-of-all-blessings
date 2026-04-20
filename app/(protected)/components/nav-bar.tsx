@@ -305,7 +305,7 @@ export function NavBar() {
 
             {/* Add — raised accent FAB */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Link href="/dashboard" aria-label="Add transaction" style={fabStyle}>
+              <Link href="/add" aria-label="Add transaction" style={fabStyle}>
                 <PlusIcon size={26} />
               </Link>
             </div>
