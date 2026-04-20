@@ -14,6 +14,18 @@ export async function GET(request: NextRequest) {
   const tag_id = p.get('tag_id')
   const start = p.get('start')
   const end = p.get('end')
+  const search = p.get('search')
+  const sort = p.get('sort') ?? 'date-desc'
+
+  const ORDER_MAP: Record<string, string> = {
+    'date-desc': 't.datetime DESC',
+    'date-asc': 't.datetime ASC',
+    'amount-desc': 'COALESCE(t.sgd_equivalent, t.amount) DESC',
+    'amount-asc': 'COALESCE(t.sgd_equivalent, t.amount) ASC',
+    'payee-asc': "COALESCE(t.payee, '') ASC, t.datetime DESC",
+  }
+  const orderClause = ORDER_MAP[sort] ?? 't.datetime DESC'
+
   const status = p.get('status')  // 'draft' or null (default = approved)
 
   const where: string[] = []
@@ -28,6 +40,10 @@ export async function GET(request: NextRequest) {
     where.push('EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = t.id AND tt.tag_id = ?)')
     args.push(tag_id)
   }
+  if (search) {
+    where.push('(t.payee LIKE ? OR t.note LIKE ? OR c.name LIKE ?)')
+    args.push(`%${search}%`, `%${search}%`, `%${search}%`)
+  }
   if (status === 'draft') {
     where.push("t.status = 'draft'")
   } else {
@@ -38,7 +54,10 @@ export async function GET(request: NextRequest) {
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
 
   const countResult = await db.execute({
-    sql: `SELECT COUNT(*) as total FROM transactions t ${whereClause}`,
+    sql: `SELECT COUNT(*) as total
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        ${whereClause}`,
     args,
   })
   const total = Number(countResult.rows[0].total)
@@ -53,7 +72,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN accounts ta ON t.to_account_id = ta.id
           LEFT JOIN categories c ON t.category_id = c.id
           ${whereClause}
-          ORDER BY t.datetime DESC
+          ORDER BY ${orderClause}
           LIMIT ? OFFSET ?`,
     args: [...args, limit, offset],
   })

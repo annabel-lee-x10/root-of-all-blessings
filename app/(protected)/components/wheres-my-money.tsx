@@ -7,6 +7,26 @@ import { parseBlessThis } from '@/lib/parse-bless-this'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
 
+const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
+const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
+
+function AccountOptions({ accounts }: { accounts: Account[] }) {
+  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
+  for (const a of accounts) {
+    if (groups[a.type]) groups[a.type].push(a)
+    else groups[a.type] = [a]
+  }
+  return (
+    <>
+      {ACCOUNT_TYPE_ORDER.filter(t => groups[t] && groups[t].length > 0).map(type => (
+        <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
+          {groups[type].map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
 function sgtNow() {
   const sgt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }))
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -536,18 +556,14 @@ export function WheresMyMoney() {
             <div style={{ flex: 1 }}>
               <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle}>
                 <option value="">Account</option>
-                {activeAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                <AccountOptions accounts={activeAccounts} />
               </select>
             </div>
             {type === 'transfer' && (
               <div style={{ flex: 1 }}>
                 <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
                   <option value="">To Account</option>
-                  {activeAccounts.filter((a) => a.id !== accountId).map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
+                  <AccountOptions accounts={activeAccounts.filter((a) => a.id !== accountId)} />
                 </select>
               </div>
             )}

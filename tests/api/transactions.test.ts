@@ -395,6 +395,34 @@ describe('PATCH /api/transactions/[id] — status', () => {
   })
 })
 
+describe('GET /api/transactions - search and sort', () => {
+  it('filters by search term matching payee', async () => {
+    seedAccount('srch_a1', 'SrchBank', 'bank')
+    seedTransaction('srch_t1', 'srch_a1', { payee: 'NTUC FairPrice', type: 'expense' })
+    seedTransaction('srch_t2', 'srch_a1', { payee: 'Grab', type: 'expense' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions?search=NTUC'))
+    const data = await res.json()
+    expect(data.data.some((t: { payee: string }) => t.payee === 'NTUC FairPrice')).toBe(true)
+    expect(data.data.every((t: { payee: string }) => t.payee !== 'Grab')).toBe(true)
+  })
+
+  it('sorts by amount descending', async () => {
+    seedAccount('sort_a1', 'SortBank', 'bank')
+    seedTransaction('sort_t1', 'sort_a1', { amount: 10, type: 'expense' })
+    seedTransaction('sort_t2', 'sort_a1', { amount: 50, type: 'expense' })
+    seedTransaction('sort_t3', 'sort_a1', { amount: 25, type: 'expense' })
+    const { GET } = await import('@/app/api/transactions/route')
+    const res = await GET(req('/api/transactions?sort=amount-desc'))
+    const data = await res.json()
+    // Find our 3 transactions in the result and verify ordering
+    const amounts = data.data
+      .filter((t: { id: string }) => ['sort_t1', 'sort_t2', 'sort_t3'].includes(t.id))
+      .map((t: { amount: number }) => t.amount)
+    expect(amounts).toEqual([50, 25, 10])
+  })
+})
+
 describe('GET /api/transactions/payees', () => {
   it('returns distinct payees', async () => {
     seedTransaction('tx1', 'acc1', { payee: 'Starbucks' })
