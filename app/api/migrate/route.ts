@@ -40,7 +40,7 @@ export async function POST() {
     },
     {
       name: 'accounts.delete_vallow',
-      sql: "DELETE FROM accounts WHERE name = 'vallow'",
+      sql: "DELETE FROM accounts WHERE LOWER(name) = 'vallow'",
     },
   ]
 
