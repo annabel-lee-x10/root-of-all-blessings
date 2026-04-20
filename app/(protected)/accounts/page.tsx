@@ -5,12 +5,12 @@ import Link from 'next/link'
 import { useToast } from '../components/toast'
 import type { Account } from '@/lib/types'
 
-const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
+const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }
 const BTN_PRI = { ...BTN, background: 'var(--accent)', color: 'var(--bg)' }
 const BTN_SEC = { ...BTN, background: 'var(--bg-dim)', color: 'var(--text)', border: '1px solid var(--border)' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: 'var(--red)', border: '1px solid var(--red)' }
 const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
-const SELECT = { ...INPUT }
+const SELECT = { ...INPUT, maxWidth: '100%' }
 const CARD = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.25rem 1.5rem', marginBottom: '1rem' }
 
 const TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const

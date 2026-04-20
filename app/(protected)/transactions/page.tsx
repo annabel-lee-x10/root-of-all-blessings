@@ -71,6 +71,7 @@ function txToForm(tx: TransactionRow): EditForm {
 const BTN: React.CSSProperties = {
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontSize: '12px', fontWeight: 500, padding: '5px 10px',
+  minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
 }
 const BTN_PRI: React.CSSProperties = { ...BTN, background: 'var(--accent)', color: 'var(--bg)' }
 const BTN_SEC: React.CSSProperties = { ...BTN, background: 'var(--bg-dim)', color: 'var(--text)', border: '1px solid var(--border)' }
@@ -80,7 +81,7 @@ const INPUT: React.CSSProperties = {
   background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
   color: 'var(--text)', fontSize: '13px', padding: '6px 10px', outline: 'none',
 }
-const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
+const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer', maxWidth: '100%' }
 
 const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
 const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
@@ -444,7 +445,7 @@ export default function TransactionsPage() {
           display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px',
         }}>
           <div>
-            <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>From</label>
+            <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>From</label>
             <input
               type="date" style={{ ...INPUT, width: '100%' }}
               value={draftDates.start}
@@ -453,7 +454,7 @@ export default function TransactionsPage() {
             />
           </div>
           <div>
-            <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>To</label>
+            <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>To</label>
             <input
               type="date" style={{ ...INPUT, width: '100%' }}
               value={draftDates.end}
@@ -462,28 +463,28 @@ export default function TransactionsPage() {
             />
           </div>
           <div>
-            <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Account</label>
+            <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Account</label>
             <select style={{ ...SELECT, width: '100%' }} value={filters.accountId} onChange={(e) => setFilter('accountId', e.target.value)}>
               <option value="">All accounts</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Category</label>
+            <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Category</label>
             <select style={{ ...SELECT, width: '100%' }} value={filters.categoryId} onChange={(e) => setFilter('categoryId', e.target.value)}>
               <option value="">All categories</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Type</label>
+            <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Type</label>
             <div style={{ display: 'flex', gap: '4px' }}>
               {(['', 'expense', 'income', 'transfer'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setFilter('type', t)}
                   style={{
-                    ...BTN, padding: '4px 8px', fontSize: '11px',
+                    ...BTN, padding: '4px 8px', fontSize: '12px',
                     background: filters.type === t ? 'var(--accent)' : 'var(--bg-dim)',
                     color: filters.type === t ? 'var(--bg)' : 'var(--text-muted)',
                     border: '1px solid var(--border)',
@@ -495,7 +496,7 @@ export default function TransactionsPage() {
             </div>
           </div>
           <div>
-            <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '4px' }}>Tag</label>
+            <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '4px' }}>Tag</label>
             <select style={{ ...SELECT, width: '100%' }} value={filters.tagId} onChange={(e) => setFilter('tagId', e.target.value)}>
               <option value="">All tags</option>
               {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -604,14 +605,14 @@ export default function TransactionsPage() {
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button
                     onClick={() => editingId === tx.id ? cancelEdit() : startEdit(tx)}
-                    style={{ ...BTN_SEC, padding: '4px 8px', fontSize: '11px' }}
+                    style={{ ...BTN_SEC, padding: '4px 8px', fontSize: '12px' }}
                   >
                     {editingId === tx.id ? 'Cancel' : 'Edit'}
                   </button>
                   <button
                     onClick={() => deleteTransaction(tx.id)}
                     disabled={deletingId === tx.id}
-                    style={{ ...BTN_DNG, padding: '4px 8px', fontSize: '11px' }}
+                    style={{ ...BTN_DNG, padding: '4px 8px', fontSize: '12px' }}
                   >
                     {deletingId === tx.id ? '...' : '×'}
                   </button>
@@ -645,40 +646,40 @@ export default function TransactionsPage() {
                   ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', marginBottom: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', marginBottom: '8px' }}>
                   <div>
-                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Date / Time</label>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Date / Time</label>
                     <input type="datetime-local" style={{ ...INPUT, width: '100%' }} value={editForm.datetime} onChange={(e) => ef('datetime', e.target.value)} />
                   </div>
                   <div>
-                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Amount</label>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Amount</label>
                     <input type="number" step="0.01" style={{ ...INPUT, width: '100%' }} value={editForm.amount} onChange={(e) => ef('amount', e.target.value)} />
                   </div>
                   <div>
-                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Currency</label>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Currency</label>
                     <input style={{ ...INPUT, width: '100%' }} value={editForm.currency} onChange={(e) => ef('currency', e.target.value.toUpperCase())} maxLength={3} />
                   </div>
                   {editForm.currency !== 'SGD' && (
                     <>
                       <div>
-                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>FX Rate</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>FX Rate</label>
                         <input type="number" step="0.0001" style={{ ...INPUT, width: '100%' }} value={editForm.fx_rate} onChange={(e) => ef('fx_rate', e.target.value)} />
                       </div>
                       <div>
-                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>FX Date</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>FX Date</label>
                         <input type="date" style={{ ...INPUT, width: '100%' }} value={editForm.fx_date} onChange={(e) => ef('fx_date', e.target.value)} />
                       </div>
                     </>
                   )}
                   <div>
-                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Account</label>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Account</label>
                     <select style={{ ...SELECT, width: '100%' }} value={editForm.account_id} onChange={(e) => ef('account_id', e.target.value)}>
                       <AccountOptions accounts={activeAccounts} />
                     </select>
                   </div>
                   {editForm.type === 'transfer' && (
                     <div>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>To Account</label>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>To Account</label>
                       <select style={{ ...SELECT, width: '100%' }} value={editForm.to_account_id} onChange={(e) => ef('to_account_id', e.target.value)}>
                         <option value="">Select...</option>
                         <AccountOptions accounts={activeAccounts.filter((a) => a.id !== editForm.account_id)} />
@@ -687,7 +688,7 @@ export default function TransactionsPage() {
                   )}
                   {editForm.type !== 'transfer' && (
                     <div>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Category</label>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Category</label>
                       <select style={{ ...SELECT, width: '100%' }} value={editForm.category_id} onChange={(e) => ef('category_id', e.target.value)}>
                         <option value="">None</option>
                         {(editForm.type === 'expense' ? expenseCategories : incomeCategories).map((c) => (
@@ -697,13 +698,13 @@ export default function TransactionsPage() {
                     </div>
                   )}
                   <div>
-                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payee</label>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Payee</label>
                     <input style={{ ...INPUT, width: '100%' }} value={editForm.payee} onChange={(e) => ef('payee', e.target.value)} />
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '8px' }}>
-                  <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Note</label>
+                  <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Note</label>
                   <textarea
                     style={{ ...INPUT, width: '100%', resize: 'vertical', minHeight: '56px', fontFamily: 'inherit' }}
                     value={editForm.note}
