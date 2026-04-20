@@ -221,3 +221,33 @@ describe('GET /api/dashboard (drilldown)', () => {
     expect(data.tag_breakdown).toEqual([])
   })
 })
+
+describe('GET /api/dashboard (parent_category_id drilldown)', () => {
+  it('returns subcategory breakdown when parent_category_id is provided', async () => {
+    seedCategory('parent1', 'Meals', 'expense')
+    seedCategory('sub1', 'Groceries', 'expense')
+    seedCategory('sub2', 'Dining', 'expense')
+    // Set parent_id on sub1 and sub2 via PATCH
+    const { PATCH } = await import('@/app/api/categories/[id]/route')
+    await PATCH(
+      req('/api/categories/sub1', 'PATCH', { parent_id: 'parent1' }),
+      { params: Promise.resolve({ id: 'sub1' }) }
+    )
+    await PATCH(
+      req('/api/categories/sub2', 'PATCH', { parent_id: 'parent1' }),
+      { params: Promise.resolve({ id: 'sub2' }) }
+    )
+    const now = new Date().toISOString()
+    seedTransaction('t1', 'acc1', { type: 'expense', amount: 50, categoryId: 'sub1', datetime: now })
+    seedTransaction('t2', 'acc1', { type: 'expense', amount: 30, categoryId: 'sub2', datetime: now })
+
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=monthly&parent_category_id=parent1'))
+    const data = await res.json()
+    expect(Array.isArray(data.category_breakdown)).toBe(true)
+    expect(data.category_breakdown.length).toBeGreaterThanOrEqual(2)
+    const names = data.category_breakdown.map((x: { category_name: string }) => x.category_name)
+    expect(names).toContain('Groceries')
+    expect(names).toContain('Dining')
+  })
+})

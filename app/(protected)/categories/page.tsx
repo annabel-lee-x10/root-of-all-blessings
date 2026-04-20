@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/toast'
 import type { Category, Tag } from '@/lib/types'
 
@@ -9,12 +8,12 @@ const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cur
 const BTN_PRI = { ...BTN, background: '#CC5500', color: '#0d1117' }
 const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
-const BTN_ICON = { ...BTN_SEC, padding: '0.3rem 0.6rem', fontSize: '0.85rem' }
 const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 const SELECT = { ...INPUT }
-const CARD: React.CSSProperties = { background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '0.5rem' }
+const CARD: React.CSSProperties = { background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }
 
 type Tab = 'expense' | 'income'
+type SortBy = 'name-asc' | 'name-desc' | 'volume-desc' | 'volume-asc'
 type CategoryWithCount = Category & { tx_count: number }
 type TagWithCategory = Tag & { category_id: string | null }
 
@@ -27,12 +26,15 @@ export default function CategoriesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editType, setEditType] = useState<Tab>('expense')
+  const [editParentId, setEditParentId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [movingId, setMovingId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newParentId, setNewParentId] = useState('')
   const [creating, setCreating] = useState(false)
+  const [sortBy, setSortBy] = useState<SortBy>('name-asc')
+  const [search, setSearch] = useState('')
 
   async function load() {
     setLoading(true)
@@ -56,14 +58,29 @@ export default function CategoriesPage() {
 
   useEffect(() => { load() }, [])
 
-  const visible = categories
-    .filter(c => c.type === tab)
-    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
+  const topLevel = categories
+    .filter(c => c.type === tab && c.parent_id == null)
+    .filter(c => !search.trim() || c.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === 'name-asc') return a.name.localeCompare(b.name)
+      if (sortBy === 'name-desc') return b.name.localeCompare(a.name)
+      if (sortBy === 'volume-desc') return b.tx_count - a.tx_count
+      if (sortBy === 'volume-asc') return a.tx_count - b.tx_count
+      return 0
+    })
+
+  const subcatsByParent = new Map<string, CategoryWithCount[]>()
+  for (const c of categories.filter(x => x.type === tab && x.parent_id != null)) {
+    const pid = c.parent_id!
+    if (!subcatsByParent.has(pid)) subcatsByParent.set(pid, [])
+    subcatsByParent.get(pid)!.push(c)
+  }
 
   function startEdit(c: CategoryWithCount) {
     setEditingId(c.id)
     setEditName(c.name)
     setEditType(c.type as Tab)
+    setEditParentId(c.parent_id ?? null)
   }
 
   async function saveEdit(id: string) {
@@ -72,7 +89,7 @@ export default function CategoriesPage() {
       const res = await fetch(`/api/categories/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim(), type: editType }),
+        body: JSON.stringify({ name: editName.trim(), type: editType, parent_id: editParentId }),
       })
       if (!res.ok) throw new Error()
       showToast('Category updated', 'success')
@@ -104,48 +121,20 @@ export default function CategoriesPage() {
     }
   }
 
-  async function move(c: CategoryWithCount, dir: 'up' | 'down') {
-    const list = visible
-    const idx = list.findIndex(x => x.id === c.id)
-    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= list.length) return
-    const swap = list[swapIdx]
-    setMovingId(c.id)
-    try {
-      await Promise.all([
-        fetch(`/api/categories/${c.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sort_order: swap.sort_order }),
-        }),
-        fetch(`/api/categories/${swap.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sort_order: c.sort_order }),
-        }),
-      ])
-      await load()
-    } catch {
-      showToast('Failed to reorder', 'error')
-    } finally {
-      setMovingId(null)
-    }
-  }
-
   async function createCategory() {
     if (!newName.trim()) { showToast('Name is required', 'error'); return }
-    const maxOrder = visible.length > 0 ? Math.max(...visible.map(c => c.sort_order)) + 1 : 0
     setCreating(true)
     try {
       const res = await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), type: tab, sort_order: maxOrder }),
+        body: JSON.stringify({ name: newName.trim(), type: tab, sort_order: 0, parent_id: newParentId || null }),
       })
       if (!res.ok) throw new Error()
       showToast('Category created', 'success')
       setShowCreate(false)
       setNewName('')
+      setNewParentId('')
       await load()
     } catch {
       showToast('Failed to create category', 'error')
@@ -181,7 +170,7 @@ export default function CategoriesPage() {
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
         <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#e6edf3' }}>Categories</h1>
-        <button style={BTN_PRI} onClick={() => { setShowCreate(v => !v); setNewName('') }}>
+        <button style={BTN_PRI} onClick={() => { setShowCreate(v => !v); setNewName(''); setNewParentId('') }}>
           {showCreate ? 'Cancel' : '+ New Category'}
         </button>
       </div>
@@ -197,88 +186,155 @@ export default function CategoriesPage() {
 
       <div style={{ border: '1px solid #30363d', borderRadius: '0 6px 6px 6px', padding: '1.25rem', background: '#161b22' }}>
         {showCreate && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-            <input
-              style={{ ...INPUT, flex: 1 }}
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              placeholder={`New ${tab} category name`}
-              onKeyDown={e => e.key === 'Enter' && createCategory()}
-              autoFocus
-            />
-            <button style={BTN_PRI} onClick={createCategory} disabled={creating}>
-              {creating ? 'Adding...' : 'Add'}
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                style={{ ...INPUT, flex: 1 }}
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder={`New ${tab} category name`}
+                onKeyDown={e => e.key === 'Enter' && createCategory()}
+                autoFocus
+              />
+              <button style={BTN_PRI} onClick={createCategory} disabled={creating}>
+                {creating ? 'Adding...' : 'Add'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <label style={{ color: '#8b949e', fontSize: '0.8rem', flexShrink: 0 }}>Parent (optional):</label>
+              <select
+                style={{ ...SELECT, flex: 1 }}
+                value={newParentId}
+                onChange={e => setNewParentId(e.target.value)}
+              >
+                <option value="">None (top-level)</option>
+                {categories.filter(c => c.type === tab && c.parent_id == null).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 
+        {/* Sort + search controls */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+          <input
+            style={{ ...INPUT, flex: '1 1 180px', minWidth: 0 }}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search categories..."
+          />
+          <select
+            style={{ ...SELECT, flex: '0 0 auto', width: 'auto' }}
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as SortBy)}
+          >
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="volume-desc">Volume high-low</option>
+            <option value="volume-asc">Volume low-high</option>
+          </select>
+        </div>
+
         {loading ? (
           <p style={{ color: '#8b949e', margin: 0 }}>Loading...</p>
-        ) : visible.length === 0 ? (
-          <p style={{ color: '#8b949e', margin: 0 }}>No {tab} categories yet.</p>
+        ) : topLevel.length === 0 ? (
+          <p style={{ color: '#8b949e', margin: 0 }}>No {tab} categories{search ? ' match.' : ' yet.'}</p>
         ) : (
-          visible.map((c, idx) => {
-            const linkedTags = (tagsByCategory[c.id] ?? []).sort((a, b) => a.name.localeCompare(b.name))
-            return (
-              <div key={c.id} style={CARD}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <button style={BTN_ICON} onClick={() => move(c, 'up')} disabled={idx === 0 || movingId === c.id} title="Move up">^</button>
-                    <button style={BTN_ICON} onClick={() => move(c, 'down')} disabled={idx === visible.length - 1 || movingId === c.id} title="Move down">v</button>
+          topLevel.map(c => (
+            <React.Fragment key={c.id}>
+              {/* Top-level card */}
+              <div style={CARD}>
+                {editingId === c.id ? (
+                  <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(c.id)} />
+                    <select style={{ ...SELECT, width: 'auto' }} value={editType} onChange={e => setEditType(e.target.value as Tab)}>
+                      <option value="expense">Expense</option>
+                      <option value="income">Income</option>
+                    </select>
+                    <select
+                      style={{ ...SELECT, width: 'auto' }}
+                      value={editParentId ?? ''}
+                      onChange={e => setEditParentId(e.target.value || null)}
+                    >
+                      <option value="">None (top-level)</option>
+                      {categories.filter(x => x.type === editType && x.parent_id == null && x.id !== editingId).map(x => (
+                        <option key={x.id} value={x.id}>{x.name}</option>
+                      ))}
+                    </select>
+                    <button style={BTN_PRI} onClick={() => saveEdit(c.id)} disabled={savingId === c.id}>
+                      {savingId === c.id ? '...' : 'Save'}
+                    </button>
+                    <button style={BTN_SEC} onClick={() => setEditingId(null)}>Cancel</button>
                   </div>
+                ) : (
+                  <>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ color: '#e6edf3', fontWeight: 500 }}>{c.name}</span>
+                      <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
+                        {c.tx_count} transaction{c.tx_count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button style={BTN_SEC} onClick={() => startEdit(c)}>Edit</button>
+                      <button
+                        style={BTN_DNG}
+                        onClick={() => deleteCategory(c)}
+                        disabled={deletingId === c.id}
+                        title={c.tx_count > 0 ? `${c.tx_count} transactions use this category` : 'Delete'}
+                      >
+                        {deletingId === c.id ? '...' : 'Delete'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
 
-                  {editingId === c.id ? (
-                    <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(c.id)} />
+              {/* Subcategories — indented */}
+              {(subcatsByParent.get(c.id) ?? []).map(sub => (
+                <div key={sub.id} style={{ ...CARD, marginLeft: '1.5rem', background: '#0d1117', border: '1px dashed #30363d' }}>
+                  {editingId === sub.id ? (
+                    <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(sub.id)} />
                       <select style={{ ...SELECT, width: 'auto' }} value={editType} onChange={e => setEditType(e.target.value as Tab)}>
                         <option value="expense">Expense</option>
                         <option value="income">Income</option>
                       </select>
-                      <button style={BTN_PRI} onClick={() => saveEdit(c.id)} disabled={savingId === c.id}>
-                        {savingId === c.id ? '...' : 'Save'}
+                      <select
+                        style={{ ...SELECT, width: 'auto' }}
+                        value={editParentId ?? ''}
+                        onChange={e => setEditParentId(e.target.value || null)}
+                      >
+                        <option value="">None (top-level)</option>
+                        {categories.filter(x => x.type === editType && x.parent_id == null && x.id !== sub.id).map(x => (
+                          <option key={x.id} value={x.id}>{x.name}</option>
+                        ))}
+                      </select>
+                      <button style={BTN_PRI} onClick={() => saveEdit(sub.id)} disabled={savingId === sub.id}>
+                        {savingId === sub.id ? '...' : 'Save'}
                       </button>
                       <button style={BTN_SEC} onClick={() => setEditingId(null)}>Cancel</button>
                     </div>
                   ) : (
                     <>
                       <div style={{ flex: 1 }}>
-                        <span style={{ color: '#e6edf3', fontWeight: 500 }}>{c.name}</span>
-                        <Link
-                          href={`/transactions?category_id=${c.id}`}
-                          style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem', textDecoration: 'none' }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline' }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none' }}
-                        >
-                          {c.tx_count} transaction{c.tx_count !== 1 ? 's' : ''}
-                        </Link>
+                        <span style={{ color: '#c9d1d9', fontWeight: 400 }}>{sub.name}</span>
+                        <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
+                          {sub.tx_count} transaction{sub.tx_count !== 1 ? 's' : ''}
+                        </span>
                       </div>
                       <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button style={BTN_SEC} onClick={() => startEdit(c)}>Edit</button>
-                        <button
-                          style={BTN_DNG}
-                          onClick={() => deleteCategory(c)}
-                          disabled={deletingId === c.id}
-                          title={c.tx_count > 0 ? `${c.tx_count} transactions use this category` : 'Delete'}
-                        >
-                          {deletingId === c.id ? '...' : 'Delete'}
+                        <button style={BTN_SEC} onClick={() => startEdit(sub)}>Edit</button>
+                        <button style={BTN_DNG} onClick={() => deleteCategory(sub)} disabled={deletingId === sub.id}>
+                          {deletingId === sub.id ? '...' : 'Delete'}
                         </button>
                       </div>
                     </>
                   )}
                 </div>
-
-                {editingId !== c.id && linkedTags.length > 0 && (
-                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.5rem', paddingLeft: '2.75rem' }}>
-                    {linkedTags.map(tag => (
-                      <span key={tag.id} style={{ fontSize: '0.72rem', background: '#21262d', color: '#8b949e', padding: '0.1rem 0.45rem', borderRadius: '4px', border: '1px solid #30363d' }}>
-                        {tag.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })
+              ))}
+            </React.Fragment>
+          ))
         )}
       </div>
     </main>
