@@ -147,9 +147,9 @@ describe('Budget view bottom nav', () => {
     expect(within(getBottomNav()).getByRole('link', { name: /Categories/i })).toHaveAttribute('href', '/categories')
   })
 
-  it('FAB Add transaction link points to /dashboard', () => {
+  it('FAB Add transaction link points to /add', () => {
     render(<NavBar />)
-    expect(within(getBottomNav()).getByRole('link', { name: 'Add transaction' })).toHaveAttribute('href', '/dashboard')
+    expect(within(getBottomNav()).getByRole('link', { name: 'Add transaction' })).toHaveAttribute('href', '/add')
   })
 
   it('Dashboard tab is active on /dashboard', () => {
