@@ -85,6 +85,19 @@ const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
 const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
 
+function useMobile(bp = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`)
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [bp])
+  return mobile
+}
+
 function AccountOptions({ accounts }: { accounts: Account[] }) {
   const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
   for (const a of accounts) {
@@ -104,6 +117,7 @@ function AccountOptions({ accounts }: { accounts: Account[] }) {
 
 export default function TransactionsPage() {
   const { showToast } = useToast()
+  const isMobile = useMobile()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -536,8 +550,8 @@ export default function TransactionsPage() {
             {/* Row */}
             <div
               style={{
-                display: 'flex', alignItems: 'center', gap: '12px',
-                padding: '10px 16px',
+                display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', gap: '8px',
+                padding: '10px 16px', flexWrap: isMobile ? 'wrap' : 'nowrap',
                 borderBottom: i < transactions.length - 1 || editingId === tx.id ? '1px solid var(--bg-dim)' : 'none',
               }}
             >
@@ -550,7 +564,7 @@ export default function TransactionsPage() {
                   style={{ cursor: 'pointer', flexShrink: 0 }}
                 />
               )}
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor(tx.type), flexShrink: 0 }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor(tx.type), flexShrink: 0, marginTop: isMobile ? '3px' : 0 }} />
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
@@ -580,31 +594,35 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              <span style={{ fontSize: '13px', fontWeight: 600, color: typeColor(tx.type), flexShrink: 0 }}>
-                {formatAmt(tx)}
-              </span>
-
-              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                <button
-                  onClick={() => editingId === tx.id ? cancelEdit() : startEdit(tx)}
-                  style={{ ...BTN_SEC, padding: '4px 8px', fontSize: '11px' }}
-                >
-                  {editingId === tx.id ? 'Cancel' : 'Edit'}
-                </button>
-                <button
-                  onClick={() => deleteTransaction(tx.id)}
-                  disabled={deletingId === tx.id}
-                  style={{ ...BTN_DNG, padding: '4px 8px', fontSize: '11px' }}
-                >
-                  {deletingId === tx.id ? '...' : '×'}
-                </button>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                ...(isMobile ? { flex: '0 0 100%', justifyContent: 'flex-end' } : { flexShrink: 0 }),
+              }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: typeColor(tx.type) }}>
+                  {formatAmt(tx)}
+                </span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    onClick={() => editingId === tx.id ? cancelEdit() : startEdit(tx)}
+                    style={{ ...BTN_SEC, padding: '4px 8px', fontSize: '11px' }}
+                  >
+                    {editingId === tx.id ? 'Cancel' : 'Edit'}
+                  </button>
+                  <button
+                    onClick={() => deleteTransaction(tx.id)}
+                    disabled={deletingId === tx.id}
+                    style={{ ...BTN_DNG, padding: '4px 8px', fontSize: '11px' }}
+                  >
+                    {deletingId === tx.id ? '...' : '×'}
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Inline edit form */}
             {editingId === tx.id && editForm && (
               <div style={{
-                padding: '1rem 1rem 1rem 2.5rem',
+                padding: isMobile ? '0.75rem 1rem' : '1rem 1rem 1rem 2.5rem',
                 background: 'var(--bg)',
                 borderBottom: i < transactions.length - 1 ? '1px solid var(--bg-dim)' : 'none',
               }}>

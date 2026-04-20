@@ -16,8 +16,22 @@ const CARD = { background: '#161b22', border: '1px solid #30363d', borderRadius:
 
 type TagWithMeta = Tag & { tx_count: number; category_id: string | null }
 
+function useMobile(bp = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`)
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [bp])
+  return mobile
+}
+
 export default function TagsPage() {
   const { showToast } = useToast()
+  const isMobile = useMobile()
   const [tags, setTags] = useState<TagWithMeta[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,7 +230,7 @@ export default function TagsPage() {
                 </div>
               ) : (
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                         <span style={{ color: '#e6edf3', fontWeight: 500 }}>{t.name}</span>
@@ -245,9 +259,9 @@ export default function TagsPage() {
 
                       {mergeOpenId === t.id && (
                         <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.82rem', color: '#8b949e' }}>Merge into:</span>
+                          <span style={{ fontSize: '0.82rem', color: '#8b949e', flexShrink: 0 }}>Merge into:</span>
                           <select
-                            style={{ ...SELECT, width: 'auto', fontSize: '0.82rem', padding: '0.25rem 0.5rem' }}
+                            style={{ ...SELECT, flex: 1, minWidth: 0, fontSize: '0.82rem', padding: '0.25rem 0.5rem' }}
                             value={mergeTargetId}
                             onChange={e => setMergeTargetId(e.target.value)}
                           >
@@ -268,7 +282,7 @@ export default function TagsPage() {
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0, flexWrap: 'wrap' }}>
                       <button style={BTN_SEC} onClick={() => { setEditingId(t.id); setEditName(t.name) }}>Rename</button>
                       <button
                         style={mergeOpenId === t.id ? BTN_PRI : BTN_WARN}

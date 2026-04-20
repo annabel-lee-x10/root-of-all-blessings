@@ -17,8 +17,22 @@ type SortBy = 'name-asc' | 'name-desc' | 'volume-desc' | 'volume-asc'
 type CategoryWithCount = Category & { tx_count: number }
 type TagWithCategory = Tag & { category_id: string | null }
 
+function useMobile(bp = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`)
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [bp])
+  return mobile
+}
+
 export default function CategoriesPage() {
   const { showToast } = useToast()
+  const isMobile = useMobile()
   const [tab, setTab] = useState<Tab>('expense')
   const [categories, setCategories] = useState<CategoryWithCount[]>([])
   const [allTags, setAllTags] = useState<TagWithCategory[]>([])
@@ -144,7 +158,7 @@ export default function CategoriesPage() {
   }
 
   const TAB_STYLE = (active: boolean): React.CSSProperties => ({
-    padding: '0.5rem 1.25rem',
+    padding: isMobile ? '0.7rem 1.25rem' : '0.5rem 1.25rem',
     borderRadius: '6px 6px 0 0',
     border: '1px solid var(--border)',
     borderBottom: active ? '1px solid var(--bg-card)' : '1px solid var(--border)',
@@ -247,13 +261,13 @@ export default function CategoriesPage() {
               <div style={CARD}>
                 {editingId === c.id ? (
                   <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(c.id)} />
+                    <input style={{ ...INPUT, flex: 1, minWidth: '120px' }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(c.id)} />
                     <select style={{ ...SELECT, width: 'auto' }} value={editType} onChange={e => setEditType(e.target.value as Tab)}>
                       <option value="expense">Expense</option>
                       <option value="income">Income</option>
                     </select>
                     <select
-                      style={{ ...SELECT, width: 'auto' }}
+                      style={{ ...SELECT, width: isMobile ? '100%' : 'auto', minWidth: 0 }}
                       value={editParentId ?? ''}
                       onChange={e => setEditParentId(e.target.value || null)}
                     >
@@ -295,13 +309,13 @@ export default function CategoriesPage() {
                 <div key={sub.id} style={{ ...CARD, marginLeft: '1.5rem', background: 'var(--bg-dim)', border: '1px dashed var(--border)' }}>
                   {editingId === sub.id ? (
                     <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(sub.id)} />
+                      <input style={{ ...INPUT, flex: 1, minWidth: '120px' }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(sub.id)} />
                       <select style={{ ...SELECT, width: 'auto' }} value={editType} onChange={e => setEditType(e.target.value as Tab)}>
                         <option value="expense">Expense</option>
                         <option value="income">Income</option>
                       </select>
                       <select
-                        style={{ ...SELECT, width: 'auto' }}
+                        style={{ ...SELECT, width: isMobile ? '100%' : 'auto', minWidth: 0 }}
                         value={editParentId ?? ''}
                         onChange={e => setEditParentId(e.target.value || null)}
                       >

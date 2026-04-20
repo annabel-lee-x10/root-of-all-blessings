@@ -19,6 +19,19 @@ const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'HKD', 'MYR
 
 type AccountWithCount = Account & { tx_count: number }
 
+function useMobile(bp = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`)
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [bp])
+  return mobile
+}
+
 function groupByType(accounts: AccountWithCount[]) {
   const groups: Record<string, AccountWithCount[]> = {}
   for (const t of TYPE_ORDER) groups[t] = []
@@ -31,6 +44,7 @@ function groupByType(accounts: AccountWithCount[]) {
 
 export default function AccountsPage() {
   const { showToast } = useToast()
+  const isMobile = useMobile()
   const [accounts, setAccounts] = useState<AccountWithCount[]>([])
   const [stats, setStats] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -151,7 +165,7 @@ export default function AccountsPage() {
 
       {showCreate && (
         <div style={{ ...CARD, marginBottom: '1.5rem', borderColor: 'var(--accent)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
             <div>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</label>
               <input
@@ -197,7 +211,7 @@ export default function AccountsPage() {
                 <div key={a.id} style={{ ...CARD, opacity: a.is_active ? 1 : 0.55 }}>
                   {editingId === a.id ? (
                     <div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                         <div>
                           <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</label>
                           <input style={INPUT} value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
