@@ -16,7 +16,7 @@ function formatAmount(row: TransactionRow) {
 function typeColor(type: string) {
   if (type === 'expense') return '#f85149'
   if (type === 'income') return '#3fb884'
-  return '#8b949e'
+  return 'var(--text-muted)'
 }
 
 function formatDatetime(iso: string) {
@@ -75,7 +75,7 @@ export function RecentTransactions() {
     <section>
       <h2
         style={{
-          color: '#8b949e', fontSize: '11px', fontWeight: 600,
+          color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600,
           letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 12px',
         }}
       >
@@ -83,18 +83,18 @@ export function RecentTransactions() {
       </h2>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           overflow: 'hidden',
         }}
       >
         {loading ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
             Loading...
           </div>
         ) : transactions.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
             No transactions yet. Add one above.
           </div>
         ) : (
@@ -108,7 +108,7 @@ export function RecentTransactions() {
                   alignItems: 'center',
                   gap: '12px',
                   padding: '11px 16px',
-                  borderBottom: '1px solid #21262d',
+                  borderBottom: '1px solid var(--border)',
                 }}
               >
                 <div
@@ -119,31 +119,31 @@ export function RecentTransactions() {
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--text)', fontSize: '14px', fontWeight: 500 }}>
                       {tx.payee ?? tx.category_name ?? tx.account_name}
                     </span>
                     {tx.tags && tx.tags.length > 0 && (
-                      <span style={{ color: '#8b949e', fontSize: '11px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
                         {tx.tags.map((t) => t.name).join(', ')}
                       </span>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: '10px', marginTop: '2px', flexWrap: 'wrap' }}>
-                    <span style={{ color: '#484f58', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                       {formatDatetime(tx.datetime)}
                     </span>
-                    <span style={{ color: '#484f58', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                       {tx.type === 'transfer'
-                        ? `${tx.account_name} → ${tx.to_account_name ?? ''}`
+                        ? `${tx.account_name} \u2192 ${tx.to_account_name ?? ''}`
                         : tx.account_name}
                     </span>
                     {tx.payment_method && (
-                      <span style={{ color: '#8b949e', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                         {tx.payment_method as string}
                       </span>
                     )}
                     {tx.note && (
-                      <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
                         {(tx.note as string).length > 50
                           ? (tx.note as string).slice(0, 50) + '...'
                           : tx.note as string}
@@ -165,16 +165,16 @@ export function RecentTransactions() {
                   title="Delete transaction"
                   style={{
                     background: 'none', border: 'none',
-                    color: '#484f58',
+                    color: 'var(--text-muted)',
                     cursor: deletingId === tx.id ? 'not-allowed' : 'pointer',
                     padding: '4px 6px', fontSize: '16px', lineHeight: 1,
                     flexShrink: 0, borderRadius: '4px',
                     transition: 'color 0.1s',
                   }}
                   onMouseEnter={(e) => { if (deletingId !== tx.id) (e.currentTarget as HTMLElement).style.color = '#f85149' }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#484f58' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
                 >
-                  {deletingId === tx.id ? '...' : '×'}
+                  {deletingId === tx.id ? '...' : '\u00d7'}
                 </button>
               </div>
             ))}
@@ -182,11 +182,11 @@ export function RecentTransactions() {
               <Link
                 href="/transactions"
                 style={{
-                  color: '#8b949e', fontSize: '12px', textDecoration: 'none',
+                  color: 'var(--text-muted)', fontSize: '12px', textDecoration: 'none',
                   fontWeight: 500,
                 }}
               >
-                Show more →
+                Show more &rarr;
               </Link>
             </div>
           </>

@@ -5,12 +5,12 @@ import { useToast } from '../components/toast'
 import type { Account } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
-const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
-const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
+const BTN_PRI = { ...BTN, background: 'var(--accent)', color: 'var(--bg)' }
+const BTN_SEC = { ...BTN, background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border)' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
-const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
+const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 const SELECT = { ...INPUT }
-const CARD = { background: '#161b22', border: '1px solid #30363d', borderRadius: '10px', padding: '1.25rem 1.5rem', marginBottom: '1rem' }
+const CARD = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.25rem 1.5rem', marginBottom: '1rem' }
 
 const TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
 const TYPE_LABEL: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
@@ -142,17 +142,17 @@ export default function AccountsPage() {
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#e6edf3' }}>Accounts</h1>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>Accounts</h1>
         <button style={BTN_PRI} onClick={() => setShowCreate(v => !v)}>
           {showCreate ? 'Cancel' : '+ New Account'}
         </button>
       </div>
 
       {showCreate && (
-        <div style={{ ...CARD, marginBottom: '1.5rem', borderColor: '#f0b429' }}>
+        <div style={{ ...CARD, marginBottom: '1.5rem', borderColor: 'var(--accent)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
             <div>
-              <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Name</label>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</label>
               <input
                 style={INPUT}
                 value={newName}
@@ -163,13 +163,13 @@ export default function AccountsPage() {
               />
             </div>
             <div>
-              <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Type</label>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Type</label>
               <select style={SELECT} value={newType} onChange={e => setNewType(e.target.value)}>
                 {TYPE_ORDER.map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Currency</label>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Currency</label>
               <select style={SELECT} value={newCurrency} onChange={e => setNewCurrency(e.target.value)}>
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -182,14 +182,14 @@ export default function AccountsPage() {
       )}
 
       {loading ? (
-        <p style={{ color: '#8b949e' }}>Loading...</p>
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
       ) : (
         TYPE_ORDER.map(type => {
           const group = groups[type] ?? []
           if (group.length === 0) return null
           return (
             <div key={type} style={{ marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+              <h2 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
                 {TYPE_LABEL[type]}
               </h2>
               {group.map(a => (
@@ -198,17 +198,17 @@ export default function AccountsPage() {
                     <div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                         <div>
-                          <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Name</label>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</label>
                           <input style={INPUT} value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
                         </div>
                         <div>
-                          <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Type</label>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Type</label>
                           <select style={SELECT} value={editType} onChange={e => setEditType(e.target.value)}>
                             {TYPE_ORDER.map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Currency</label>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Currency</label>
                           <select style={SELECT} value={editCurrency} onChange={e => setEditCurrency(e.target.value)}>
                             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
@@ -225,13 +225,13 @@ export default function AccountsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <span style={{ fontWeight: 600, color: '#e6edf3' }}>{a.name}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#8b949e', background: '#21262d', padding: '0.1rem 0.5rem', borderRadius: '4px' }}>{a.currency}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--text)' }}>{a.name}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'var(--bg-card)', padding: '0.1rem 0.5rem', borderRadius: '4px', border: '1px solid var(--border)' }}>{a.currency}</span>
                           {!a.is_active && (
                             <span style={{ fontSize: '0.72rem', color: '#f85149', background: 'rgba(248,81,73,0.1)', padding: '0.1rem 0.5rem', borderRadius: '4px' }}>inactive</span>
                           )}
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#8b949e', marginTop: '0.25rem' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                           {a.tx_count} transaction{a.tx_count !== 1 ? 's' : ''}
                         </div>
                       </div>

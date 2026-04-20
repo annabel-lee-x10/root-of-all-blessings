@@ -7,7 +7,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const valid = await verifySession()
   if (!valid) redirect('/login')
   return (
-    <div style={{ minHeight: '100vh', background: '#0d1117' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <NavBar />
       <ToastProvider>
         {children}

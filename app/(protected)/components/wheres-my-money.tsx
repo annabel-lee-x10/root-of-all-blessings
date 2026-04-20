@@ -19,10 +19,10 @@ function toISOWithSGTOffset(localDatetime: string): string {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#0d1117',
-  border: '1px solid #30363d',
+  background: 'var(--bg)',
+  border: '1px solid var(--border)',
   borderRadius: '8px',
-  color: '#e6edf3',
+  color: 'var(--text)',
   padding: '8px 12px',
   fontSize: '14px',
   width: '100%',
@@ -275,9 +275,9 @@ export function WheresMyMoney() {
       fontSize: '13px',
       fontWeight: 500,
       cursor: 'pointer',
-      border: active ? '1px solid #f0b429' : '1px solid #30363d',
+      border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
       background: active ? '#f0b42920' : 'transparent',
-      color: active ? '#f0b429' : '#8b949e',
+      color: active ? 'var(--accent)' : 'var(--text-muted)',
       transition: 'all 0.15s',
     }
   }
@@ -288,14 +288,14 @@ export function WheresMyMoney() {
     <section style={{ marginBottom: '2rem' }}>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '1.5rem',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : '1.25rem' }}>
-          <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+          <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Where's My Money
           </h2>
           <button
@@ -303,9 +303,9 @@ export function WheresMyMoney() {
             onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
             style={{
               display: 'flex', alignItems: 'center', gap: '5px',
-              padding: '6px 12px', borderRadius: '8px', border: '1px solid #30363d',
+              padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
               background: pasteOpen ? '#f0b42915' : 'transparent',
-              color: pasteOpen ? '#f0b429' : '#8b949e',
+              color: pasteOpen ? 'var(--accent)' : 'var(--text-muted)',
               fontSize: '13px', fontWeight: 500, cursor: 'pointer',
               minHeight: '36px',
             }}
@@ -321,7 +321,7 @@ export function WheresMyMoney() {
         {/* Paste panel */}
         {pasteOpen && (
           <div style={{
-            background: '#0d1117', border: '1px solid #f0b42940',
+            background: 'var(--bg)', border: '1px solid #f0b42940',
             borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem',
           }}>
             <textarea
@@ -351,8 +351,8 @@ export function WheresMyMoney() {
               style={{
                 width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
                 fontSize: '14px', fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'not-allowed',
-                background: pasteText.trim() ? '#f0b429' : '#21262d',
-                color: pasteText.trim() ? '#0d1117' : '#484f58',
+                background: pasteText.trim() ? 'var(--accent)' : 'var(--bg-card)',
+                color: pasteText.trim() ? 'var(--bg)' : 'var(--text-muted)',
               }}
             >
               Fill Form
@@ -432,7 +432,7 @@ export function WheresMyMoney() {
                 />
               </div>
               {fxRate && amount && (
-                <span style={{ color: '#8b949e', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   = SGD {(parseFloat(amount) * parseFloat(fxRate)).toFixed(2)}
                 </span>
               )}
@@ -444,18 +444,30 @@ export function WheresMyMoney() {
             <div style={{ flex: 1 }}>
               <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle}>
                 <option value="">Account</option>
-                {activeAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                {(['bank', 'wallet', 'cash', 'fund'] as const).map((grpType) => {
+                  const grp = activeAccounts.filter((a) => a.type === grpType)
+                  if (grp.length === 0) return null
+                  return (
+                    <optgroup key={grpType} label={grpType.charAt(0).toUpperCase() + grpType.slice(1)}>
+                      {grp.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </optgroup>
+                  )
+                })}
               </select>
             </div>
             {type === 'transfer' && (
               <div style={{ flex: 1 }}>
                 <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
                   <option value="">To Account</option>
-                  {activeAccounts.filter((a) => a.id !== accountId).map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
+                  {(['bank', 'wallet', 'cash', 'fund'] as const).map((grpType) => {
+                    const grp = activeAccounts.filter((a) => a.type === grpType && a.id !== accountId)
+                    if (grp.length === 0) return null
+                    return (
+                      <optgroup key={grpType} label={grpType.charAt(0).toUpperCase() + grpType.slice(1)}>
+                        {grp.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </optgroup>
+                    )
+                  })}
                 </select>
               </div>
             )}
@@ -511,7 +523,7 @@ export function WheresMyMoney() {
                       style={{
                         background: '#f0b42920', border: '1px solid #f0b42960',
                         borderRadius: '12px', padding: '2px 10px', fontSize: '12px',
-                        color: '#f0b429', cursor: 'pointer', userSelect: 'none',
+                        color: 'var(--accent)', cursor: 'pointer', userSelect: 'none',
                       }}
                     >
                       {tag.name} ×
@@ -530,7 +542,7 @@ export function WheresMyMoney() {
                 <div
                   style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                    background: '#1c2128', border: '1px solid #30363d', borderRadius: '8px',
+                    background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px',
                     marginTop: '4px', maxHeight: '180px', overflowY: 'auto',
                   }}
                 >
@@ -538,8 +550,8 @@ export function WheresMyMoney() {
                     <div
                       key={t.id}
                       onMouseDown={(e) => { e.preventDefault(); toggleTag(t.id); setTagSearch('') }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#e6edf3' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#30363d' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--border)' }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
                       {t.name}
@@ -548,8 +560,8 @@ export function WheresMyMoney() {
                   {!filteredTagSuggestions.some((t) => t.name.toLowerCase() === tagSearch.toLowerCase()) && (
                     <div
                       onMouseDown={(e) => { e.preventDefault(); createAndAddTag(tagSearch) }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#f0b429' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#30363d' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: 'var(--accent)' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--border)' }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
                       + Create "{tagSearch}"
@@ -566,7 +578,7 @@ export function WheresMyMoney() {
               type="button"
               onClick={() => setShowNoteField(true)}
               style={{
-                background: 'none', border: 'none', color: '#8b949e',
+                background: 'none', border: 'none', color: 'var(--text-muted)',
                 fontSize: '13px', cursor: 'pointer', marginBottom: '12px', padding: 0,
               }}
             >
@@ -604,8 +616,8 @@ export function WheresMyMoney() {
               fontSize: '14px',
               fontWeight: 600,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
-              background: canSubmit ? '#f0b429' : '#21262d',
-              color: canSubmit ? '#0d1117' : '#484f58',
+              background: canSubmit ? 'var(--accent)' : 'var(--bg-card)',
+              color: canSubmit ? 'var(--bg)' : 'var(--text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -631,8 +643,8 @@ export function WheresMyMoney() {
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
-        input::placeholder, textarea::placeholder { color: #484f58; }
-        select option { background: #161b22; color: #e6edf3; }
+        input::placeholder, textarea::placeholder { color: var(--text-muted); }
+        select option { background: var(--bg-card); color: var(--text); }
         input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
       `}</style>

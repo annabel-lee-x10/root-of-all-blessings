@@ -29,5 +29,8 @@ export async function POST() {
     }
   }
 
+  const vallow = await db.execute("DELETE FROM accounts WHERE LOWER(name) = 'vallow'")
+  results['accounts.vallow'] = vallow.rowsAffected > 0 ? 'deleted' : 'not found'
+
   return Response.json({ ok: true, migrations: results })
 }
