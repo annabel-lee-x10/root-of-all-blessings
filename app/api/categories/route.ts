@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { name, type, sort_order = 0 } = body
+  const { name, type, sort_order = 0, parent_id = null } = body
 
   if (!name || !type) {
     return Response.json({ error: 'name and type are required' }, { status: 400 })
@@ -22,12 +22,22 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'type must be expense or income' }, { status: 400 })
   }
 
+  if (parent_id != null) {
+    const parentRow = await db.execute({
+      sql: 'SELECT id FROM categories WHERE id = ?',
+      args: [parent_id],
+    })
+    if (parentRow.rows.length === 0) {
+      return Response.json({ error: 'parent_id does not reference a valid category' }, { status: 400 })
+    }
+  }
+
   const id = crypto.randomUUID()
   const n = new Date().toISOString()
 
   await db.execute({
-    sql: `INSERT INTO categories (id, name, type, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, name, type, sort_order, n, n],
+    sql: `INSERT INTO categories (id, name, type, sort_order, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, name, type, sort_order, parent_id, n, n],
   })
 
   const row = await db.execute({ sql: 'SELECT * FROM categories WHERE id = ?', args: [id] })

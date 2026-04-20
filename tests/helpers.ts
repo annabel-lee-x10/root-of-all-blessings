@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL UNIQUE,
   type TEXT NOT NULL CHECK(type IN ('expense','income')),
   sort_order INTEGER NOT NULL DEFAULT 0,
+  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
