@@ -36,9 +36,14 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL UNIQUE,
   type TEXT NOT NULL CHECK(type IN ('expense','income')),
   sort_order INTEGER NOT NULL DEFAULT 0,
-  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+  parent_id TEXT REFERENCES categories(id),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS category_remap_backup (
+  transaction_id TEXT NOT NULL PRIMARY KEY,
+  original_category_id TEXT,
+  backed_up_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
@@ -92,6 +97,7 @@ export function resetTestDb() {
       DELETE FROM accounts;
       DELETE FROM news_briefs;
       DELETE FROM portfolio_snapshots;
+      DELETE FROM category_remap_backup;
     `)
   }
 }
@@ -113,8 +119,8 @@ function wireDbMock() {
       const rows = stmt.all(...args)
       return Promise.resolve({ rows })
     }
-    stmt.run(...args)
-    return Promise.resolve({ rows: [] })
+    const info = stmt.run(...args)
+    return Promise.resolve({ rows: [], rowsAffected: info.changes })
   })
 
   const batch = vi.fn((stmts: (string | { sql: string })[]) => {
@@ -153,11 +159,17 @@ export function seedAccount(id: string, name: string, type = 'bank', currency = 
   ).run(id, name, type, currency, n, n)
 }
 
-export function seedCategory(id: string, name: string, type: 'expense' | 'income') {
+export function seedCategory(id: string, name: string, type: 'expense' | 'income', parentId?: string) {
   const n = new Date().toISOString()
   testDb.prepare(
-    'INSERT INTO categories (id, name, type, sort_order, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
-  ).run(id, name, type, n, n)
+    'INSERT INTO categories (id, name, type, sort_order, parent_id, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?, ?)'
+  ).run(id, name, type, parentId ?? null, n, n)
+}
+
+export function seedTransactionTag(transactionId: string, tagId: string) {
+  testDb.prepare(
+    'INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
+  ).run(transactionId, tagId)
 }
 
 export function seedTag(id: string, name: string) {
@@ -207,8 +219,8 @@ export function seedTransaction(
     payee?: string | null
     note?: string | null
     payment_method?: string | null
+    status?: string
     datetime?: string
-    status?: 'draft' | 'approved'
   } = {}
 ) {
   const n = new Date().toISOString()
@@ -221,8 +233,8 @@ export function seedTransaction(
     payee = null,
     note = null,
     payment_method = null,
-    datetime = n,
     status = 'approved',
+    datetime = n,
   } = opts
   testDb.prepare(
     `INSERT INTO transactions
@@ -230,10 +242,4 @@ export function seedTransaction(
        account_id, to_account_id, category_id, payee, note, payment_method, status, datetime, created_at, updated_at)
      VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, status, datetime, n, n)
-}
-
-export function seedTransactionTag(transactionId: string, tagId: string) {
-  testDb.prepare(
-    'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
-  ).run(transactionId, tagId)
 }
