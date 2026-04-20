@@ -14,8 +14,8 @@ export default function DashboardPage() {
       <WheresMyMoney />
       <ReceiptDropzone />
       <ExpenseDashboard />
-      <RecentTransactions />
       <DraftsCard />
+      <RecentTransactions />
     </main>
   )
 }

@@ -30,6 +30,18 @@ export async function POST() {
       name: 'tags.category_id',
       sql: 'ALTER TABLE tags ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL',
     },
+    {
+      name: 'categories.parent_id',
+      sql: 'ALTER TABLE categories ADD COLUMN parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL',
+    },
+    {
+      name: 'tags.drop_category_id',
+      sql: 'ALTER TABLE tags DROP COLUMN category_id',
+    },
+    {
+      name: 'accounts.delete_vallow',
+      sql: "DELETE FROM accounts WHERE name = 'vallow'",
+    },
   ]
 
   for (const m of migrations) {
