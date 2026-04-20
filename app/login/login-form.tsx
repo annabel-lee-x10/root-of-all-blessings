@@ -95,8 +95,11 @@ export function LoginForm() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
             style={{ background: 'linear-gradient(135deg, #f0b429 0%, #d4a017 100%)' }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9"/>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="17" width="5" height="5" rx="1" fill="white" fillOpacity="0.75"/>
+              <rect x="9" y="12" width="5" height="10" rx="1" fill="white" fillOpacity="0.75"/>
+              <rect x="16" y="5" width="5" height="17" rx="1" fill="white" fillOpacity="0.75"/>
+              <path d="M4 17 L11 12 L18 5 L22 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
           <h1

@@ -71,9 +71,19 @@ export function NavBar() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
+            {/* Option 1 (default): ascending bar chart + trend line */}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9" />
+              <rect x="2" y="17" width="5" height="5" rx="1" fill="white" fillOpacity="0.75"/>
+              <rect x="9" y="12" width="5" height="10" rx="1" fill="white" fillOpacity="0.75"/>
+              <rect x="16" y="5" width="5" height="17" rx="1" fill="white" fillOpacity="0.75"/>
+              <path d="M4 17 L11 12 L18 5 L22 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
+            {/* Option 2: coin with R — swap above svg with this to use
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" fill="white" fillOpacity="0.2" stroke="white" strokeWidth="1.5"/>
+              <text x="12" y="16.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="white">R</text>
+            </svg>
+            */}
           </div>
           <span style={{ color: '#e6edf3', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
         </div>
