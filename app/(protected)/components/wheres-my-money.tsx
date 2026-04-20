@@ -2,18 +2,30 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useToast } from './toast'
-import type { Account, Category, Tag, TxType, AccountType } from '@/lib/types'
+import type { Account, Category, Tag, TxType } from '@/lib/types'
 import { parseBlessThis } from '@/lib/parse-bless-this'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
 
-const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  bank: 'Bank',
-  wallet: 'Wallet',
-  cash: 'Cash',
-  fund: 'Fund',
+const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
+const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
+
+function AccountOptions({ accounts }: { accounts: Account[] }) {
+  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
+  for (const a of accounts) {
+    if (groups[a.type]) groups[a.type].push(a)
+    else groups[a.type] = [a]
+  }
+  return (
+    <>
+      {ACCOUNT_TYPE_ORDER.filter(t => groups[t] && groups[t].length > 0).map(type => (
+        <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
+          {groups[type].map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </optgroup>
+      ))}
+    </>
+  )
 }
-const ACCOUNT_TYPE_ORDER: AccountType[] = ['bank', 'wallet', 'cash', 'fund']
 
 function sgtNow() {
   const sgt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }))
@@ -37,6 +49,7 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box',
 }
+
 const selectStyle: React.CSSProperties = {
   ...inputStyle,
   cursor: 'pointer',
@@ -70,6 +83,11 @@ export function WheresMyMoney() {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteApplied, setPasteApplied] = useState(false)
+
+  const [listening, setListening] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   const amountRef = useRef<HTMLInputElement>(null)
   const tagDropdownRef = useRef<HTMLDivElement>(null)
@@ -147,6 +165,7 @@ export function WheresMyMoney() {
       return
     }
 
+    if (data.type) setType(data.type)
     if (data.amount) setAmount(String(data.amount))
     if (data.currency) setCurrency(data.currency)
     if (data.payee) setPayee(data.payee)
@@ -209,6 +228,50 @@ export function WheresMyMoney() {
     setTimeout(() => amountRef.current?.focus(), 100)
     setTimeout(() => setPasteApplied(false), 4000)
   }, [accounts, categories, tags, showToast])
+
+  function startVoice() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = typeof window !== 'undefined' ? (window as any) : null
+    const SR = w?.SpeechRecognition || w?.webkitSpeechRecognition
+
+    if (!SR) {
+      setVoiceError('Voice input is not supported in your browser. Try Chrome on Android or Safari on iOS.')
+      return
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+
+    setVoiceError(null)
+    const recognition = new SR()
+    recognitionRef.current = recognition
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    recognition.onstart = () => setListening(true)
+    recognition.onend = () => setListening(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (e: any) => {
+      setListening(false)
+      if (e.error === 'not-allowed') {
+        setVoiceError('Microphone permission denied. Allow microphone access in your browser settings and try again.')
+      } else if (e.error === 'no-speech') {
+        setVoiceError('No speech detected. Tap the mic and speak clearly.')
+      } else {
+        setVoiceError(`Voice input error: ${e.error}`)
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript
+      applyPasteData(transcript)
+    }
+
+    recognition.start()
+  }
 
   function reset() {
     setAmount('')
@@ -277,8 +340,11 @@ export function WheresMyMoney() {
 
   function pillBtn(active: boolean): React.CSSProperties {
     return {
-      padding: '6px 16px', borderRadius: '20px', fontSize: '13px',
-      fontWeight: 500, cursor: 'pointer',
+      padding: '6px 16px',
+      borderRadius: '20px',
+      fontSize: '13px',
+      fontWeight: 500,
+      cursor: 'pointer',
       border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
       background: active ? 'var(--accent-faint)' : 'transparent',
       color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -298,29 +364,71 @@ export function WheresMyMoney() {
           padding: '1.5rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : voiceError ? '0.75rem' : '1.25rem' }}>
           <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Where's My Money
           </h2>
-          <button
-            type="button"
-            onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '5px',
-              padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
-              background: pasteOpen ? 'var(--accent-faint)' : 'transparent',
-              color: pasteOpen ? 'var(--accent)' : 'var(--text-muted)',
-              fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-              minHeight: '36px',
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="2" width="10" height="4" rx="1"/>
-              <path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/>
-            </svg>
-            {pasteOpen ? 'Cancel' : 'Paste Receipt'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={startVoice}
+              aria-label={listening ? 'Stop listening' : 'Tap mic to log an expense by voice'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
+                background: listening ? 'var(--accent-faint)' : 'transparent',
+                color: listening ? 'var(--accent)' : 'var(--text-muted)',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                minHeight: '36px',
+                animation: listening ? 'micPulse 1.2s ease-in-out infinite' : 'none',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+              {listening ? 'Listening…' : 'Voice'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
+                background: pasteOpen ? 'var(--accent-faint)' : 'transparent',
+                color: pasteOpen ? 'var(--accent)' : 'var(--text-muted)',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                minHeight: '36px',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="2" width="10" height="4" rx="1"/>
+                <path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/>
+              </svg>
+              {pasteOpen ? 'Cancel' : 'Paste Receipt'}
+            </button>
+          </div>
         </div>
+
+        {/* Voice error banner */}
+        {voiceError && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+            background: 'var(--red-faint)', border: '1px solid var(--red-muted)',
+            borderRadius: '8px', padding: '8px 12px', marginBottom: '1rem',
+            fontSize: '13px', color: 'var(--red)',
+          }}>
+            <span>{voiceError}</span>
+            <button
+              type="button"
+              onClick={() => setVoiceError(null)}
+              style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: 0, fontSize: '16px', lineHeight: 1, flexShrink: 0 }}
+              aria-label="Dismiss voice error"
+            >×</button>
+          </div>
+        )}
 
         {/* Paste panel */}
         {pasteOpen && (
@@ -368,7 +476,7 @@ export function WheresMyMoney() {
         {pasteApplied && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: '6px',
-            background: 'var(--green-faint)', border: '1px solid var(--green-muted)',
+            background: 'rgba(63,184,132,0.1)', border: '1px solid rgba(63,184,132,0.25)',
             borderRadius: '8px', padding: '8px 12px', marginBottom: '1rem',
             fontSize: '13px', color: 'var(--green)',
           }}>
@@ -448,34 +556,14 @@ export function WheresMyMoney() {
             <div style={{ flex: 1 }}>
               <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle}>
                 <option value="">Account</option>
-                {ACCOUNT_TYPE_ORDER.map((type) => {
-                  const group = activeAccounts.filter((a) => a.type === type)
-                  if (group.length === 0) return null
-                  return (
-                    <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
-                      {group.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </optgroup>
-                  )
-                })}
+                <AccountOptions accounts={activeAccounts} />
               </select>
             </div>
             {type === 'transfer' && (
               <div style={{ flex: 1 }}>
                 <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
                   <option value="">To Account</option>
-                  {ACCOUNT_TYPE_ORDER.map((type) => {
-                    const group = activeAccounts.filter((a) => a.type === type && a.id !== accountId)
-                    if (group.length === 0) return null
-                    return (
-                      <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
-                        {group.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                      </optgroup>
-                    )
-                  })}
+                  <AccountOptions accounts={activeAccounts.filter((a) => a.id !== accountId)} />
                 </select>
               </div>
             )}
@@ -648,6 +736,7 @@ export function WheresMyMoney() {
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes micPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }

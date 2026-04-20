@@ -82,19 +82,66 @@ const INPUT: React.CSSProperties = {
 }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 
+const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
+const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
+
+function AccountOptions({ accounts }: { accounts: Account[] }) {
+  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
+  for (const a of accounts) {
+    if (groups[a.type]) groups[a.type].push(a)
+    else groups[a.type] = [a]
+  }
+  return (
+    <>
+      {ACCOUNT_TYPE_ORDER.filter(t => groups[t] && groups[t].length > 0).map(type => (
+        <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
+          {groups[type].map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
 export default function TransactionsPage() {
   const { showToast } = useToast()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState<Filters>({ start: '', end: '', accountId: '', categoryId: '', type: '', tagId: '' })
+  const [filters, setFilters] = useState<Filters>(() => {
+    if (typeof window === 'undefined') return { start: '', end: '', accountId: '', categoryId: '', type: '', tagId: '' }
+    const p = new URLSearchParams(window.location.search)
+    return {
+      start: p.get('start') ?? '',
+      end: p.get('end') ?? '',
+      accountId: p.get('account_id') ?? '',
+      categoryId: p.get('category_id') ?? '',
+      type: (p.get('type') ?? '') as '' | TxType,
+      tagId: p.get('tag_id') ?? '',
+    }
+  })
   const [draftDates, setDraftDates] = useState({ start: '', end: '' })
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const p = new URLSearchParams(window.location.search)
+    return !!(p.get('account_id') || p.get('category_id') || p.get('type') || p.get('tag_id'))
+  })
 
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tags, setTags] = useState<Tag[]>([])
+
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('date-desc')
+
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkAccountId, setBulkAccountId] = useState('')
+  const [bulkCategoryId, setBulkCategoryId] = useState('')
+  const [bulkType, setBulkType] = useState<'' | TxType>('')
+  const [bulkAddTagId, setBulkAddTagId] = useState('')
+  const [bulkRemoveTagId, setBulkRemoveTagId] = useState('')
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
@@ -102,6 +149,24 @@ export default function TransactionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
+    // Read URL search params on mount
+    const sp = new URLSearchParams(window.location.search)
+    const urlFilters: Partial<Filters> = {}
+    const catId = sp.get('category_id')
+    const acctId = sp.get('account_id')
+    const tagId = sp.get('tag_id')
+    const txType = sp.get('type')
+    if (catId) urlFilters.categoryId = catId
+    if (acctId) urlFilters.accountId = acctId
+    if (tagId) urlFilters.tagId = tagId
+    if (txType && (['expense', 'income', 'transfer', ''] as string[]).includes(txType)) {
+      urlFilters.type = txType as Filters['type']
+    }
+    if (Object.keys(urlFilters).length > 0) {
+      setFilters(prev => ({ ...prev, ...urlFilters }))
+      setShowFilters(true)
+    }
+
     Promise.all([
       fetch('/api/accounts').then((r) => r.json()),
       fetch('/api/categories').then((r) => r.json()),
@@ -123,6 +188,8 @@ export default function TransactionsPage() {
       if (filters.categoryId) p.set('category_id', filters.categoryId)
       if (filters.type) p.set('type', filters.type)
       if (filters.tagId) p.set('tag_id', filters.tagId)
+      if (search) p.set('search', search)
+      if (sortBy && sortBy !== 'date-desc') p.set('sort', sortBy)
       const res = await fetch(`/api/transactions?${p}`)
       const data = await res.json()
       setTransactions(data.data ?? [])
@@ -130,7 +197,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, filters])
+  }, [page, filters, search, sortBy])
 
   useEffect(() => { load() }, [load])
 
@@ -220,13 +287,98 @@ export default function TransactionsPage() {
     setEditForm((prev) => prev ? { ...prev, [key]: value } : prev)
   }
 
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === transactions.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(transactions.map(t => t.id)))
+    }
+  }
+
+  async function bulkPatch(patch: object) {
+    setBulkLoading(true)
+    const selectedTxs = transactions.filter(t => selected.has(t.id))
+    try {
+      await Promise.all(selectedTxs.map(tx =>
+        fetch(`/api/transactions/${tx.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+      ))
+      showToast(`Updated ${selectedTxs.length} transaction${selectedTxs.length !== 1 ? 's' : ''}`, 'success')
+      setSelected(new Set())
+      load()
+    } catch {
+      showToast('Some updates failed', 'error')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  async function bulkApplyAddTag() {
+    if (!bulkAddTagId) return
+    setBulkLoading(true)
+    const selectedTxs = transactions.filter(t => selected.has(t.id))
+    try {
+      await Promise.all(selectedTxs.map(tx => {
+        const newTagIds = [...new Set([...tx.tags.map(tg => tg.id), bulkAddTagId])]
+        return fetch(`/api/transactions/${tx.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tag_ids: newTagIds }),
+        })
+      }))
+      showToast(`Added tag to ${selectedTxs.length} transaction${selectedTxs.length !== 1 ? 's' : ''}`, 'success')
+      setBulkAddTagId('')
+      setSelected(new Set())
+      load()
+    } catch {
+      showToast('Some updates failed', 'error')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  async function bulkApplyRemoveTag() {
+    if (!bulkRemoveTagId) return
+    setBulkLoading(true)
+    const selectedTxs = transactions.filter(t => selected.has(t.id))
+    try {
+      await Promise.all(selectedTxs.map(tx => {
+        const newTagIds = tx.tags.map(tg => tg.id).filter(id => id !== bulkRemoveTagId)
+        return fetch(`/api/transactions/${tx.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tag_ids: newTagIds }),
+        })
+      }))
+      showToast(`Removed tag from ${selectedTxs.length} transaction${selectedTxs.length !== 1 ? 's' : ''}`, 'success')
+      setBulkRemoveTagId('')
+      setSelected(new Set())
+      load()
+    } catch {
+      showToast('Some updates failed', 'error')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   const totalPages = Math.ceil(total / LIMIT)
   const activeAccounts = accounts.filter((a) => a.is_active)
   const expenseCategories = categories.filter((c) => c.type === 'expense')
   const incomeCategories = categories.filter((c) => c.type === 'income')
 
   return (
-    <div style={{ padding: '1.5rem', maxWidth: '960px', margin: '0 auto' }}>
+    <div style={{ padding: '1.5rem', maxWidth: '960px', margin: '0 auto', paddingBottom: selectMode && selected.size > 0 ? '80px' : undefined }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
         <h1 style={{ margin: 0, color: 'var(--text)', fontSize: '18px', fontWeight: 600 }}>Transactions</h1>
@@ -240,7 +392,34 @@ export default function TransactionsPage() {
           <button onClick={() => setShowFilters(!showFilters)} style={BTN_SEC}>
             {showFilters ? 'Hide Filters' : 'Filters'}
           </button>
+          <button
+            onClick={() => { setSelectMode(v => !v); setSelected(new Set()) }}
+            style={selectMode ? { ...BTN_SEC, color: 'var(--accent)', borderColor: 'var(--accent)' } : BTN_SEC}
+          >
+            {selectMode ? 'Cancel select' : 'Select'}
+          </button>
         </div>
+      </div>
+
+      {/* Search + sort bar - always visible */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <input
+          style={{ ...INPUT, flex: '1 1 200px', minWidth: 0 }}
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
+          placeholder="Search payee, note, category..."
+        />
+        <select
+          style={{ ...SELECT, flex: '0 0 auto', width: 'auto' }}
+          value={sortBy}
+          onChange={e => { setSortBy(e.target.value); setPage(1) }}
+        >
+          <option value="date-desc">Date: newest first</option>
+          <option value="date-asc">Date: oldest first</option>
+          <option value="amount-desc">Amount: high to low</option>
+          <option value="amount-asc">Amount: low to high</option>
+          <option value="payee-asc">Payee A-Z</option>
+        </select>
       </div>
 
       {/* Filters */}
@@ -313,6 +492,8 @@ export default function TransactionsPage() {
               onClick={() => {
                 setFilters({ start: '', end: '', accountId: '', categoryId: '', type: '', tagId: '' })
                 setDraftDates({ start: '', end: '' })
+                setSearch('')
+                setSortBy('date-desc')
                 setPage(1)
               }}
               style={{ ...BTN_SEC, width: '100%' }}
@@ -336,6 +517,20 @@ export default function TransactionsPage() {
           </div>
         )}
 
+        {selectMode && (
+          <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--bg-dim)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="checkbox"
+              checked={selected.size === transactions.length && transactions.length > 0}
+              onChange={toggleSelectAll}
+              style={{ cursor: 'pointer' }}
+            />
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+              {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+            </span>
+          </div>
+        )}
+
         {transactions.map((tx, i) => (
           <div key={tx.id}>
             {/* Row */}
@@ -346,6 +541,15 @@ export default function TransactionsPage() {
                 borderBottom: i < transactions.length - 1 || editingId === tx.id ? '1px solid var(--bg-dim)' : 'none',
               }}
             >
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  checked={selected.has(tx.id)}
+                  onChange={() => toggleSelect(tx.id)}
+                  onClick={e => e.stopPropagation()}
+                  style={{ cursor: 'pointer', flexShrink: 0 }}
+                />
+              )}
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: typeColor(tx.type), flexShrink: 0 }} />
 
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -451,7 +655,7 @@ export default function TransactionsPage() {
                   <div>
                     <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Account</label>
                     <select style={{ ...SELECT, width: '100%' }} value={editForm.account_id} onChange={(e) => ef('account_id', e.target.value)}>
-                      {activeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      <AccountOptions accounts={activeAccounts} />
                     </select>
                   </div>
                   {editForm.type === 'transfer' && (
@@ -459,7 +663,7 @@ export default function TransactionsPage() {
                       <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>To Account</label>
                       <select style={{ ...SELECT, width: '100%' }} value={editForm.to_account_id} onChange={(e) => ef('to_account_id', e.target.value)}>
                         <option value="">Select...</option>
-                        {activeAccounts.filter((a) => a.id !== editForm.account_id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        <AccountOptions accounts={activeAccounts.filter((a) => a.id !== editForm.account_id)} />
                       </select>
                     </div>
                   )}
@@ -543,6 +747,109 @@ export default function TransactionsPage() {
           <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={BTN_SEC}>
             Next
           </button>
+        </div>
+      )}
+
+      {selectMode && selected.size > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+          background: 'var(--bg-subtle)', borderTop: '1px solid var(--border)',
+          padding: '10px 1.5rem', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          <span style={{ color: 'var(--text)', fontSize: '13px', fontWeight: 600, flexShrink: 0 }}>
+            {selected.size} selected
+          </span>
+
+          {/* Change account */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <select
+              style={{ ...SELECT, width: 'auto', fontSize: '12px', padding: '4px 8px' }}
+              value={bulkAccountId}
+              onChange={e => setBulkAccountId(e.target.value)}
+            >
+              <option value="">Account...</option>
+              <AccountOptions accounts={activeAccounts} />
+            </select>
+            <button
+              style={{ ...BTN_SEC, fontSize: '12px' }}
+              onClick={() => { if (bulkAccountId) { bulkPatch({ account_id: bulkAccountId }); setBulkAccountId('') } }}
+              disabled={!bulkAccountId || bulkLoading}
+            >Apply</button>
+          </div>
+
+          {/* Change category */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <select
+              style={{ ...SELECT, width: 'auto', fontSize: '12px', padding: '4px 8px' }}
+              value={bulkCategoryId}
+              onChange={e => setBulkCategoryId(e.target.value)}
+            >
+              <option value="">Category...</option>
+              <optgroup label="Expense">
+                {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </optgroup>
+              <optgroup label="Income">
+                {incomeCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </optgroup>
+            </select>
+            <button
+              style={{ ...BTN_SEC, fontSize: '12px' }}
+              onClick={() => { if (bulkCategoryId) { bulkPatch({ category_id: bulkCategoryId }); setBulkCategoryId('') } }}
+              disabled={!bulkCategoryId || bulkLoading}
+            >Apply</button>
+          </div>
+
+          {/* Change type */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {(['expense', 'income', 'transfer'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setBulkType(prev => prev === t ? '' : t)}
+                style={{
+                  ...BTN, fontSize: '12px', padding: '4px 10px',
+                  background: bulkType === t ? typeColor(t) : 'var(--bg-dim)',
+                  color: bulkType === t ? 'var(--bg)' : 'var(--text-muted)',
+                  border: `1px solid ${bulkType === t ? typeColor(t) : 'var(--border)'}`,
+                  textTransform: 'capitalize',
+                }}
+              >
+                {t}
+              </button>
+            ))}
+            {bulkType && (
+              <button
+                style={{ ...BTN_SEC, fontSize: '12px' }}
+                onClick={() => { bulkPatch({ type: bulkType }); setBulkType('') }}
+                disabled={bulkLoading}
+              >Apply type</button>
+            )}
+          </div>
+
+          {/* Add/remove tag */}
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <select
+              style={{ ...SELECT, width: 'auto', fontSize: '12px', padding: '4px 8px' }}
+              value={bulkAddTagId}
+              onChange={e => setBulkAddTagId(e.target.value)}
+            >
+              <option value="">+Tag...</option>
+              {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <button style={{ ...BTN_SEC, fontSize: '12px' }} onClick={bulkApplyAddTag} disabled={!bulkAddTagId || bulkLoading}>+Tag</button>
+          </div>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <select
+              style={{ ...SELECT, width: 'auto', fontSize: '12px', padding: '4px 8px' }}
+              value={bulkRemoveTagId}
+              onChange={e => setBulkRemoveTagId(e.target.value)}
+            >
+              <option value="">-Tag...</option>
+              {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <button style={{ ...BTN_DNG, fontSize: '12px' }} onClick={bulkApplyRemoveTag} disabled={!bulkRemoveTagId || bulkLoading}>-Tag</button>
+          </div>
+
+          {bulkLoading && <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Updating...</span>}
         </div>
       )}
     </div>

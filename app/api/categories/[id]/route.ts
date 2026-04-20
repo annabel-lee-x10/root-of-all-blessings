@@ -8,7 +8,7 @@ export async function PATCH(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { name, type, sort_order } = body
+  const { name, type, sort_order, parent_id } = body
 
   const existing = await db.execute({ sql: 'SELECT id FROM categories WHERE id = ?', args: [id] })
   if (existing.rows.length === 0) {
@@ -22,6 +22,7 @@ export async function PATCH(
   if (name !== undefined) { updates.push('name = ?'); args.push(name) }
   if (type !== undefined) { updates.push('type = ?'); args.push(type) }
   if (sort_order !== undefined) { updates.push('sort_order = ?'); args.push(sort_order) }
+  if ('parent_id' in body) { updates.push('parent_id = ?'); args.push(parent_id ?? null) }
 
   if (updates.length === 0) {
     return Response.json({ error: 'No fields to update' }, { status: 400 })

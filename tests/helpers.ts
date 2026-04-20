@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL UNIQUE,
   type TEXT NOT NULL CHECK(type IN ('expense','income')),
   sort_order INTEGER NOT NULL DEFAULT 0,
+  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   payee TEXT,
   note TEXT,
   payment_method TEXT,
+  status TEXT NOT NULL DEFAULT 'approved',
   datetime TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -206,6 +208,7 @@ export function seedTransaction(
     note?: string | null
     payment_method?: string | null
     datetime?: string
+    status?: 'draft' | 'approved'
   } = {}
 ) {
   const n = new Date().toISOString()
@@ -219,11 +222,18 @@ export function seedTransaction(
     note = null,
     payment_method = null,
     datetime = n,
+    status = 'approved',
   } = opts
   testDb.prepare(
     `INSERT INTO transactions
       (id, type, amount, currency, fx_rate, fx_date, sgd_equivalent,
-       account_id, to_account_id, category_id, payee, note, payment_method, datetime, created_at, updated_at)
-     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, datetime, n, n)
+       account_id, to_account_id, category_id, payee, note, payment_method, status, datetime, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, status, datetime, n, n)
+}
+
+export function seedTransactionTag(transactionId: string, tagId: string) {
+  testDb.prepare(
+    'INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)'
+  ).run(transactionId, tagId)
 }

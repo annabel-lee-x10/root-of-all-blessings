@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useToast } from '../components/toast'
 import type { Account } from '@/lib/types'
 
@@ -231,8 +232,15 @@ export default function AccountsPage() {
                             <span style={{ fontSize: '0.72rem', color: 'var(--red)', background: 'var(--red-faint)', padding: '0.1rem 0.5rem', borderRadius: '4px' }}>inactive</span>
                           )}
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                          {a.tx_count} transaction{a.tx_count !== 1 ? 's' : ''}
+                        <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                          <Link
+                            href={`/transactions?account_id=${a.id}`}
+                            style={{ color: 'var(--text-muted)', textDecoration: 'none' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none' }}
+                          >
+                            {a.tx_count} transaction{a.tx_count !== 1 ? 's' : ''}
+                          </Link>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>

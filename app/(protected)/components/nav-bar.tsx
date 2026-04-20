@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import { ThemeToggle } from './theme-toggle'
 
 const TOP_TABS = [
   {
@@ -71,19 +72,10 @@ export function NavBar() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
-            {/* Option 1 (default): ascending bar chart + trend line */}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="17" width="5" height="5" rx="1" fill="white" fillOpacity="0.75"/>
-              <rect x="9" y="12" width="5" height="10" rx="1" fill="white" fillOpacity="0.75"/>
-              <rect x="16" y="5" width="5" height="17" rx="1" fill="white" fillOpacity="0.75"/>
-              <path d="M4 17 L11 12 L18 5 L22 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3,17 8,12 12,14 18,7 21,10"/>
+              <polyline points="18,7 21,7 21,10"/>
             </svg>
-            {/* Option 2: coin with R — swap above svg with this to use
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="9" fill="white" fillOpacity="0.2" stroke="white" strokeWidth="1.5"/>
-              <text x="12" y="16.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="white">R</text>
-            </svg>
-            */}
           </div>
           <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
         </div>
@@ -152,7 +144,8 @@ export function NavBar() {
         </div>
 
         {/* Right side */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <ThemeToggle />
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
