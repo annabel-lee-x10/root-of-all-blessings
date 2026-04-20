@@ -439,9 +439,7 @@ export function ExpenseDashboard() {
                           <div style={{ marginBottom: '4px', paddingLeft: '0' }}>
                             {drillLoading ? (
                               <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '4px 0' }}>Loading...</div>
-                            ) : !drillData || drillData.length === 0 ? (
-                              <div style={{ color: 'var(--text-dim)', fontSize: '12px', padding: '4px 0' }}>No subcategories</div>
-                            ) : (
+                            ) : drillData && drillData.length > 0 ? (
                               drillData.map(sub => (
                                 <div key={sub.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '3px 0' }}>
                                   <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '100px' }}>{sub.category_name}</span>
@@ -453,6 +451,20 @@ export function ExpenseDashboard() {
                                   <span style={{ width: '16px', flexShrink: 0 }} />
                                 </div>
                               ))
+                            ) : cat.tag_breakdown && cat.tag_breakdown.length > 0 ? (
+                              cat.tag_breakdown.map(tag => (
+                                <div key={tag.tag_name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '3px 0' }}>
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '100px' }}>{tag.tag_name}</span>
+                                  <div style={{ flex: 1, background: 'var(--bg-dim)', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(100, cat.total > 0 ? (tag.total / cat.total) * 100 : 0)}%`, height: '100%', background: 'rgba(204, 85, 0, 0.3)', borderRadius: '4px' }} />
+                                  </div>
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>{fmt(tag.total)}</span>
+                                  <span style={{ color: 'var(--text-dim)', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>{cat.total > 0 ? ((tag.total / cat.total) * 100).toFixed(1) : '0.0'}%</span>
+                                  <span style={{ width: '16px', flexShrink: 0 }} />
+                                </div>
+                              ))
+                            ) : (
+                              <div style={{ color: 'var(--text-dim)', fontSize: '12px', padding: '4px 0' }}>No breakdown available</div>
                             )}
                           </div>
                         )}
