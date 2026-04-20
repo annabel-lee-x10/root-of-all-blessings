@@ -212,7 +212,6 @@ export function DraftsCard() {
   }
 
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
-  const expenseCategories = categories.filter((c) => c.type === 'expense')
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -355,8 +354,11 @@ export function DraftsCard() {
                       )}
                     </div>
                   </div>
-                  <span style={{ color: '#f85149', fontSize: '13px', fontWeight: 600, flexShrink: 0 }}>
-                    -{tx.currency} {(tx.amount as number).toFixed(2)}
+                  <span style={{
+                    color: tx.type === 'income' ? '#3fb884' : '#f85149',
+                    fontSize: '13px', fontWeight: 600, flexShrink: 0,
+                  }}>
+                    {tx.type === 'income' ? '+' : '-'}{tx.currency} {(tx.amount as number).toFixed(2)}
                   </span>
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '4px', flexShrink: 0, flexWrap: 'wrap' }}>
@@ -407,6 +409,19 @@ export function DraftsCard() {
                       }}
                     >
                       <div>
+                        <label htmlFor={`edit-type-${tx.id}`} style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Type</label>
+                        <select
+                          id={`edit-type-${tx.id}`}
+                          style={SELECT}
+                          value={editForm.type}
+                          onChange={(e) => ef('type', e.target.value as TxType)}
+                        >
+                          <option value="expense">Expense</option>
+                          <option value="income">Income</option>
+                          <option value="transfer">Transfer</option>
+                        </select>
+                      </div>
+                      <div>
                         <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Amount</label>
                         <input type="number" step="0.01" style={INPUT} value={editForm.amount} onChange={(e) => ef('amount', e.target.value)} />
                       </div>
@@ -426,7 +441,7 @@ export function DraftsCard() {
                         <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Category</label>
                         <select style={SELECT} value={editForm.category_id} onChange={(e) => ef('category_id', e.target.value)}>
                           <option value="">None</option>
-                          {expenseCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          {categories.filter((c) => c.type === editForm.type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
                       <div>
