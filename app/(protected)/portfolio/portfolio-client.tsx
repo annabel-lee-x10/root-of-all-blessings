@@ -240,6 +240,7 @@ function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
   const BTN: React.CSSProperties = {
     padding: '0.35rem 0.85rem', borderRadius: 6, border: 'none', cursor: 'pointer',
     fontSize: '0.8rem', fontWeight: 600, background: T.orange, color: '#fff',
+    minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   }
 
   return (
@@ -874,6 +875,7 @@ export function PortfolioClient() {
     padding: '0.35rem 0.85rem', borderRadius: 6, cursor: 'pointer',
     fontSize: '0.8rem', fontWeight: 600, background: theme.inset, color: theme.pale,
     border: `1px solid ${theme.border}`,
+    minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   }
 
   const themeToggle = (
@@ -883,6 +885,7 @@ export function PortfolioClient() {
       style={{
         background: 'none', border: `1px solid ${theme.border}`, borderRadius: 6,
         cursor: 'pointer', fontSize: '1rem', padding: '4px 8px', color: theme.pale,
+        minHeight: '44px', minWidth: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
       {dark ? '🌙' : '☀️'}
@@ -987,6 +990,7 @@ export function PortfolioClient() {
                 color: tab === t.id ? theme.orange : theme.mid,
                 borderBottom: tab === t.id ? `2px solid ${theme.orange}` : '2px solid transparent',
                 transition: 'color 0.15s',
+                minHeight: '44px', display: 'inline-flex', alignItems: 'center',
               }}>
                 {t.label}
               </button>

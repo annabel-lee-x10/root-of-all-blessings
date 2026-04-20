@@ -174,7 +174,8 @@ export function NavBar() {
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: active ? 'var(--accent)' : 'var(--text-muted)',
-                      padding: '2px 4px', fontSize: '10px', lineHeight: 1,
+                      padding: '4px 8px', fontSize: '12px', lineHeight: 1,
+                      minHeight: '44px', display: 'inline-flex', alignItems: 'center',
                     }}
                   >
                     {subOpen ? '▲' : '▼'}
@@ -227,6 +228,7 @@ export function NavBar() {
               style={{
                 background: 'none', border: 'none', color: 'var(--text-muted)',
                 fontSize: '13px', cursor: 'pointer', padding: '4px 8px',
+                minHeight: '44px', display: 'inline-flex', alignItems: 'center',
               }}
             >
               Sign out
