@@ -101,7 +101,7 @@ export function LoginForm() {
           </div>
           <h1
             className="text-xl font-semibold tracking-tight"
-            style={{ color: isDark ? '#e6edf3' : '#1f2328' }}
+            style={{ color: isDark ? 'var(--root-paper)' : '#1f2328' }}
           >
             Root OS
           </h1>
@@ -133,7 +133,7 @@ export function LoginForm() {
               style={{
                 background: isDark ? '#0d1117' : '#f6f8fa',
                 border: `1px solid ${error ? '#f85149' : isDark ? '#30363d' : '#d0d7de'}`,
-                color: isDark ? '#e6edf3' : '#1f2328',
+                color: isDark ? 'var(--root-paper)' : '#1f2328',
               }}
               onFocus={(e) => {
                 e.target.style.border = `1px solid ${error ? '#f85149' : '#f0b429'}`

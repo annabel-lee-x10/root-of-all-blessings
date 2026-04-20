@@ -75,7 +75,7 @@ export function NavBar() {
               <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9" />
             </svg>
           </div>
-          <span style={{ color: '#e6edf3', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
+          <span style={{ color: 'var(--root-paper)', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
         </div>
 
         {/* Desktop tabs */}
@@ -119,7 +119,7 @@ export function NavBar() {
                           onClick={() => setSubOpen(false)}
                           style={{
                             display: 'block',
-                            color: pathname.startsWith(sub.href) ? '#f0b429' : '#e6edf3',
+                            color: pathname.startsWith(sub.href) ? '#f0b429' : 'var(--root-paper)',
                             textDecoration: 'none',
                             padding: '8px 14px',
                             fontSize: '13px',
@@ -191,7 +191,7 @@ export function NavBar() {
                 onClick={() => setMobileOpen(false)}
                 style={{
                   display: 'block',
-                  color: active ? '#f0b429' : '#e6edf3',
+                  color: active ? '#f0b429' : 'var(--root-paper)',
                   textDecoration: 'none',
                   padding: '11px 1rem',
                   fontSize: '14px',

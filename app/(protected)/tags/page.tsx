@@ -6,9 +6,9 @@ import type { Tag } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
 const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
-const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
+const BTN_SEC = { ...BTN, background: '#21262d', color: 'var(--root-paper)', border: '1px solid #30363d' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
-const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
+const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: 'var(--root-paper)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 
 type TagWithCount = Tag & { tx_count: number }
 
@@ -109,7 +109,7 @@ export default function TagsPage() {
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#e6edf3' }}>Tags</h1>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--root-paper)' }}>Tags</h1>
         <span style={{ fontSize: '0.85rem', color: '#8b949e' }}>{tags.length} total</span>
       </div>
 
@@ -161,7 +161,7 @@ export default function TagsPage() {
               ) : (
                 <>
                   <div style={{ flex: 1 }}>
-                    <span style={{ color: '#e6edf3', fontWeight: 500 }}>{t.name}</span>
+                    <span style={{ color: 'var(--root-paper)', fontWeight: 500 }}>{t.name}</span>
                     <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
                       {t.tx_count} transaction{t.tx_count !== 1 ? 's' : ''}
                     </span>

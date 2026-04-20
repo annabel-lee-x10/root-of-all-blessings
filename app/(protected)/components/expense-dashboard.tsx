@@ -50,7 +50,7 @@ const labelStyle: React.CSSProperties = {
 }
 
 const valueStyle: React.CSSProperties = {
-  color: '#e6edf3',
+  color: 'var(--root-paper)',
   fontSize: '22px',
   fontWeight: 700,
   letterSpacing: '-0.5px',
@@ -145,7 +145,7 @@ export function ExpenseDashboard() {
                 onChange={(e) => setCustomStart(e.target.value)}
                 style={{
                   background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#e6edf3', padding: '6px 10px', fontSize: '13px', width: '100%',
+                  color: 'var(--root-paper)', padding: '6px 10px', fontSize: '13px', width: '100%',
                   boxSizing: 'border-box',
                 }}
               />
@@ -160,7 +160,7 @@ export function ExpenseDashboard() {
                 onChange={(e) => setCustomEnd(e.target.value)}
                 style={{
                   background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#e6edf3', padding: '6px 10px', fontSize: '13px', width: '100%',
+                  color: 'var(--root-paper)', padding: '6px 10px', fontSize: '13px', width: '100%',
                   boxSizing: 'border-box',
                 }}
               />
@@ -196,7 +196,7 @@ export function ExpenseDashboard() {
 
               <div style={card}>
                 <div style={labelStyle}>Daily Avg</div>
-                <div style={{ ...valueStyle, color: loading ? '#484f58' : '#e6edf3' }}>
+                <div style={{ ...valueStyle, color: loading ? '#484f58' : 'var(--root-paper)' }}>
                   {loading ? '…' : fmt(data?.daily_average ?? 0)}
                 </div>
                 <div style={{ color: '#484f58', fontSize: '11px', marginTop: '2px' }}>SGD / day</div>
@@ -218,7 +218,7 @@ export function ExpenseDashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {data.category_breakdown.slice(0, 6).map((cat) => (
                     <div key={cat.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                      <span style={{ color: 'var(--root-paper)', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
                       <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
                         <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
                       </div>

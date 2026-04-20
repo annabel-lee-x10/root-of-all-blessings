@@ -119,7 +119,7 @@ export function RecentTransactions() {
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--root-paper)', fontSize: '14px', fontWeight: 500 }}>
                       {tx.payee ?? tx.category_name ?? tx.account_name}
                     </span>
                     {tx.tags && tx.tags.length > 0 && (

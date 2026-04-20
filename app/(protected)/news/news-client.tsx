@@ -9,7 +9,7 @@ const BG = '#0f0f1a'
 const CARD = '#111520'
 const BORDER = '#1C2333'
 const ACCENT = '#E8520A'
-const TEXT = '#e6edf3'
+const TEXT = 'var(--root-paper)'
 const MUTED = '#8b949e'
 const BLUE = '#4A6FA5'
 

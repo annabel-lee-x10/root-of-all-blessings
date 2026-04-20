@@ -22,7 +22,7 @@ const inputStyle: React.CSSProperties = {
   background: '#0d1117',
   border: '1px solid #30363d',
   borderRadius: '8px',
-  color: '#e6edf3',
+  color: 'var(--root-paper)',
   padding: '8px 12px',
   fontSize: '14px',
   width: '100%',
@@ -295,7 +295,7 @@ export function WheresMyMoney() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : '1.25rem' }}>
-          <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+          <h2 style={{ color: 'var(--root-paper)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Where's My Money
           </h2>
           <button
@@ -538,7 +538,7 @@ export function WheresMyMoney() {
                     <div
                       key={t.id}
                       onMouseDown={(e) => { e.preventDefault(); toggleTag(t.id); setTagSearch('') }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#e6edf3' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: 'var(--root-paper)' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#30363d' }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
@@ -632,7 +632,7 @@ export function WheresMyMoney() {
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
         input::placeholder, textarea::placeholder { color: #484f58; }
-        select option { background: #161b22; color: #e6edf3; }
+        select option { background: #161b22; color: var(--root-paper); }
         input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
       `}</style>

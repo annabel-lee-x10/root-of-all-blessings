@@ -73,12 +73,12 @@ const BTN: React.CSSProperties = {
   fontSize: '12px', fontWeight: 500, padding: '5px 10px',
 }
 const BTN_PRI: React.CSSProperties = { ...BTN, background: '#f0b429', color: '#0d1117' }
-const BTN_SEC: React.CSSProperties = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
+const BTN_SEC: React.CSSProperties = { ...BTN, background: '#21262d', color: 'var(--root-paper)', border: '1px solid #30363d' }
 const BTN_DNG: React.CSSProperties = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f8514940' }
 
 const INPUT: React.CSSProperties = {
   background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-  color: '#e6edf3', fontSize: '13px', padding: '6px 10px', outline: 'none',
+  color: 'var(--root-paper)', fontSize: '13px', padding: '6px 10px', outline: 'none',
 }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 
@@ -229,7 +229,7 @@ export default function TransactionsPage() {
     <div style={{ padding: '1.5rem', maxWidth: '960px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-        <h1 style={{ margin: 0, color: '#e6edf3', fontSize: '18px', fontWeight: 600 }}>Transactions</h1>
+        <h1 style={{ margin: 0, color: 'var(--root-paper)', fontSize: '18px', fontWeight: 600 }}>Transactions</h1>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <a href={exportUrl('csv')} download style={{ ...BTN_SEC, textDecoration: 'none', display: 'inline-block' }}>
             Export CSV
@@ -350,7 +350,7 @@ export default function TransactionsPage() {
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#e6edf3', fontSize: '13px', fontWeight: 500 }}>
+                  <span style={{ color: 'var(--root-paper)', fontSize: '13px', fontWeight: 500 }}>
                     {tx.payee ?? tx.category_name ?? tx.account_name}
                   </span>
                   {tx.tags.length > 0 && (

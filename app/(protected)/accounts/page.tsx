@@ -6,9 +6,9 @@ import type { Account } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
 const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
-const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
+const BTN_SEC = { ...BTN, background: '#21262d', color: 'var(--root-paper)', border: '1px solid #30363d' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
-const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
+const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: 'var(--root-paper)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 const SELECT = { ...INPUT }
 const CARD = { background: '#161b22', border: '1px solid #30363d', borderRadius: '10px', padding: '1.25rem 1.5rem', marginBottom: '1rem' }
 
@@ -142,7 +142,7 @@ export default function AccountsPage() {
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#e6edf3' }}>Accounts</h1>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--root-paper)' }}>Accounts</h1>
         <button style={BTN_PRI} onClick={() => setShowCreate(v => !v)}>
           {showCreate ? 'Cancel' : '+ New Account'}
         </button>
@@ -225,7 +225,7 @@ export default function AccountsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <span style={{ fontWeight: 600, color: '#e6edf3' }}>{a.name}</span>
+                          <span style={{ fontWeight: 600, color: 'var(--root-paper)' }}>{a.name}</span>
                           <span style={{ fontSize: '0.75rem', color: '#8b949e', background: '#21262d', padding: '0.1rem 0.5rem', borderRadius: '4px' }}>{a.currency}</span>
                           {!a.is_active && (
                             <span style={{ fontSize: '0.72rem', color: '#f85149', background: 'rgba(248,81,73,0.1)', padding: '0.1rem 0.5rem', borderRadius: '4px' }}>inactive</span>
