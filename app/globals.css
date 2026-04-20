@@ -1,10 +1,11 @@
 @import "tailwindcss";
+@import "../public/brand/tokens.css";
 
 :root {
   --bg: #0d1117;
   --bg-card: #161b22;
   --border: #30363d;
-  --text: #e6edf3;
+  --text: var(--root-paper);
   --text-muted: #8b949e;
   --accent: #f0b429;
 }
