@@ -152,6 +152,31 @@ describe('PATCH /api/categories/[id]', () => {
   })
 })
 
+describe('POST /api/categories – BUG-010 parent_id fallback', () => {
+  it('returns 201 even when the parent_id column is missing from the DB', async () => {
+    const { db } = await import('@/lib/db')
+    const { POST } = await import('@/app/api/categories/route')
+
+    const original = vi.mocked(db.execute).getMockImplementation()!
+    let intercepted = false
+    vi.mocked(db.execute).mockImplementation((q) => {
+      const sql = typeof q === 'string' ? q : (q as { sql: string }).sql
+      if (!intercepted && sql.includes('INSERT INTO categories') && sql.includes('parent_id')) {
+        intercepted = true
+        return Promise.reject(new Error('table categories has no column named parent_id'))
+      }
+      return original(q)
+    })
+
+    const res = await POST(req('/api/categories', 'POST', { name: 'PetBug010', type: 'expense' }))
+    vi.mocked(db.execute).mockImplementation(original)
+
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.name).toBe('PetBug010')
+  })
+})
+
 describe('DELETE /api/categories/[id]', () => {
   it('deletes a category', async () => {
     seedCategory('c3', 'ToDelete', 'expense')

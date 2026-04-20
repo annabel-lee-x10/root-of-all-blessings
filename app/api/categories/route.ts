@@ -35,10 +35,21 @@ export async function POST(request: NextRequest) {
   const id = crypto.randomUUID()
   const n = new Date().toISOString()
 
-  await db.execute({
-    sql: `INSERT INTO categories (id, name, type, sort_order, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, name, type, sort_order, parent_id, n, n],
-  })
+  try {
+    await db.execute({
+      sql: `INSERT INTO categories (id, name, type, sort_order, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, name, type, sort_order, parent_id, n, n],
+    })
+  } catch (err: unknown) {
+    // Migration pending: parent_id column not yet added — insert without it so
+    // the category is still created. Run /api/migrate to add the column and then
+    // set the parent relationship via PATCH.
+    if (!String(err).includes('parent_id')) throw err
+    await db.execute({
+      sql: `INSERT INTO categories (id, name, type, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [id, name, type, sort_order, n, n],
+    })
+  }
 
   const row = await db.execute({ sql: 'SELECT * FROM categories WHERE id = ?', args: [id] })
   return Response.json(row.rows[0], { status: 201 })
