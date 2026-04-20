@@ -17,6 +17,7 @@ const DARK = {
   green:  '#3DD68C',
   red:    '#FF5A5A',
   yellow: '#F5C842',
+  teal:   '#06D6A0',
 }
 const LIGHT = {
   bg:     '#F1F5F9',
@@ -29,6 +30,7 @@ const LIGHT = {
   green:  '#16A34A',
   red:    '#DC2626',
   yellow: '#D97706',
+  teal:   '#06D6A0',
 }
 type Theme = typeof DARK
 const ThemeCtx = createContext<Theme>(DARK)
@@ -340,7 +342,7 @@ function HoldingsTab({ holdings }: { holdings: Holding[] }) {
                     {hasBuy && (
                       <span
                         data-testid={`limit-badge-${h.ticker}`}
-                        style={{ ...TAG, background: '#06D6A022', color: '#06D6A0' }}
+                        style={{ ...TAG, background: C.teal + '22', color: C.teal }}
                       >BUY</span>
                     )}
                     <span style={{ fontSize: '0.7rem', color: T.mid }}>{sector}</span>

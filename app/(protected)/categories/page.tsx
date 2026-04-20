@@ -5,12 +5,12 @@ import { useToast } from '../components/toast'
 import type { Category, Tag } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
-const BTN_PRI = { ...BTN, background: '#CC5500', color: '#0d1117' }
-const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
-const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
-const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
+const BTN_PRI = { ...BTN, background: 'var(--accent)', color: 'var(--bg)' }
+const BTN_SEC = { ...BTN, background: 'var(--bg-dim)', color: 'var(--text)', border: '1px solid var(--border)' }
+const BTN_DNG = { ...BTN, background: 'transparent', color: 'var(--red)', border: '1px solid var(--red)' }
+const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 const SELECT = { ...INPUT }
-const CARD: React.CSSProperties = { background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }
+const CARD: React.CSSProperties = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }
 
 type Tab = 'expense' | 'income'
 type SortBy = 'name-asc' | 'name-desc' | 'volume-desc' | 'volume-asc'
@@ -146,10 +146,10 @@ export default function CategoriesPage() {
   const TAB_STYLE = (active: boolean): React.CSSProperties => ({
     padding: '0.5rem 1.25rem',
     borderRadius: '6px 6px 0 0',
-    border: '1px solid #30363d',
-    borderBottom: active ? '1px solid #161b22' : '1px solid #30363d',
-    background: active ? '#161b22' : 'transparent',
-    color: active ? '#e6edf3' : '#8b949e',
+    border: '1px solid var(--border)',
+    borderBottom: active ? '1px solid var(--bg-card)' : '1px solid var(--border)',
+    background: active ? 'var(--bg-card)' : 'transparent',
+    color: active ? 'var(--text)' : 'var(--text-muted)',
     cursor: 'pointer',
     fontSize: '0.9rem',
     fontWeight: active ? 600 : 400,
@@ -169,7 +169,7 @@ export default function CategoriesPage() {
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#e6edf3' }}>Categories</h1>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>Categories</h1>
         <button style={BTN_PRI} onClick={() => { setShowCreate(v => !v); setNewName(''); setNewParentId('') }}>
           {showCreate ? 'Cancel' : '+ New Category'}
         </button>
@@ -184,7 +184,7 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      <div style={{ border: '1px solid #30363d', borderRadius: '0 6px 6px 6px', padding: '1.25rem', background: '#161b22' }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: '0 6px 6px 6px', padding: '1.25rem', background: 'var(--bg-card)' }}>
         {showCreate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -201,7 +201,7 @@ export default function CategoriesPage() {
               </button>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <label style={{ color: '#8b949e', fontSize: '0.8rem', flexShrink: 0 }}>Parent (optional):</label>
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>Parent (optional):</label>
               <select
                 style={{ ...SELECT, flex: 1 }}
                 value={newParentId}
@@ -237,9 +237,9 @@ export default function CategoriesPage() {
         </div>
 
         {loading ? (
-          <p style={{ color: '#8b949e', margin: 0 }}>Loading...</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading...</p>
         ) : topLevel.length === 0 ? (
-          <p style={{ color: '#8b949e', margin: 0 }}>No {tab} categories{search ? ' match.' : ' yet.'}</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>No {tab} categories{search ? ' match.' : ' yet.'}</p>
         ) : (
           topLevel.map(c => (
             <React.Fragment key={c.id}>
@@ -270,8 +270,8 @@ export default function CategoriesPage() {
                 ) : (
                   <>
                     <div style={{ flex: 1 }}>
-                      <span style={{ color: '#e6edf3', fontWeight: 500 }}>{c.name}</span>
-                      <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
+                      <span style={{ color: 'var(--text)', fontWeight: 500 }}>{c.name}</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>
                         {c.tx_count} transaction{c.tx_count !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -292,7 +292,7 @@ export default function CategoriesPage() {
 
               {/* Subcategories — indented */}
               {(subcatsByParent.get(c.id) ?? []).map(sub => (
-                <div key={sub.id} style={{ ...CARD, marginLeft: '1.5rem', background: '#0d1117', border: '1px dashed #30363d' }}>
+                <div key={sub.id} style={{ ...CARD, marginLeft: '1.5rem', background: 'var(--bg)', border: '1px dashed var(--border)' }}>
                   {editingId === sub.id ? (
                     <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <input style={{ ...INPUT, flex: 1 }} value={editName} onChange={e => setEditName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveEdit(sub.id)} />
@@ -319,7 +319,7 @@ export default function CategoriesPage() {
                     <>
                       <div style={{ flex: 1 }}>
                         <span style={{ color: '#c9d1d9', fontWeight: 400 }}>{sub.name}</span>
-                        <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>
                           {sub.tx_count} transaction{sub.tx_count !== 1 ? 's' : ''}
                         </span>
                       </div>

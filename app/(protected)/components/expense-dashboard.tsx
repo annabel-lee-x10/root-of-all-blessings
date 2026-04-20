@@ -47,7 +47,7 @@ function fmt(n: number) {
 }
 
 const labelStyle: React.CSSProperties = {
-  color: '#8b949e',
+  color: 'var(--text-muted)',
   fontSize: '10px',
   fontWeight: 600,
   letterSpacing: '0.06em',
@@ -64,10 +64,10 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
   const displayPct = savingsPct !== null ? Math.round(savingsPct) : null
 
   const color =
-    savingsPct === null ? '#484f58'
-    : savingsPct > 20 ? '#3fb884'
-    : savingsPct > 10 ? '#CC5500'
-    : '#f85149'
+    savingsPct === null ? 'var(--text-dim)'
+    : savingsPct > 20 ? 'var(--green)'
+    : savingsPct > 10 ? 'var(--accent)'
+    : 'var(--red)'
 
   const progress = savingsPct !== null ? Math.max(0, Math.min(100, savingsPct)) : 0
   const endAngle = Math.PI * (1 - progress / 100)
@@ -80,7 +80,7 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
       <svg viewBox="0 0 200 120" style={{ width: '100%', maxWidth: '200px', display: 'block', margin: '0 auto', overflow: 'visible' }}>
         <path
           d="M 10,110 A 90,90 0 0,1 190,110"
-          fill="none" stroke="#21262d" strokeWidth="14" strokeLinecap="round"
+          fill="none" stroke="var(--bg-dim)" strokeWidth="14" strokeLinecap="round"
         />
         {!loading && progress > 0 && (
           <path
@@ -89,7 +89,7 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
           />
         )}
         {loading ? (
-          <text x="100" y="90" textAnchor="middle" fill="#484f58" fontSize="26" fontWeight="700" fontFamily="inherit">
+          <text x="100" y="90" textAnchor="middle" fill="var(--text-dim)" fontSize="26" fontWeight="700" fontFamily="inherit">
             …
           </text>
         ) : displayPct !== null ? (
@@ -97,12 +97,12 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
             <text x="100" y="86" textAnchor="middle" fill={color} fontSize="30" fontWeight="700" fontFamily="inherit">
               {displayPct}%
             </text>
-            <text x="100" y="104" textAnchor="middle" fill="#484f58" fontSize="11" fontFamily="inherit">
+            <text x="100" y="104" textAnchor="middle" fill="var(--text-dim)" fontSize="11" fontFamily="inherit">
               {displayPct < 0 ? 'deficit' : 'saved'}
             </text>
           </>
         ) : (
-          <text x="100" y="90" textAnchor="middle" fill="#484f58" fontSize="13" fontFamily="inherit">
+          <text x="100" y="90" textAnchor="middle" fill="var(--text-dim)" fontSize="13" fontFamily="inherit">
             no income
           </text>
         )}
@@ -215,15 +215,15 @@ export function ExpenseDashboard() {
     <section style={{ marginBottom: '2rem' }}>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '1.25rem 1.5rem',
         }}
       >
         {/* Header + range selector */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-          <h2 style={{ color: '#8b949e', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
+          <h2 style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
             Expense Dashboard
           </h2>
           <div style={{ display: 'flex', gap: '4px' }}>
@@ -239,9 +239,9 @@ export function ExpenseDashboard() {
                   fontSize: '12px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  border: range === r.id ? '1px solid #CC5500' : '1px solid #30363d',
-                  background: range === r.id ? 'rgba(204,85,0,0.12)' : 'transparent',
-                  color: range === r.id ? '#CC5500' : '#8b949e',
+                  border: range === r.id ? '1px solid var(--accent)' : '1px solid var(--border)',
+                  background: range === r.id ? 'var(--accent-faint)' : 'transparent',
+                  color: range === r.id ? 'var(--accent)' : 'var(--text-muted)',
                 }}
               >
                 {r.label}
@@ -262,8 +262,8 @@ export function ExpenseDashboard() {
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
                 style={{
-                  background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#e6edf3', padding: '6px 10px', fontSize: '13px', width: '100%',
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+                  color: 'var(--text)', padding: '6px 10px', fontSize: '13px', width: '100%',
                   boxSizing: 'border-box',
                 }}
               />
@@ -277,8 +277,8 @@ export function ExpenseDashboard() {
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
                 style={{
-                  background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#e6edf3', padding: '6px 10px', fontSize: '13px', width: '100%',
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+                  color: 'var(--text)', padding: '6px 10px', fontSize: '13px', width: '100%',
                   boxSizing: 'border-box',
                 }}
               />
@@ -287,7 +287,7 @@ export function ExpenseDashboard() {
         )}
 
         {error && (
-          <p style={{ color: '#f85149', fontSize: '13px', textAlign: 'center', padding: '1rem 0' }}>
+          <p style={{ color: 'var(--red)', fontSize: '13px', textAlign: 'center', padding: '1rem 0' }}>
             Failed to load dashboard data - please refresh
           </p>
         )}
@@ -303,27 +303,27 @@ export function ExpenseDashboard() {
 
             {/* Stat boxes - smaller/secondary */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', margin: '0.75rem 0' }}>
-              <div style={{ background: '#1c2128', border: '1px solid #30363d', borderRadius: '8px', padding: '8px 10px' }}>
+              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
                 <div style={labelStyle}>Spend</div>
-                <div style={{ color: loading ? '#484f58' : '#f85149', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
+                <div style={{ color: loading ? 'var(--text-dim)' : 'var(--red)', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
                   {loading ? '…' : fmt(data?.total_spend ?? 0)}
                 </div>
               </div>
-              <div style={{ background: '#1c2128', border: '1px solid #30363d', borderRadius: '8px', padding: '8px 10px' }}>
+              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
                 <div style={labelStyle}>Income</div>
-                <div style={{ color: loading ? '#484f58' : '#3fb884', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
+                <div style={{ color: loading ? 'var(--text-dim)' : 'var(--green)', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
                   {loading ? '…' : fmt(data?.total_income ?? 0)}
                 </div>
               </div>
-              <div style={{ background: '#1c2128', border: '1px solid #30363d', borderRadius: '8px', padding: '8px 10px' }}>
+              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
                 <div style={labelStyle}>Avg/day</div>
-                <div style={{ color: loading ? '#484f58' : '#e6edf3', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
+                <div style={{ color: loading ? 'var(--text-dim)' : 'var(--text)', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
                   {loading ? '…' : fmt(data?.daily_average ?? 0)}
                 </div>
               </div>
-              <div style={{ background: '#1c2128', border: '1px solid #30363d', borderRadius: '8px', padding: '8px 10px' }}>
+              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
                 <div style={labelStyle}>Budget</div>
-                <div style={{ color: '#484f58', fontSize: '14px', fontWeight: 700 }}>
+                <div style={{ color: 'var(--text-dim)', fontSize: '14px', fontWeight: 700 }}>
                   {loading ? '…' : (data?.budget_remaining != null ? fmt(data.budget_remaining) : '--')}
                 </div>
               </div>
@@ -331,7 +331,7 @@ export function ExpenseDashboard() {
 
             {/* Empty state */}
             {!loading && data && data.total_spend === 0 && data.total_income === 0 && (
-              <p style={{ color: '#484f58', fontSize: '13px', textAlign: 'center', padding: '0.25rem 0 0.5rem' }}>
+              <p style={{ color: 'var(--text-dim)', fontSize: '13px', textAlign: 'center', padding: '0.25rem 0 0.5rem' }}>
                 No transactions in this period
               </p>
             )}
@@ -342,8 +342,8 @@ export function ExpenseDashboard() {
                 type="button"
                 onClick={handleToggleTrend}
                 style={{
-                  background: 'none', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#8b949e', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                  background: 'none', border: '1px solid var(--border)', borderRadius: '6px',
+                  color: 'var(--text-muted)', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
                   padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px',
                 }}
               >
@@ -352,11 +352,11 @@ export function ExpenseDashboard() {
               </button>
 
               {showTrend && (
-                <div style={{ marginTop: '10px', padding: '12px', background: '#0d1117', borderRadius: '8px', border: '1px solid #21262d' }}>
+                <div style={{ marginTop: '10px', padding: '12px', background: 'var(--bg)', borderRadius: '8px', border: '1px solid var(--bg-dim)' }}>
                   {trendLoading ? (
-                    <div style={{ color: '#484f58', fontSize: '12px', textAlign: 'center', padding: '1rem 0' }}>Loading...</div>
+                    <div style={{ color: 'var(--text-dim)', fontSize: '12px', textAlign: 'center', padding: '1rem 0' }}>Loading...</div>
                   ) : trendData.length === 0 ? (
-                    <div style={{ color: '#484f58', fontSize: '12px', textAlign: 'center', padding: '0.5rem 0' }}>No trend data</div>
+                    <div style={{ color: 'var(--text-dim)', fontSize: '12px', textAlign: 'center', padding: '0.5rem 0' }}>No trend data</div>
                   ) : (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '72px' }}>
@@ -368,11 +368,11 @@ export function ExpenseDashboard() {
                               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '60px' }}>
                                 <div
                                   title={`Income: SGD ${fmt(pt.income)}`}
-                                  style={{ width: '10px', height: `${Math.max(incomeH, 0)}px`, background: '#3fb884', borderRadius: '2px 2px 0 0', minHeight: incomeH > 0 ? '2px' : '0' }}
+                                  style={{ width: '10px', height: `${Math.max(incomeH, 0)}px`, background: 'var(--green)', borderRadius: '2px 2px 0 0', minHeight: incomeH > 0 ? '2px' : '0' }}
                                 />
                                 <div
                                   title={`Expense: SGD ${fmt(pt.expense)}`}
-                                  style={{ width: '10px', height: `${Math.max(expenseH, 0)}px`, background: '#f85149', borderRadius: '2px 2px 0 0', minHeight: expenseH > 0 ? '2px' : '0' }}
+                                  style={{ width: '10px', height: `${Math.max(expenseH, 0)}px`, background: 'var(--red)', borderRadius: '2px 2px 0 0', minHeight: expenseH > 0 ? '2px' : '0' }}
                                 />
                               </div>
                               <span style={{ color: '#6e7681', fontSize: '10px', whiteSpace: 'nowrap' }}>{pt.label}</span>
@@ -382,11 +382,11 @@ export function ExpenseDashboard() {
                       </div>
                       <div style={{ display: 'flex', gap: '12px', marginTop: '8px', justifyContent: 'center' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6e7681', fontSize: '11px' }}>
-                          <span style={{ width: '8px', height: '8px', background: '#3fb884', borderRadius: '2px', display: 'inline-block' }} />
+                          <span style={{ width: '8px', height: '8px', background: 'var(--green)', borderRadius: '2px', display: 'inline-block' }} />
                           Income
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6e7681', fontSize: '11px' }}>
-                          <span style={{ width: '8px', height: '8px', background: '#f85149', borderRadius: '2px', display: 'inline-block' }} />
+                          <span style={{ width: '8px', height: '8px', background: 'var(--red)', borderRadius: '2px', display: 'inline-block' }} />
                           Expense
                         </span>
                       </div>
@@ -420,36 +420,36 @@ export function ExpenseDashboard() {
                             textAlign: 'left',
                           }}
                         >
-                          <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
-                          <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#CC5500', borderRadius: '4px' }} />
+                          <span style={{ color: 'var(--text)', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                          <div style={{ flex: 1, background: 'var(--bg-dim)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: 'var(--accent)', borderRadius: '4px' }} />
                           </div>
-                          <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
                             {fmt(cat.total)}
                           </span>
-                          <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                          <span style={{ color: 'var(--text-dim)', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
                             {cat.pct.toFixed(1)}%
                           </span>
                           {cat.category_id && (
-                            <span style={{ color: '#484f58', fontSize: '11px', width: '16px', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '11px', width: '16px', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
                           )}
                         </button>
 
                         {isExpanded && (
                           <div style={{ marginBottom: '4px', paddingLeft: '0' }}>
                             {drillLoading ? (
-                              <div style={{ color: '#8b949e', fontSize: '12px', padding: '4px 0' }}>Loading...</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '4px 0' }}>Loading...</div>
                             ) : !drillData || drillData.length === 0 ? (
-                              <div style={{ color: '#484f58', fontSize: '12px', padding: '4px 0' }}>No subcategories</div>
+                              <div style={{ color: 'var(--text-dim)', fontSize: '12px', padding: '4px 0' }}>No subcategories</div>
                             ) : (
                               drillData.map(sub => (
                                 <div key={sub.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '3px 0' }}>
-                                  <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '100px' }}>{sub.category_name}</span>
-                                  <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${Math.min(100, sub.pct)}%`, height: '100%', background: '#CC550080', borderRadius: '4px' }} />
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '100px' }}>{sub.category_name}</span>
+                                  <div style={{ flex: 1, background: 'var(--bg-dim)', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(100, sub.pct)}%`, height: '100%', background: 'rgba(204, 85, 0, 0.5)', borderRadius: '4px' }} />
                                   </div>
-                                  <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>{fmt(sub.total)}</span>
-                                  <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>{sub.pct.toFixed(1)}%</span>
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>{fmt(sub.total)}</span>
+                                  <span style={{ color: 'var(--text-dim)', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>{sub.pct.toFixed(1)}%</span>
                                   <span style={{ width: '16px', flexShrink: 0 }} />
                                 </div>
                               ))
