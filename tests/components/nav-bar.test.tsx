@@ -135,10 +135,10 @@ describe('NavBar', () => {
       expect(within(bottomNav).getByRole('link', { name: 'Add transaction' })).toBeInTheDocument()
     })
 
-    it('Add transaction link points to /transactions', () => {
+    it('Add transaction link points to /dashboard', () => {
       render(<NavBar />)
       const bottomNav = getBottomNav()
-      expect(within(bottomNav).getByRole('link', { name: 'Add transaction' })).toHaveAttribute('href', '/transactions')
+      expect(within(bottomNav).getByRole('link', { name: 'Add transaction' })).toHaveAttribute('href', '/dashboard')
     })
 
     it('Dashboard link points to /dashboard', () => {
