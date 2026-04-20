@@ -43,6 +43,7 @@ async function migrate() {
       note TEXT,
       payment_method TEXT,
       datetime TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('draft','approved')),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,
@@ -89,6 +90,13 @@ async function migrate() {
   // Idempotent: add payment_method column to existing transactions tables
   try {
     await db.execute('ALTER TABLE transactions ADD COLUMN payment_method TEXT')
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  // Idempotent: add status column to existing transactions tables
+  try {
+    await db.execute("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('draft','approved'))")
   } catch {
     // Column already exists — safe to ignore
   }

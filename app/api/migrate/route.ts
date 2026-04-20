@@ -18,6 +18,10 @@ export async function POST() {
       name: 'news_briefs.tickers',
       sql: 'ALTER TABLE news_briefs ADD COLUMN tickers TEXT',
     },
+    {
+      name: 'transactions.status',
+      sql: "ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('draft','approved'))",
+    },
   ]
 
   for (const m of migrations) {

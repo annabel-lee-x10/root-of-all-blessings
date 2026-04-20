@@ -268,16 +268,28 @@ export function WheresMyMoney() {
     }
   }
 
-  function pillBtn(active: boolean): React.CSSProperties {
+  function txTypeColor(t: TxType) {
+    if (t === 'expense') return '#f85149'
+    if (t === 'income') return '#3fb884'
+    return '#8b949e'
+  }
+
+  function txTypeBg(t: TxType) {
+    if (t === 'expense') return 'rgba(248,81,73,0.15)'
+    if (t === 'income') return 'rgba(63,184,132,0.15)'
+    return 'rgba(139,148,158,0.15)'
+  }
+
+  function pillBtn(active: boolean, t: TxType): React.CSSProperties {
     return {
       padding: '6px 16px',
       borderRadius: '20px',
       fontSize: '13px',
       fontWeight: 500,
       cursor: 'pointer',
-      border: active ? '1px solid #f0b429' : '1px solid #30363d',
-      background: active ? '#f0b42920' : 'transparent',
-      color: active ? '#f0b429' : '#8b949e',
+      border: active ? `1px solid ${txTypeColor(t)}` : '1px solid #30363d',
+      background: active ? txTypeBg(t) : 'transparent',
+      color: active ? txTypeColor(t) : '#8b949e',
       transition: 'all 0.15s',
     }
   }
@@ -379,15 +391,23 @@ export function WheresMyMoney() {
           {/* Type toggle */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)} style={pillBtn(type === t)}>
+              <button key={t} type="button" onClick={() => setType(t)} style={pillBtn(type === t, t)}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
 
           {/* Amount + Currency */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {type !== 'transfer' && (
+                <span style={{
+                  fontSize: '22px', fontWeight: 700, color: txTypeColor(type),
+                  lineHeight: 1, flexShrink: 0, width: '16px', textAlign: 'center',
+                }}>
+                  {type === 'income' ? '+' : '−'}
+                </span>
+              )}
               <input
                 ref={amountRef}
                 type="number"
@@ -404,6 +424,7 @@ export function WheresMyMoney() {
                   fontWeight: 600,
                   padding: '10px 14px',
                   letterSpacing: '-0.5px',
+                  flex: 1,
                 }}
               />
             </div>
