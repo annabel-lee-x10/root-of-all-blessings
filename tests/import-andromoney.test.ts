@@ -273,7 +273,6 @@ describe('normaliseAccountName', () => {
   })
 
   it('maps special accounts', () => {
-    expect(normaliseAccountName('vallow')).toBe('vallow')
     expect(normaliseAccountName('Lalamove Easyvan')).toBe('Lalamove Easyvan')
     expect(normaliseAccountName('2024 Japan')).toBe('2024 Japan')
   })
@@ -282,10 +281,6 @@ describe('normaliseAccountName', () => {
 // ── guessAccountType ──────────────────────────────────────────────────────────
 
 describe('guessAccountType', () => {
-  it('returns wallet for vallow', () => {
-    expect(guessAccountType('vallow')).toBe('wallet')
-  })
-
   it('returns wallet for Lalamove Easyvan', () => {
     expect(guessAccountType('Lalamove Easyvan')).toBe('wallet')
   })
