@@ -150,9 +150,9 @@ export function NavBar() {
         {/* Logo */}
         <div style={{ flexShrink: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo.svg" alt="Root OS" height={28} className="logo-dark" />
+          <img src="/brand/logo.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-dark" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/logo-light.svg" alt="Root OS" height={28} className="logo-light" />
+          <img src="/brand/logo-light.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-light" />
         </div>
 
         {/* Desktop tabs */}
@@ -277,7 +277,7 @@ export function NavBar() {
         {/* Add — raised accent FAB */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Link
-            href="/transactions"
+            href="/dashboard"
             aria-label="Add transaction"
             style={{
               display: 'flex',
