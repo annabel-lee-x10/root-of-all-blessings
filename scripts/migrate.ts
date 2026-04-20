@@ -9,7 +9,7 @@ async function migrate() {
     `CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
-      type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund')),
+      type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund','credit_card')),
       currency TEXT NOT NULL DEFAULT 'SGD',
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
@@ -17,9 +17,10 @@ async function migrate() {
     )`,
     `CREATE TABLE IF NOT EXISTS categories (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('expense','income')),
       sort_order INTEGER NOT NULL DEFAULT 0,
+      parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,
@@ -96,16 +97,26 @@ async function migrate() {
 
   // Idempotent: add status column to transactions (drafts system)
   try {
-    await db.execute("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'")
+    await db.execute('ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT \'approved\' CHECK(status IN (\'draft\',\'approved\'))')
   } catch {
     // Column already exists — safe to ignore
   }
 
+  // Idempotent: add parent_id column to categories (hierarchy support)
+  try {
+    await db.execute('ALTER TABLE categories ADD COLUMN parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL')
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  // Idempotent: create index for category hierarchy
+  try {
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id)')
+  } catch {
+    // Index already exists — safe to ignore
+  }
+
   console.log('Migrations complete.')
-  process.exit(0)
 }
 
-migrate().catch((err) => {
-  console.error('Migration failed:', err)
-  process.exit(1)
-})
+migrate().catch(console.error)

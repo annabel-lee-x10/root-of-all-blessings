@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS news_briefs (
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
-  type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund')),
+  type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund','credit_card')),
   currency TEXT NOT NULL DEFAULT 'SGD',
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
@@ -33,10 +33,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   type TEXT NOT NULL CHECK(type IN ('expense','income')),
   sort_order INTEGER NOT NULL DEFAULT 0,
-  parent_id TEXT REFERENCES categories(id),
+  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
