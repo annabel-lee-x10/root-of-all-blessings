@@ -210,150 +210,154 @@ export async function POST() {
     }
   }
 
-  // ── Backup table ────────────────────────────────────────────────────────────
+  try {
+    // ── Backup table ──────────────────────────────────────────────────────────
 
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS category_remap_backup (
-      transaction_id TEXT NOT NULL PRIMARY KEY,
-      original_category_id TEXT,
-      backed_up_at TEXT NOT NULL
-    )
-  `)
-  results['category_remap_backup'] = 'ready'
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS category_remap_backup (
+        transaction_id TEXT NOT NULL PRIMARY KEY,
+        original_category_id TEXT,
+        backed_up_at TEXT NOT NULL
+      )
+    `)
+    results['category_remap_backup'] = 'ready'
 
-  // ── Load current categories ─────────────────────────────────────────────────
+    // ── Load current categories ───────────────────────────────────────────────
 
-  const catRes = await db.execute('SELECT id, name, type FROM categories')
-  const catByName = new Map<string, string>() // name → id
-  for (const row of catRes.rows) {
-    catByName.set(row.name as string, row.id as string)
-  }
+    const catRes = await db.execute('SELECT id, name, type FROM categories')
+    const catByName = new Map<string, string>() // name → id
+    for (const row of catRes.rows) {
+      catByName.set(row.name as string, row.id as string)
+    }
 
-  // ── Ensure subcategories exist with parent_id set ───────────────────────────
+    // ── Ensure subcategories exist with parent_id set ─────────────────────────
 
-  let subcatsCreated = 0
-  let subcatsLinked = 0
+    let subcatsCreated = 0
+    let subcatsLinked = 0
 
-  // Deduplicate: a child name may appear under multiple parents (e.g. Netflix
-  // under both Entertainment and Subscriptions). We only INSERT once.
-  const processedChildren = new Set<string>()
+    // Deduplicate: a child name may appear under multiple parents (e.g. Netflix
+    // under both Entertainment and Subscriptions). We only INSERT once.
+    const processedChildren = new Set<string>()
 
-  for (const { parent, type, children } of HIERARCHY) {
-    const parentId = catByName.get(parent)
-    if (!parentId) continue
+    for (const { parent, type, children } of HIERARCHY) {
+      const parentId = catByName.get(parent)
+      if (!parentId) continue
 
-    for (const child of children) {
-      if (!catByName.has(child)) {
-        if (processedChildren.has(child)) continue // already created under another parent
-        const id = crypto.randomUUID()
-        await db.execute({
-          sql: `INSERT OR IGNORE INTO categories (id, name, type, sort_order, parent_id, created_at, updated_at)
-                VALUES (?, ?, ?, 0, ?, ?, ?)`,
-          args: [id, child, type, parentId, now, now],
-        })
-        // Fetch the real id in case INSERT OR IGNORE skipped a concurrent duplicate
-        const fetched = await db.execute({ sql: 'SELECT id FROM categories WHERE name = ?', args: [child] })
-        const realId = (fetched.rows[0]?.id as string) ?? id
-        catByName.set(child, realId)
-        processedChildren.add(child)
-        subcatsCreated++
-      } else {
-        // Category exists — ensure parent_id is set
-        await db.execute({
-          sql: `UPDATE categories SET parent_id = ? WHERE name = ? AND (parent_id IS NULL OR parent_id != ?)`,
-          args: [parentId, child, parentId],
-        })
-        subcatsLinked++
+      for (const child of children) {
+        if (!catByName.has(child)) {
+          if (processedChildren.has(child)) continue // already created under another parent
+          const id = crypto.randomUUID()
+          await db.execute({
+            sql: `INSERT OR IGNORE INTO categories (id, name, type, sort_order, parent_id, created_at, updated_at)
+                  VALUES (?, ?, ?, 0, ?, ?, ?)`,
+            args: [id, child, type, parentId, now, now],
+          })
+          // Fetch the real id in case INSERT OR IGNORE skipped a concurrent duplicate
+          const fetched = await db.execute({ sql: 'SELECT id FROM categories WHERE name = ?', args: [child] })
+          const realId = (fetched.rows[0]?.id as string) ?? id
+          catByName.set(child, realId)
+          processedChildren.add(child)
+          subcatsCreated++
+        } else {
+          // Category exists — ensure parent_id is set
+          await db.execute({
+            sql: `UPDATE categories SET parent_id = ? WHERE name = ? AND (parent_id IS NULL OR parent_id != ?)`,
+            args: [parentId, child, parentId],
+          })
+          subcatsLinked++
+        }
       }
     }
-  }
 
-  results['subcategories'] = `${subcatsCreated} created, ${subcatsLinked} linked`
+    results['subcategories'] = `${subcatsCreated} created, ${subcatsLinked} linked`
 
-  // ── Backup transactions currently pointing to parent categories ─────────────
-  // INSERT OR IGNORE ensures the backup row records the *original* category_id
-  // even if this migration is run more than once.
+    // ── Backup transactions currently pointing to parent categories ───────────
+    // INSERT OR IGNORE ensures the backup row records the *original* category_id
+    // even if this migration is run more than once.
 
-  await db.execute({
-    sql: `
-      INSERT OR IGNORE INTO category_remap_backup (transaction_id, original_category_id, backed_up_at)
-      SELECT t.id, t.category_id, ?
-      FROM transactions t
-      JOIN categories c ON c.id = t.category_id
-      WHERE c.parent_id IS NULL
-        AND t.type != 'transfer'
-        AND t.category_id IS NOT NULL
-    `,
-    args: [now],
-  })
-
-  results['backup'] = 'complete'
-
-  // ── Tag-based remapping ─────────────────────────────────────────────────────
-  // For each rule: update transactions whose current category has parent_id IS NULL
-  // (i.e. is still a parent) and which have a matching tag. Once updated the
-  // transaction's category_id points to a subcategory and is excluded from future rules.
-
-  for (const rule of TAG_RULES) {
-    const subcatId = catByName.get(rule.subcategory)
-    if (!subcatId) continue
-
-    const placeholders = rule.tags.map(() => '?').join(', ')
-    const result = await db.execute({
+    await db.execute({
       sql: `
-        UPDATE transactions
-        SET category_id = ?, updated_at = ?
-        WHERE type != 'transfer'
-          AND id IN (
-            SELECT tt.transaction_id
-            FROM transaction_tags tt
-            JOIN tags tg ON tg.id = tt.tag_id
-            JOIN transactions tx ON tx.id = tt.transaction_id
-            JOIN categories c ON c.id = tx.category_id
-            WHERE c.parent_id IS NULL
-              AND LOWER(tg.name) IN (${placeholders})
-          )
+        INSERT OR IGNORE INTO category_remap_backup (transaction_id, original_category_id, backed_up_at)
+        SELECT t.id, t.category_id, ?
+        FROM transactions t
+        JOIN categories c ON c.id = t.category_id
+        WHERE c.parent_id IS NULL
+          AND t.type != 'transfer'
+          AND t.category_id IS NOT NULL
       `,
-      args: [subcatId, now, ...rule.tags],
+      args: [now],
     })
 
-    const count = (result as unknown as { rowsAffected?: number }).rowsAffected ?? 0
-    if (count > 0) {
-      remapLog.push({ rule: `tag:${rule.tags[0]}`, subcategory: rule.subcategory, count })
+    results['backup'] = 'complete'
+
+    // ── Tag-based remapping ───────────────────────────────────────────────────
+    // For each rule: update transactions whose current category has parent_id IS NULL
+    // (i.e. is still a parent) and which have a matching tag. Once updated the
+    // transaction's category_id points to a subcategory and is excluded from future rules.
+
+    for (const rule of TAG_RULES) {
+      const subcatId = catByName.get(rule.subcategory)
+      if (!subcatId) continue
+
+      const placeholders = rule.tags.map(() => '?').join(', ')
+      const result = await db.execute({
+        sql: `
+          UPDATE transactions
+          SET category_id = ?, updated_at = ?
+          WHERE type != 'transfer'
+            AND id IN (
+              SELECT tt.transaction_id
+              FROM transaction_tags tt
+              JOIN tags tg ON tg.id = tt.tag_id
+              JOIN transactions tx ON tx.id = tt.transaction_id
+              JOIN categories c ON c.id = tx.category_id
+              WHERE c.parent_id IS NULL
+                AND LOWER(tg.name) IN (${placeholders})
+            )
+        `,
+        args: [subcatId, now, ...rule.tags],
+      })
+
+      const count = (result as unknown as { rowsAffected?: number }).rowsAffected ?? 0
+      if (count > 0) {
+        remapLog.push({ rule: `tag:${rule.tags[0]}`, subcategory: rule.subcategory, count })
+      }
     }
-  }
 
-  // ── Payee-based remapping ───────────────────────────────────────────────────
-  // Applied after tag rules. Only touches transactions still pointing to a parent.
+    // ── Payee-based remapping ─────────────────────────────────────────────────
+    // Applied after tag rules. Only touches transactions still pointing to a parent.
 
-  for (const rule of PAYEE_RULES) {
-    const subcatId = catByName.get(rule.subcategory)
-    if (!subcatId) continue
+    for (const rule of PAYEE_RULES) {
+      const subcatId = catByName.get(rule.subcategory)
+      if (!subcatId) continue
 
-    const result = await db.execute({
-      sql: `
-        UPDATE transactions
-        SET category_id = ?, updated_at = ?
-        WHERE type != 'transfer'
-          AND payee IS NOT NULL
-          AND LOWER(payee) LIKE ?
-          AND id IN (
-            SELECT t.id FROM transactions t
-            JOIN categories c ON c.id = t.category_id
-            WHERE c.parent_id IS NULL
-          )
-      `,
-      args: [subcatId, now, `%${rule.pattern.toLowerCase()}%`],
-    })
+      const result = await db.execute({
+        sql: `
+          UPDATE transactions
+          SET category_id = ?, updated_at = ?
+          WHERE type != 'transfer'
+            AND payee IS NOT NULL
+            AND LOWER(payee) LIKE ?
+            AND id IN (
+              SELECT t.id FROM transactions t
+              JOIN categories c ON c.id = t.category_id
+              WHERE c.parent_id IS NULL
+            )
+        `,
+        args: [subcatId, now, `%${rule.pattern.toLowerCase()}%`],
+      })
 
-    const count = (result as unknown as { rowsAffected?: number }).rowsAffected ?? 0
-    if (count > 0) {
-      remapLog.push({ rule: `payee:${rule.pattern}`, subcategory: rule.subcategory, count })
+      const count = (result as unknown as { rowsAffected?: number }).rowsAffected ?? 0
+      if (count > 0) {
+        remapLog.push({ rule: `payee:${rule.pattern}`, subcategory: rule.subcategory, count })
+      }
     }
-  }
 
-  const totalRemapped = remapLog.reduce((sum, e) => sum + e.count, 0)
-  results['remapped'] = `${totalRemapped} transactions`
+    const totalRemapped = remapLog.reduce((sum, e) => sum + e.count, 0)
+    results['remapped'] = `${totalRemapped} transactions`
+  } catch (err) {
+    results['remap_error'] = String(err)
+  }
 
   return Response.json({ ok: true, migrations: results, remap_log: remapLog })
 }

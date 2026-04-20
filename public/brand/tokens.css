@@ -1,9 +1,22 @@
-/* public/brand/tokens.css — Root OS design tokens */
 :root {
-  --root-orange:   #CC5500;
-  --root-graphite: #2a2f37;
-  --root-ink:      #0f1217;
-  --root-paper:    #e6edf3;
-  --root-cream:    #f5f0e8;
-  --root-ember:    #F4A542;
+  /* Brand colors */
+  --root-orange: #CC5500;       /* primary accent */
+  --root-ember: #F4A542;        /* secondary / ring accent */
+  --root-graphite: #2a2f37;     /* surface / card base */
+  --root-ink: #0f1217;          /* deepest shadow / baseline */
+  --root-paper: #e6edf3;        /* light text on graphite */
+  --root-cream: #f5f0e8;        /* light mode surface */
+  --root-dim: #8b949e;          /* secondary text */
+  --root-muted: #a9b2bc;        /* tertiary text */
+
+  /* Radii */
+  --root-radius-sm: 6px;
+  --root-radius-md: 10px;
+  --root-radius-lg: 14px;
+
+  /* Icon sizing (stroke-based) */
+  --root-icon-stroke: 1.5px;
+  --root-icon-size-sm: 16px;
+  --root-icon-size-md: 20px;
+  --root-icon-size-lg: 24px;
 }
