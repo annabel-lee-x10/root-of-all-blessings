@@ -156,6 +156,7 @@ export function DraftsCard() {
         showToast('Transaction approved', 'success')
         setDrafts((prev) => prev.filter((d) => d.id !== id))
         if (editingId === id) { setEditingId(null); setEditForm(null) }
+        window.dispatchEvent(new Event('transaction-saved'))
       } else {
         showToast('Failed to approve', 'error')
       }
@@ -183,6 +184,7 @@ export function DraftsCard() {
         setDrafts([])
         setEditingId(null)
         setEditForm(null)
+        window.dispatchEvent(new Event('transaction-saved'))
       } else {
         showToast('Some approvals failed — refresh to check', 'error')
         loadDrafts()
