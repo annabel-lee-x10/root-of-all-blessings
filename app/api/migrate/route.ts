@@ -130,5 +130,57 @@ export async function POST() {
     results['categories.hierarchy'] = `error: ${err}`
   }
 
+  // ── Pet category promotion ──────────────────────────────────────────────────
+  // Promotes Pet from a child of Living to its own top-level parent category,
+  // then creates its subcategories. Idempotent: INSERT OR IGNORE + conditional
+  // UPDATE ensures no duplicate rows and no accidental re-parenting of
+  // categories that are already parents themselves (e.g. the top-level 'Food').
+  try {
+    const now = new Date().toISOString()
+
+    // Ensure Pet exists as a category (hierarchy block may have created it already)
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO categories (id, name, type, sort_order, created_at, updated_at)
+            VALUES (lower(hex(randomblob(16))), 'Pet', 'expense', 99, ?, ?)`,
+      args: [now, now],
+    })
+
+    // Promote Pet to top-level parent (clear any parent_id set by hierarchy block)
+    await db.execute({
+      sql: `UPDATE categories SET parent_id = NULL, updated_at = ? WHERE name = 'Pet'`,
+      args: [now],
+    })
+
+    // Insert Pet subcategories — INSERT OR IGNORE skips existing names
+    const petSubs = ['Grooming', 'Vet', 'Toys', 'Litter', 'Others', 'Food', 'Supplements']
+    for (const name of petSubs) {
+      await db.execute({
+        sql: `INSERT OR IGNORE INTO categories (id, name, type, sort_order, created_at, updated_at)
+              VALUES (lower(hex(randomblob(16))), ?, 'expense', 99, ?, ?)`,
+        args: [name, now, now],
+      })
+    }
+
+    // Wire each subcategory to Pet, but only if it has no existing parent AND
+    // is not itself a parent (avoids reparenting the top-level 'Food' category).
+    for (const name of petSubs) {
+      await db.execute({
+        sql: `UPDATE categories
+              SET parent_id = (SELECT id FROM categories WHERE name = 'Pet'),
+                  updated_at = ?
+              WHERE name = ?
+                AND parent_id IS NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM categories AS c2 WHERE c2.parent_id = categories.id
+                )`,
+        args: [now, name],
+      })
+    }
+
+    results['categories.pet'] = 'ok'
+  } catch (err) {
+    results['categories.pet'] = `error: ${err}`
+  }
+
   return Response.json({ ok: true, migrations: results })
 }

@@ -99,6 +99,24 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
+## BUG-010 · /api/categories returns 500 on POST when parent_id column is absent
+
+**Status:** Fixed  
+**Reported:** 2026-04-20  
+**Fixed in:** `app/api/categories/route.ts`, `app/api/migrate/route.ts`
+
+**Symptom:** `POST /api/categories` returned 500 for all requests in production, preventing users from creating categories (e.g. a "Pet" category).
+
+**Root cause:** `POST` runs `INSERT INTO categories (id, name, type, sort_order, parent_id, ...)`. The `parent_id` column was added to the route in PR #14, but the corresponding `ALTER TABLE` migration in `/api/migrate` was never called against the production Turso DB. The DB still had the original schema (from `scripts/migrate.ts`) without `parent_id`, so every INSERT failed with "table categories has no column named parent_id" → uncaught exception → 500.
+
+**Fix (route):** `POST` now catches the `no column named parent_id` error and retries the INSERT without `parent_id`. Category is created; the user can set the parent relationship via `PATCH` once `/api/migrate` is run.
+
+**Fix (migration):** Added a `categories.pet` section to `/api/migrate` that (a) promotes the "Pet" category from a child of Living to a top-level parent, and (b) creates subcategories (Grooming, Vet, Toys, Litter, Others, Food, Supplements) linked to Pet — skipping any that already exist as parents elsewhere.
+
+**Regression test:** `tests/api/categories.test.ts` — "POST /api/categories – BUG-010 parent_id fallback" describe block
+
+---
+
 ## BUG-007 · Where's My Money: mic button does nothing on mobile
 
 **Status:** Fixed  
