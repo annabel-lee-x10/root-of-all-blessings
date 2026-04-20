@@ -7,6 +7,26 @@ import { parseBlessThis } from '@/lib/parse-bless-this'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
 
+const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
+const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
+
+function AccountOptions({ accounts }: { accounts: Account[] }) {
+  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
+  for (const a of accounts) {
+    if (groups[a.type]) groups[a.type].push(a)
+    else groups[a.type] = [a]
+  }
+  return (
+    <>
+      {ACCOUNT_TYPE_ORDER.filter(t => groups[t] && groups[t].length > 0).map(type => (
+        <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
+          {groups[type].map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
 function sgtNow() {
   const sgt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }))
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -19,10 +39,10 @@ function toISOWithSGTOffset(localDatetime: string): string {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#0d1117',
-  border: '1px solid #30363d',
+  background: 'var(--bg)',
+  border: '1px solid var(--border)',
   borderRadius: '8px',
-  color: '#e6edf3',
+  color: 'var(--text)',
   padding: '8px 12px',
   fontSize: '14px',
   width: '100%',
@@ -63,6 +83,11 @@ export function WheresMyMoney() {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteApplied, setPasteApplied] = useState(false)
+
+  const [listening, setListening] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
 
   const amountRef = useRef<HTMLInputElement>(null)
   const tagDropdownRef = useRef<HTMLDivElement>(null)
@@ -140,6 +165,7 @@ export function WheresMyMoney() {
       return
     }
 
+    if (data.type) setType(data.type)
     if (data.amount) setAmount(String(data.amount))
     if (data.currency) setCurrency(data.currency)
     if (data.payee) setPayee(data.payee)
@@ -202,6 +228,50 @@ export function WheresMyMoney() {
     setTimeout(() => amountRef.current?.focus(), 100)
     setTimeout(() => setPasteApplied(false), 4000)
   }, [accounts, categories, tags, showToast])
+
+  function startVoice() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = typeof window !== 'undefined' ? (window as any) : null
+    const SR = w?.SpeechRecognition || w?.webkitSpeechRecognition
+
+    if (!SR) {
+      setVoiceError('Voice input is not supported in your browser. Try Chrome on Android or Safari on iOS.')
+      return
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+
+    setVoiceError(null)
+    const recognition = new SR()
+    recognitionRef.current = recognition
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    recognition.onstart = () => setListening(true)
+    recognition.onend = () => setListening(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (e: any) => {
+      setListening(false)
+      if (e.error === 'not-allowed') {
+        setVoiceError('Microphone permission denied. Allow microphone access in your browser settings and try again.')
+      } else if (e.error === 'no-speech') {
+        setVoiceError('No speech detected. Tap the mic and speak clearly.')
+      } else {
+        setVoiceError(`Voice input error: ${e.error}`)
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript
+      applyPasteData(transcript)
+    }
+
+    recognition.start()
+  }
 
   function reset() {
     setAmount('')
@@ -269,14 +339,14 @@ export function WheresMyMoney() {
   }
 
   function txTypeColor(t: TxType) {
-    if (t === 'expense') return '#f85149'
-    if (t === 'income') return '#3fb884'
-    return '#8b949e'
+    if (t === 'expense') return 'var(--red)'
+    if (t === 'income') return 'var(--green)'
+    return 'var(--text-muted)'
   }
 
   function txTypeBg(t: TxType) {
-    if (t === 'expense') return 'rgba(248,81,73,0.15)'
-    if (t === 'income') return 'rgba(63,184,132,0.15)'
+    if (t === 'expense') return 'var(--red-muted)'
+    if (t === 'income') return 'var(--green-muted)'
     return 'rgba(139,148,158,0.15)'
   }
 
@@ -287,9 +357,9 @@ export function WheresMyMoney() {
       fontSize: '13px',
       fontWeight: 500,
       cursor: 'pointer',
-      border: active ? `1px solid ${txTypeColor(t)}` : '1px solid #30363d',
+      border: active ? `1px solid ${txTypeColor(t)}` : '1px solid var(--border)',
       background: active ? txTypeBg(t) : 'transparent',
-      color: active ? txTypeColor(t) : '#8b949e',
+      color: active ? txTypeColor(t) : 'var(--text-muted)',
       transition: 'all 0.15s',
     }
   }
@@ -300,40 +370,82 @@ export function WheresMyMoney() {
     <section style={{ marginBottom: '2rem' }}>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '1.5rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : '1.25rem' }}>
-          <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : voiceError ? '0.75rem' : '1.25rem' }}>
+          <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Where's My Money
           </h2>
-          <button
-            type="button"
-            onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '5px',
-              padding: '6px 12px', borderRadius: '8px', border: '1px solid #30363d',
-              background: pasteOpen ? '#f0b42915' : 'transparent',
-              color: pasteOpen ? '#f0b429' : '#8b949e',
-              fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-              minHeight: '36px',
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="2" width="10" height="4" rx="1"/>
-              <path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/>
-            </svg>
-            {pasteOpen ? 'Cancel' : 'Paste Receipt'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={startVoice}
+              aria-label={listening ? 'Stop listening' : 'Tap mic to log an expense by voice'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
+                background: listening ? 'var(--accent-faint)' : 'transparent',
+                color: listening ? 'var(--accent)' : 'var(--text-muted)',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                minHeight: '36px',
+                animation: listening ? 'micPulse 1.2s ease-in-out infinite' : 'none',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+              {listening ? 'Listening…' : 'Voice'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
+                background: pasteOpen ? 'var(--accent-faint)' : 'transparent',
+                color: pasteOpen ? 'var(--accent)' : 'var(--text-muted)',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                minHeight: '36px',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="2" width="10" height="4" rx="1"/>
+                <path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/>
+              </svg>
+              {pasteOpen ? 'Cancel' : 'Paste Receipt'}
+            </button>
+          </div>
         </div>
+
+        {/* Voice error banner */}
+        {voiceError && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+            background: 'var(--red-faint)', border: '1px solid var(--red-muted)',
+            borderRadius: '8px', padding: '8px 12px', marginBottom: '1rem',
+            fontSize: '13px', color: 'var(--red)',
+          }}>
+            <span>{voiceError}</span>
+            <button
+              type="button"
+              onClick={() => setVoiceError(null)}
+              style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: 0, fontSize: '16px', lineHeight: 1, flexShrink: 0 }}
+              aria-label="Dismiss voice error"
+            >×</button>
+          </div>
+        )}
 
         {/* Paste panel */}
         {pasteOpen && (
           <div style={{
-            background: '#0d1117', border: '1px solid #f0b42940',
+            background: 'var(--bg)', border: '1px solid var(--accent-muted)',
             borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem',
           }}>
             <textarea
@@ -363,8 +475,8 @@ export function WheresMyMoney() {
               style={{
                 width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
                 fontSize: '14px', fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'not-allowed',
-                background: pasteText.trim() ? '#f0b429' : '#21262d',
-                color: pasteText.trim() ? '#0d1117' : '#484f58',
+                background: pasteText.trim() ? 'var(--accent)' : 'var(--bg-dim)',
+                color: pasteText.trim() ? 'var(--bg)' : 'var(--text-dim)',
               }}
             >
               Fill Form
@@ -378,7 +490,7 @@ export function WheresMyMoney() {
             display: 'flex', alignItems: 'center', gap: '6px',
             background: 'rgba(63,184,132,0.1)', border: '1px solid rgba(63,184,132,0.25)',
             borderRadius: '8px', padding: '8px 12px', marginBottom: '1rem',
-            fontSize: '13px', color: '#3fb884',
+            fontSize: '13px', color: 'var(--green)',
           }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12"/>
@@ -453,7 +565,7 @@ export function WheresMyMoney() {
                 />
               </div>
               {fxRate && amount && (
-                <span style={{ color: '#8b949e', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   = SGD {(parseFloat(amount) * parseFloat(fxRate)).toFixed(2)}
                 </span>
               )}
@@ -465,18 +577,14 @@ export function WheresMyMoney() {
             <div style={{ flex: 1 }}>
               <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle}>
                 <option value="">Account</option>
-                {activeAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                <AccountOptions accounts={activeAccounts} />
               </select>
             </div>
             {type === 'transfer' && (
               <div style={{ flex: 1 }}>
                 <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
                   <option value="">To Account</option>
-                  {activeAccounts.filter((a) => a.id !== accountId).map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
+                  <AccountOptions accounts={activeAccounts.filter((a) => a.id !== accountId)} />
                 </select>
               </div>
             )}
@@ -530,9 +638,9 @@ export function WheresMyMoney() {
                       key={tid}
                       onClick={() => toggleTag(tid)}
                       style={{
-                        background: '#f0b42920', border: '1px solid #f0b42960',
+                        background: 'var(--accent-faint)', border: '1px solid var(--accent-soft)',
                         borderRadius: '12px', padding: '2px 10px', fontSize: '12px',
-                        color: '#f0b429', cursor: 'pointer', userSelect: 'none',
+                        color: 'var(--accent)', cursor: 'pointer', userSelect: 'none',
                       }}
                     >
                       {tag.name} ×
@@ -551,7 +659,7 @@ export function WheresMyMoney() {
                 <div
                   style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                    background: '#1c2128', border: '1px solid #30363d', borderRadius: '8px',
+                    background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px',
                     marginTop: '4px', maxHeight: '180px', overflowY: 'auto',
                   }}
                 >
@@ -559,8 +667,8 @@ export function WheresMyMoney() {
                     <div
                       key={t.id}
                       onMouseDown={(e) => { e.preventDefault(); toggleTag(t.id); setTagSearch('') }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#e6edf3' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#30363d' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--border)' }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
                       {t.name}
@@ -569,8 +677,8 @@ export function WheresMyMoney() {
                   {!filteredTagSuggestions.some((t) => t.name.toLowerCase() === tagSearch.toLowerCase()) && (
                     <div
                       onMouseDown={(e) => { e.preventDefault(); createAndAddTag(tagSearch) }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#f0b429' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#30363d' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: 'var(--accent)' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--border)' }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
                       + Create "{tagSearch}"
@@ -587,7 +695,7 @@ export function WheresMyMoney() {
               type="button"
               onClick={() => setShowNoteField(true)}
               style={{
-                background: 'none', border: 'none', color: '#8b949e',
+                background: 'none', border: 'none', color: 'var(--text-muted)',
                 fontSize: '13px', cursor: 'pointer', marginBottom: '12px', padding: 0,
               }}
             >
@@ -625,8 +733,8 @@ export function WheresMyMoney() {
               fontSize: '14px',
               fontWeight: 600,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
-              background: canSubmit ? '#f0b429' : '#21262d',
-              color: canSubmit ? '#0d1117' : '#484f58',
+              background: canSubmit ? 'var(--accent)' : 'var(--bg-dim)',
+              color: canSubmit ? 'var(--bg)' : 'var(--text-dim)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -649,11 +757,12 @@ export function WheresMyMoney() {
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes micPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
-        input::placeholder, textarea::placeholder { color: #484f58; }
-        select option { background: #161b22; color: #e6edf3; }
+        input::placeholder, textarea::placeholder { color: var(--text-dim); }
+        select option { background: var(--bg-card); color: var(--text); }
         input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
       `}</style>

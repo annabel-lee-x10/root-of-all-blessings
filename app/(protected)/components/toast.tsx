@@ -34,9 +34,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               fontSize: '13px',
               fontWeight: 500,
               boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-              background: t.type === 'success' ? '#1a4731' : '#4a1717',
-              color: t.type === 'success' ? '#3fb884' : '#f85149',
-              border: `1px solid ${t.type === 'success' ? '#2ea04380' : '#f8514980'}`,
+              background: t.type === 'success' ? 'var(--bg-success)' : 'var(--bg-error)',
+              color: t.type === 'success' ? 'var(--green)' : 'var(--red)',
+              border: `1px solid ${t.type === 'success' ? 'var(--border-success)' : 'var(--border-error)'}`,
             }}
           >
             {t.message}

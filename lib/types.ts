@@ -17,6 +17,7 @@ export interface Category {
   name: string
   type: CategoryType
   sort_order: number
+  parent_id: string | null
   created_at: string
   updated_at: string
 }
@@ -24,6 +25,7 @@ export interface Category {
 export interface Tag {
   id: string
   name: string
+  category_id?: string | null
   created_at: string
 }
 
@@ -42,6 +44,7 @@ export interface Transaction {
   note: string | null
   payment_method: string | null
   datetime: string
+  status: 'draft' | 'approved'
   created_at: string
   updated_at: string
 }

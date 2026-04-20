@@ -68,6 +68,29 @@ describe('POST /api/categories', () => {
     const res = await POST(req('/api/categories', 'POST', { name: 'X', type: 'transfer' }))
     expect(res.status).toBe(400)
   })
+
+  it('creates a subcategory with parent_id', async () => {
+    seedCategory('parent1', 'Food', 'expense')
+    const { POST } = await import('@/app/api/categories/route')
+    const res = await POST(req('/api/categories', 'POST', {
+      name: 'Groceries',
+      type: 'expense',
+      parent_id: 'parent1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.parent_id).toBe('parent1')
+  })
+
+  it('returns 400 when parent_id references non-existent category', async () => {
+    const { POST } = await import('@/app/api/categories/route')
+    const res = await POST(req('/api/categories', 'POST', {
+      name: 'Groceries',
+      type: 'expense',
+      parent_id: 'does-not-exist',
+    }))
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('PATCH /api/categories/[id]', () => {
@@ -100,6 +123,32 @@ describe('PATCH /api/categories/[id]', () => {
       { params: Promise.resolve({ id: 'c2' }) }
     )
     expect(res.status).toBe(400)
+  })
+
+  it('sets parent_id on a category', async () => {
+    seedCategory('parent2', 'Food', 'expense')
+    seedCategory('child1', 'Groceries', 'expense')
+    const { PATCH } = await import('@/app/api/categories/[id]/route')
+    const res = await PATCH(
+      req('/api/categories/child1', 'PATCH', { parent_id: 'parent2' }),
+      { params: Promise.resolve({ id: 'child1' }) }
+    )
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.parent_id).toBe('parent2')
+  })
+
+  it('clears parent_id when set to null', async () => {
+    seedCategory('parent3', 'Transport', 'expense')
+    seedCategory('child2', 'Taxi', 'expense')
+    const { PATCH } = await import('@/app/api/categories/[id]/route')
+    const res = await PATCH(
+      req('/api/categories/child2', 'PATCH', { parent_id: null }),
+      { params: Promise.resolve({ id: 'child2' }) }
+    )
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.parent_id).toBeNull()
   })
 })
 

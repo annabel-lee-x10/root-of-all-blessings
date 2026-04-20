@@ -357,7 +357,6 @@ const ACCOUNT_NAME_MAP: Record<string, string> = {
   'cash':                 'Cash',
   'tech funds':           'Tech Funds',
   'ifunds annihilator':   'iFunds Annihilator',
-  'vallow':               'vallow',
   'lalamove easyvan':     'Lalamove Easyvan',
   'lalamove':             'Lalamove Easyvan',
   '2024 japan':           '2024 Japan',
@@ -365,7 +364,6 @@ const ACCOUNT_NAME_MAP: Record<string, string> = {
 
 // Account type hints for auto-creating unknown accounts
 const ACCOUNT_TYPE_HINTS: Record<string, string> = {
-  'vallow':           'wallet',
   'lalamove easyvan': 'wallet',
   '2024 japan':       'cash',
 }

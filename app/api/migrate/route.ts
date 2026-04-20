@@ -20,7 +20,27 @@ export async function POST() {
     },
     {
       name: 'transactions.status',
-      sql: "ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('draft','approved'))",
+      sql: "ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'",
+    },
+    {
+      name: 'categories.rename_housing_household',
+      sql: "UPDATE categories SET name = 'Household', updated_at = datetime('now') WHERE name = 'Housing'",
+    },
+    {
+      name: 'tags.category_id',
+      sql: 'ALTER TABLE tags ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL',
+    },
+    {
+      name: 'categories.parent_id',
+      sql: 'ALTER TABLE categories ADD COLUMN parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL',
+    },
+    {
+      name: 'tags.drop_category_id',
+      sql: 'ALTER TABLE tags DROP COLUMN category_id',
+    },
+    {
+      name: 'accounts.delete_vallow',
+      sql: "DELETE FROM accounts WHERE LOWER(name) = 'vallow'",
     },
   ]
 

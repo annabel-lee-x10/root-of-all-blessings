@@ -94,9 +94,9 @@ async function migrate() {
     // Column already exists — safe to ignore
   }
 
-  // Idempotent: add status column to existing transactions tables
+  // Idempotent: add status column to transactions (drafts system)
   try {
-    await db.execute("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved' CHECK(status IN ('draft','approved'))")
+    await db.execute("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'")
   } catch {
     // Column already exists — safe to ignore
   }

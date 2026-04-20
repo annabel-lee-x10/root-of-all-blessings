@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTransaction } from '../helpers'
+import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTag, seedTransaction, seedTransactionTag } from '../helpers'
 
 beforeAll(() => initTestDb())
 afterAll(() => clearTestDb())
@@ -98,6 +98,43 @@ describe('GET /api/dashboard', () => {
     expect(data.total_income).toBe(0)
   })
 
+  it('category_breakdown entries include tag_breakdown array', async () => {
+    seedTag('tag1', 'Lunch')
+    seedTag('tag2', 'Work')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 40, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 60, categoryId: 'cat1', datetime: '2026-04-19T11:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    seedTransactionTag('tx2', 'tag2')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
+    const data = await res.json()
+    expect(data.category_breakdown[0].tag_breakdown).toBeDefined()
+    expect(Array.isArray(data.category_breakdown[0].tag_breakdown)).toBe(true)
+    expect(data.category_breakdown[0].tag_breakdown).toHaveLength(2)
+    const tagNames = data.category_breakdown[0].tag_breakdown.map((t: { tag_name: string }) => t.tag_name)
+    expect(tagNames).toContain('Lunch')
+    expect(tagNames).toContain('Work')
+  })
+
+  it('tag_breakdown includes Untagged entry for transactions with no tags', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
+    const data = await res.json()
+    expect(data.category_breakdown[0].tag_breakdown).toHaveLength(1)
+    expect(data.category_breakdown[0].tag_breakdown[0].tag_name).toBe('Untagged')
+    expect(data.category_breakdown[0].tag_breakdown[0].total).toBeCloseTo(50)
+  })
+
+  it('existing category_breakdown test still has tag_breakdown field', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 40, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 60, categoryId: 'cat1', datetime: '2026-04-19T11:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
+    const data = await res.json()
+    expect(data.category_breakdown[0].tag_breakdown).toEqual([{ tag_name: 'Untagged', total: 100 }])
+  })
+
   it('uses amount as fallback when sgd_equivalent is null for non-SGD expenses', async () => {
     seedTransaction('tx1', 'acc1', {
       type: 'expense', amount: 100, currency: 'USD',
@@ -107,5 +144,110 @@ describe('GET /api/dashboard', () => {
     const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00'))
     const data = await res.json()
     expect(data.total_spend).toBeCloseTo(100)
+  })
+})
+
+describe('GET /api/dashboard (drilldown)', () => {
+  it('returns tag breakdown for a category', async () => {
+    seedTag('tag1', 'Dining Out')
+    seedTag('tag2', 'Groceries')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 30, categoryId: 'cat1', datetime: '2026-04-19T12:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    seedTransactionTag('tx2', 'tag2')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.category_name).toBe('Food')
+    expect(data.total).toBeCloseTo(80)
+    expect(data.tag_breakdown).toHaveLength(2)
+    expect(data.tag_breakdown[0].tag_name).toBe('Dining Out')
+    expect(data.tag_breakdown[0].total).toBeCloseTo(50)
+    expect(data.tag_breakdown[0].pct).toBeCloseTo(62.5)
+  })
+
+  it('groups multiple transactions under the same tag', async () => {
+    seedTag('tag1', 'Dining Out')
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 20, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    seedTransaction('tx2', 'acc1', { type: 'expense', amount: 30, categoryId: 'cat1', datetime: '2026-04-19T12:00:00+08:00' })
+    seedTransactionTag('tx1', 'tag1')
+    seedTransactionTag('tx2', 'tag1')
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.tag_breakdown).toHaveLength(1)
+    expect(data.tag_breakdown[0].tag_name).toBe('Dining Out')
+    expect(data.tag_breakdown[0].total).toBeCloseTo(50)
+  })
+
+  it('shows untagged transactions as "(untagged)"', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 40, categoryId: 'cat1', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.tag_breakdown).toHaveLength(1)
+    expect(data.tag_breakdown[0].tag_name).toBe('(untagged)')
+    expect(data.tag_breakdown[0].total).toBeCloseTo(40)
+    expect(data.tag_breakdown[0].pct).toBeCloseTo(100)
+  })
+
+  it('excludes transfers from drilldown totals', async () => {
+    seedAccount('acc2', 'Cash', 'cash')
+    seedTransaction('tx1', 'acc1', { type: 'transfer', amount: 100, toAccountId: 'acc2', datetime: '2026-04-19T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.total).toBe(0)
+    expect(data.tag_breakdown).toHaveLength(0)
+  })
+
+  it('respects date range — excludes transactions outside range', async () => {
+    seedTransaction('tx1', 'acc1', { type: 'expense', amount: 50, categoryId: 'cat1', datetime: '2026-01-01T10:00:00+08:00' })
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    const data = await res.json()
+    expect(data.total).toBe(0)
+    expect(data.tag_breakdown).toHaveLength(0)
+  })
+
+  it('returns total 0 and empty breakdown when category has no spend in range', async () => {
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=custom&start=2026-04-19T00:00:00%2B08:00&end=2026-04-19T23:59:59%2B08:00&drilldown=Food'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.category_name).toBe('Food')
+    expect(data.total).toBe(0)
+    expect(data.tag_breakdown).toEqual([])
+  })
+})
+
+describe('GET /api/dashboard (parent_category_id drilldown)', () => {
+  it('returns subcategory breakdown when parent_category_id is provided', async () => {
+    seedCategory('parent1', 'Meals', 'expense')
+    seedCategory('sub1', 'Groceries', 'expense')
+    seedCategory('sub2', 'Dining', 'expense')
+    // Set parent_id on sub1 and sub2 via PATCH
+    const { PATCH } = await import('@/app/api/categories/[id]/route')
+    await PATCH(
+      req('/api/categories/sub1', 'PATCH', { parent_id: 'parent1' }),
+      { params: Promise.resolve({ id: 'sub1' }) }
+    )
+    await PATCH(
+      req('/api/categories/sub2', 'PATCH', { parent_id: 'parent1' }),
+      { params: Promise.resolve({ id: 'sub2' }) }
+    )
+    const now = new Date().toISOString()
+    seedTransaction('t1', 'acc1', { type: 'expense', amount: 50, categoryId: 'sub1', datetime: now })
+    seedTransaction('t2', 'acc1', { type: 'expense', amount: 30, categoryId: 'sub2', datetime: now })
+
+    const { GET } = await import('@/app/api/dashboard/route')
+    const res = await GET(req('/api/dashboard?range=monthly&parent_category_id=parent1'))
+    const data = await res.json()
+    expect(Array.isArray(data.category_breakdown)).toBe(true)
+    expect(data.category_breakdown.length).toBeGreaterThanOrEqual(2)
+    const names = data.category_breakdown.map((x: { category_name: string }) => x.category_name)
+    expect(names).toContain('Groceries')
+    expect(names).toContain('Dining')
   })
 })
