@@ -23,14 +23,14 @@ const BTN: React.CSSProperties = {
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontSize: '12px', fontWeight: 500, padding: '6px 12px',
 }
-const BTN_PRI: React.CSSProperties = { ...BTN, background: '#f0b429', color: '#0d1117' }
-const BTN_SEC: React.CSSProperties = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
-const BTN_DNG: React.CSSProperties = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f8514940' }
-const BTN_GRN: React.CSSProperties = { ...BTN, background: '#3fb88420', color: '#3fb884', border: '1px solid #3fb88440' }
+const BTN_PRI: React.CSSProperties = { ...BTN, background: 'var(--accent)', color: '#fff' }
+const BTN_SEC: React.CSSProperties = { ...BTN, background: 'var(--bg-dim)', color: 'var(--text)', border: '1px solid var(--border)' }
+const BTN_DNG: React.CSSProperties = { ...BTN, background: 'transparent', color: 'var(--red)', border: '1px solid var(--red-muted)' }
+const BTN_GRN: React.CSSProperties = { ...BTN, background: 'var(--green-faint)', color: 'var(--green)', border: '1px solid var(--green-muted)' }
 
 const INPUT: React.CSSProperties = {
-  background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-  color: '#e6edf3', fontSize: '13px', padding: '6px 10px', outline: 'none', width: '100%',
+  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+  color: 'var(--text)', fontSize: '13px', padding: '6px 10px', outline: 'none', width: '100%',
 }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 
@@ -217,8 +217,8 @@ export function DraftsCard() {
     <section style={{ marginBottom: '2rem' }}>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           overflow: 'hidden',
         }}
@@ -240,7 +240,7 @@ export function DraftsCard() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+            <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
               Drafts
             </h2>
             {drafts.length > 0 && (
@@ -259,21 +259,21 @@ export function DraftsCard() {
               </span>
             )}
             {!open && drafts.length === 0 && !loading && (
-              <span style={{ color: '#484f58', fontSize: '12px' }}>No pending drafts</span>
+              <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>No pending drafts</span>
             )}
           </div>
-          <span style={{ color: '#8b949e', fontSize: '12px' }}>{open ? '▲' : '▼'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{open ? '▲' : '▼'}</span>
         </button>
 
         {/* Expanded body */}
         {open && (
-          <div style={{ borderTop: '1px solid #30363d' }}>
+          <div style={{ borderTop: '1px solid var(--border)' }}>
             {/* Bulk approve bar */}
             {drafts.length > 1 && (
               <div
                 style={{
                   padding: '10px 1.5rem',
-                  borderBottom: '1px solid #21262d',
+                  borderBottom: '1px solid var(--border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -281,7 +281,7 @@ export function DraftsCard() {
                   gap: '8px',
                 }}
               >
-                <span style={{ color: '#8b949e', fontSize: '12px' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                   {drafts.length} drafts pending review
                 </span>
                 <button
@@ -297,7 +297,7 @@ export function DraftsCard() {
 
             {/* Empty state */}
             {!loading && drafts.length === 0 && (
-              <div style={{ padding: '3rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
                 No drafts pending review.
               </div>
             )}
@@ -312,30 +312,30 @@ export function DraftsCard() {
                     alignItems: 'center',
                     gap: '12px',
                     padding: '10px 1.5rem',
-                    borderBottom: i < drafts.length - 1 || editingId === tx.id ? '1px solid #21262d' : 'none',
+                    borderBottom: i < drafts.length - 1 || editingId === tx.id ? '1px solid var(--border)' : 'none',
                     flexWrap: 'wrap',
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: '#e6edf3', fontSize: '13px', fontWeight: 500 }}>
+                    <div style={{ color: 'var(--text)', fontSize: '13px', fontWeight: 500 }}>
                       {tx.payee ?? tx.category_name ?? '(unnamed)'}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#484f58', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
                         {new Date(tx.datetime).toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })}
                       </span>
                       {tx.category_name && (
-                        <span style={{ color: '#484f58', fontSize: '12px' }}>{tx.category_name}</span>
+                        <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>{tx.category_name}</span>
                       )}
                       {tx.tags.length > 0 && (
-                        <span style={{ color: '#484f58', fontSize: '11px' }}>
+                        <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
                           {tx.tags.map((t) => `#${t.name}`).join(' ')}
                         </span>
                       )}
                     </div>
                   </div>
                   <span style={{
-                    color: tx.type === 'income' ? '#3fb884' : '#f85149',
+                    color: tx.type === 'income' ? 'var(--green)' : 'var(--red)',
                     fontSize: '13px', fontWeight: 600, flexShrink: 0,
                   }}>
                     {tx.type === 'income' ? '+' : '-'}{tx.currency} {(tx.amount as number).toFixed(2)}
@@ -376,8 +376,8 @@ export function DraftsCard() {
                   <div
                     style={{
                       padding: '1rem 1.5rem',
-                      background: '#0d1117',
-                      borderBottom: i < drafts.length - 1 ? '1px solid #21262d' : 'none',
+                      background: 'var(--bg-subtle)',
+                      borderBottom: i < drafts.length - 1 ? '1px solid var(--border)' : 'none',
                     }}
                   >
                     <div
@@ -389,7 +389,7 @@ export function DraftsCard() {
                       }}
                     >
                       <div>
-                        <label htmlFor={`edit-type-${tx.id}`} style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Type</label>
+                        <label htmlFor={`edit-type-${tx.id}`} style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Type</label>
                         <select
                           id={`edit-type-${tx.id}`}
                           style={SELECT}
@@ -402,34 +402,34 @@ export function DraftsCard() {
                         </select>
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Amount</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Amount</label>
                         <input type="number" step="0.01" style={INPUT} value={editForm.amount} onChange={(e) => ef('amount', e.target.value)} />
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Currency</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Currency</label>
                         <select style={SELECT} value={editForm.currency} onChange={(e) => ef('currency', e.target.value)}>
                           {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Account</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Account</label>
                         <select style={SELECT} value={editForm.account_id} onChange={(e) => ef('account_id', e.target.value)}>
                           {activeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Category</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Category</label>
                         <select style={SELECT} value={editForm.category_id} onChange={(e) => ef('category_id', e.target.value)}>
                           <option value="">None</option>
                           {categories.filter((c) => c.type === editForm.type).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payee</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payee</label>
                         <input style={INPUT} value={editForm.payee} onChange={(e) => ef('payee', e.target.value)} placeholder="Payee" />
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payment Method</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payment Method</label>
                         <select style={SELECT} value={editForm.payment_method} onChange={(e) => ef('payment_method', e.target.value)}>
                           <option value="">None</option>
                           <option value="cash">Cash</option>
@@ -439,13 +439,13 @@ export function DraftsCard() {
                         </select>
                       </div>
                       <div>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Date / Time</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Date / Time</label>
                         <input type="datetime-local" style={INPUT} value={editForm.datetime} onChange={(e) => ef('datetime', e.target.value)} />
                       </div>
                     </div>
 
                     <div style={{ marginBottom: '8px' }}>
-                      <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Note</label>
+                      <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Note</label>
                       <textarea
                         style={{ ...INPUT, resize: 'vertical', minHeight: '52px', fontFamily: 'inherit' }}
                         value={editForm.note}
@@ -456,7 +456,7 @@ export function DraftsCard() {
 
                     {tags.length > 0 && (
                       <div style={{ marginBottom: '10px' }}>
-                        <label style={{ color: '#8b949e', fontSize: '11px', display: 'block', marginBottom: '6px' }}>Tags</label>
+                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '6px' }}>Tags</label>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                           {tags.map((tag) => {
                             const selected = editForm.tag_ids.includes(tag.id)
@@ -471,9 +471,9 @@ export function DraftsCard() {
                                 }
                                 style={{
                                   ...BTN, padding: '3px 10px', fontSize: '12px',
-                                  background: selected ? '#f0b42920' : '#21262d',
-                                  color: selected ? '#f0b429' : '#8b949e',
-                                  border: `1px solid ${selected ? '#f0b42960' : '#30363d'}`,
+                                  background: selected ? '#f0b42920' : 'var(--bg-dim)',
+                                  color: selected ? '#f0b429' : 'var(--text-muted)',
+                                  border: `1px solid ${selected ? '#f0b42960' : 'var(--border)'}`,
                                 }}
                               >
                                 {tag.name}

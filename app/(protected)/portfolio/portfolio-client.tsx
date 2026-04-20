@@ -814,7 +814,17 @@ export function PortfolioClient() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [tab, setTab] = useState<Tab>('holdings')
-  const [dark, setDark] = useState(true)
+  const [dark, setDark] = useState(() =>
+    typeof document === 'undefined' ? true : document.documentElement.dataset.theme !== 'light'
+  )
+
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setDark(document.documentElement.dataset.theme !== 'light')
+    })
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
 
   const theme = dark ? DARK : LIGHT
 

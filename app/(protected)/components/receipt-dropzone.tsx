@@ -177,18 +177,18 @@ export function ReceiptDropzone() {
   const pendingCount = files.filter((f) => f.status === 'waiting').length
 
   const voiceBorderColor =
-    voiceStatus === 'recording' ? '#f85149' : voiceStatus === 'done' ? '#3fb884' : '#30363d'
+    voiceStatus === 'recording' ? 'var(--red)' : voiceStatus === 'done' ? 'var(--green)' : 'var(--border)'
   const voiceBg =
-    voiceStatus === 'recording' ? 'rgba(248,81,73,0.15)' : 'transparent'
+    voiceStatus === 'recording' ? 'var(--red-faint)' : 'transparent'
   const voiceColor =
-    voiceStatus === 'recording' ? '#f85149' : voiceStatus === 'done' ? '#3fb884' : '#8b949e'
+    voiceStatus === 'recording' ? 'var(--red)' : voiceStatus === 'done' ? 'var(--green)' : 'var(--text-muted)'
 
   return (
     <section style={{ marginBottom: '2rem' }}>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '1.5rem',
         }}
@@ -204,7 +204,7 @@ export function ReceiptDropzone() {
             gap: '8px',
           }}
         >
-          <h2 style={{ color: '#e6edf3', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+          <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Upload Receipts
           </h2>
           <label
@@ -222,9 +222,9 @@ export function ReceiptDropzone() {
               onChange={(e) => setMerchantLookup(e.target.checked)}
               style={{ accentColor: '#CC5500', width: '14px', height: '14px' }}
             />
-            <span style={{ color: '#8b949e', fontSize: '12px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
               Merchant lookup
-              {merchantLookup && <span style={{ color: '#CC5500' }}> (adds ~5s)</span>}
+              {merchantLookup && <span style={{ color: 'var(--accent)' }}> (adds ~5s)</span>}
             </span>
           </label>
         </div>
@@ -239,7 +239,7 @@ export function ReceiptDropzone() {
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter') fileInputRef.current?.click() }}
           style={{
-            border: `2px dashed ${dragOver ? '#CC5500' : '#30363d'}`,
+            border: `2px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
             borderRadius: '10px',
             padding: '2rem 1rem',
             textAlign: 'center',
@@ -260,7 +260,7 @@ export function ReceiptDropzone() {
             height="24"
             viewBox="0 0 24 24"
             fill="none"
-            stroke={dragOver ? '#CC5500' : '#8b949e'}
+            stroke={dragOver ? 'var(--accent)' : 'var(--text-muted)'}
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -269,12 +269,12 @@ export function ReceiptDropzone() {
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-          <span style={{ color: '#8b949e', fontSize: '13px' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
             {files.length === 0
               ? 'Drop receipt photos here or tap to browse'
               : `${files.length}/10 receipts added`}
           </span>
-          <span style={{ color: '#484f58', fontSize: '11px' }}>
+          <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
             JPEG · PNG · HEIC · Max 5 MB each
           </span>
           <input
@@ -302,10 +302,10 @@ export function ReceiptDropzone() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  background: '#0d1117',
+                  background: 'var(--bg-subtle)',
                   borderRadius: '8px',
                   padding: '8px 12px',
-                  border: '1px solid #21262d',
+                  border: '1px solid var(--border)',
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -323,7 +323,7 @@ export function ReceiptDropzone() {
                 <span
                   style={{
                     flex: 1,
-                    color: '#e6edf3',
+                    color: 'var(--text)',
                     fontSize: '12px',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -333,7 +333,7 @@ export function ReceiptDropzone() {
                   {item.file.name}
                 </span>
                 {item.status === 'waiting' && (
-                  <span style={{ color: '#484f58', fontSize: '11px', flexShrink: 0 }}>Waiting</span>
+                  <span style={{ color: 'var(--text-dim)', fontSize: '11px', flexShrink: 0 }}>Waiting</span>
                 )}
                 {item.status === 'uploading' && (
                   <svg
@@ -369,7 +369,7 @@ export function ReceiptDropzone() {
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#484f58',
+                      color: 'var(--text-dim)',
                       cursor: 'pointer',
                       padding: '2px 4px',
                       flexShrink: 0,
@@ -468,8 +468,8 @@ export function ReceiptDropzone() {
                 fontSize: '14px',
                 fontWeight: 600,
                 cursor: hasPending && !uploading ? 'pointer' : 'not-allowed',
-                background: hasPending && !uploading ? '#CC5500' : '#21262d',
-                color: hasPending && !uploading ? '#0d1117' : '#484f58',
+                background: hasPending && !uploading ? 'var(--accent)' : 'var(--bg-dim)',
+                color: hasPending && !uploading ? '#fff' : 'var(--text-dim)',
                 transition: 'all 0.15s',
                 minHeight: '48px',
               }}
@@ -481,7 +481,7 @@ export function ReceiptDropzone() {
                 : `Process ${pendingCount} receipt${pendingCount !== 1 ? 's' : ''}`}
             </button>
           ) : (
-            <span style={{ color: '#484f58', fontSize: '12px', flex: 1 }}>
+            <span style={{ color: 'var(--text-dim)', fontSize: '12px', flex: 1 }}>
               {voiceStatus === 'recording'
                 ? '● Recording... tap mic to stop'
                 : voiceStatus === 'processing'
@@ -497,12 +497,12 @@ export function ReceiptDropzone() {
             style={{
               marginTop: '8px',
               padding: '8px 12px',
-              background: '#0d1117',
+              background: 'var(--bg-subtle)',
               borderRadius: '6px',
-              border: '1px solid #30363d',
+              border: '1px solid var(--border)',
             }}
           >
-            <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
               &ldquo;{voiceTranscript}&rdquo;
             </span>
           </div>
