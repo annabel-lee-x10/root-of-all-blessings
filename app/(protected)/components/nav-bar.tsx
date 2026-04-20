@@ -33,7 +33,7 @@ export function NavBar() {
 
   function tabStyle(active: boolean): React.CSSProperties {
     return {
-      color: active ? '#f0b429' : '#8b949e',
+      color: active ? 'var(--accent)' : 'var(--text-muted)',
       textDecoration: 'none',
       fontSize: '13px',
       fontWeight: active ? 500 : 400,
@@ -50,8 +50,8 @@ export function NavBar() {
     <>
       <nav
         style={{
-          background: '#161b22',
-          borderBottom: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          borderBottom: '1px solid var(--border)',
           padding: '0 1rem',
           height: '52px',
           display: 'flex',
@@ -75,7 +75,7 @@ export function NavBar() {
               <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9" />
             </svg>
           </div>
-          <span style={{ color: '#e6edf3', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
+          <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
         </div>
 
         {/* Desktop tabs */}
@@ -96,7 +96,7 @@ export function NavBar() {
                     onClick={() => setSubOpen((v) => !v)}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: active ? '#f0b429' : '#8b949e',
+                      color: active ? 'var(--accent)' : 'var(--text-muted)',
                       padding: '2px 4px', fontSize: '10px', lineHeight: 1,
                     }}
                   >
@@ -106,7 +106,7 @@ export function NavBar() {
                     <div
                       style={{
                         position: 'absolute', top: '100%', left: 0,
-                        background: '#1c2128', border: '1px solid #30363d',
+                        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
                         borderRadius: '8px', padding: '4px 0',
                         marginTop: '4px', minWidth: '140px', zIndex: 50,
                         boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
@@ -119,7 +119,7 @@ export function NavBar() {
                           onClick={() => setSubOpen(false)}
                           style={{
                             display: 'block',
-                            color: pathname.startsWith(sub.href) ? '#f0b429' : '#e6edf3',
+                            color: pathname.startsWith(sub.href) ? 'var(--accent)' : 'var(--text)',
                             textDecoration: 'none',
                             padding: '8px 14px',
                             fontSize: '13px',
@@ -147,7 +147,7 @@ export function NavBar() {
             <button
               type="submit"
               style={{
-                background: 'none', border: 'none', color: '#8b949e',
+                background: 'none', border: 'none', color: 'var(--text-muted)',
                 fontSize: '13px', cursor: 'pointer', padding: '4px 8px',
               }}
             >
@@ -159,7 +159,7 @@ export function NavBar() {
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
             style={{
-              background: 'none', border: '1px solid #30363d', color: '#8b949e',
+              background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)',
               cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
               fontSize: '16px', lineHeight: 1,
             }}
@@ -174,8 +174,8 @@ export function NavBar() {
         <div
           className="sm:hidden"
           style={{
-            background: '#161b22',
-            borderBottom: '1px solid #30363d',
+            background: 'var(--bg-card)',
+            borderBottom: '1px solid var(--border)',
             padding: '4px 0',
             position: 'sticky',
             top: '52px',
@@ -191,19 +191,19 @@ export function NavBar() {
                 onClick={() => setMobileOpen(false)}
                 style={{
                   display: 'block',
-                  color: active ? '#f0b429' : '#e6edf3',
+                  color: active ? 'var(--accent)' : 'var(--text)',
                   textDecoration: 'none',
                   padding: '11px 1rem',
                   fontSize: '14px',
                   fontWeight: active ? 500 : 400,
-                  borderLeft: `3px solid ${active ? '#f0b429' : 'transparent'}`,
+                  borderLeft: `3px solid ${active ? 'var(--accent)' : 'transparent'}`,
                 }}
               >
                 {tab.label}
               </Link>
             )
           })}
-          <div style={{ borderTop: '1px solid #30363d', margin: '4px 0' }} />
+          <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
           {WMM_SUB.map((sub) => (
             <Link
               key={sub.href}
@@ -211,7 +211,7 @@ export function NavBar() {
               onClick={() => setMobileOpen(false)}
               style={{
                 display: 'block',
-                color: pathname.startsWith(sub.href) ? '#f0b429' : '#8b949e',
+                color: pathname.startsWith(sub.href) ? 'var(--accent)' : 'var(--text-muted)',
                 textDecoration: 'none',
                 padding: '9px 1.5rem',
                 fontSize: '13px',
