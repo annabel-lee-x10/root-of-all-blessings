@@ -8,9 +8,9 @@ import { db } from '@/lib/db'
 // (b) limit remapping to transactions pointing to a parent (parent_id IS NULL).
 
 const HIERARCHY: Array<{ parent: string; type: 'expense' | 'income'; children: string[] }> = [
-  { parent: 'Food', type: 'expense', children: ['Alcohol', 'Cafe', 'Coffee', 'Dining', 'Groceries', 'Hawker', 'Snacks'] },
+  { parent: 'Food', type: 'expense', children: ['Alcohol', 'Coffee', 'Groceries', 'Meals', 'Snacks'] },
   { parent: 'Living', type: 'expense', children: ['Household', 'Aircon Service', 'Electricity', 'Home Maintenance', 'Insurance', 'Internet', 'Mobile', 'Mortgage', 'Rent', 'Utilities'] },
-  { parent: 'Travel', type: 'expense', children: ['Transport', 'Grab', 'MRT', 'Taxi'] },
+  { parent: 'Travel', type: 'expense', children: ['Transport', 'Bus and Train', 'Taxi'] },
   { parent: 'Wellness and Health', type: 'expense', children: ['Health', 'Dental', 'Fitness', 'Gym', 'Medical', 'Sports', 'Supplements'] },
   { parent: 'Lifestyle', type: 'expense', children: ['Apparel', 'Delivery', 'Electronics', 'Gifts', 'Shopping'] },
   { parent: 'Business Education Work', type: 'expense', children: ['Books', 'Claude', 'Courses', 'Software'] },
@@ -28,16 +28,13 @@ const HIERARCHY: Array<{ parent: string; type: 'expense' | 'income'; children: s
 const TAG_RULES: Array<{ tags: string[]; subcategory: string }> = [
   // Food
   { tags: ['alcohol', 'beer', 'wine', 'spirits', 'liquor'], subcategory: 'Alcohol' },
-  { tags: ['cafe', 'kopitiam'], subcategory: 'Cafe' },
-  { tags: ['coffee', 'kopi', 'latte', 'espresso', 'americano', 'cappuccino'], subcategory: 'Coffee' },
-  { tags: ['dining', 'restaurant', 'dinner', 'lunch', 'breakfast', 'supper', 'zichar', 'cze char'], subcategory: 'Dining' },
+  { tags: ['cafe', 'kopitiam', 'coffee', 'kopi', 'latte', 'espresso', 'americano', 'cappuccino', 'bubble tea', 'boba', 'koi', 'liho', 'gong cha', 'playmade', 'tiger sugar', 'one zo', 'r&b tea'], subcategory: 'Coffee' },
+  { tags: ['hawker', 'hawker centre', 'food court', 'coffeeshop', 'food stall', 'dining', 'restaurant', 'dinner', 'lunch', 'breakfast', 'supper', 'zichar', 'cze char', 'foodpanda', 'deliveroo', 'grab food', 'grabfood'], subcategory: 'Meals' },
   { tags: ['groceries', 'grocery', 'supermarket', 'market', 'provisions'], subcategory: 'Groceries' },
-  { tags: ['hawker', 'hawker centre', 'food court', 'coffeeshop', 'food stall'], subcategory: 'Hawker' },
-  { tags: ['snacks', 'bubble tea', 'boba', 'dessert', 'ice cream', 'pastry', 'cake', 'candy', 'chips'], subcategory: 'Snacks' },
+  { tags: ['snacks', 'dessert', 'ice cream', 'pastry', 'cake', 'candy', 'chips'], subcategory: 'Snacks' },
   // Travel
-  { tags: ['grab', 'grabcar', 'grab car'], subcategory: 'Grab' },
-  { tags: ['mrt', 'ez-link', 'ezlink', 'transit', 'bus', 'train', 'smrt', 'sbs', 'public transport', 'lrt'], subcategory: 'MRT' },
-  { tags: ['taxi', 'cab', 'gojek', 'tada', 'comfort', 'comfortdelgro', 'cdg'], subcategory: 'Taxi' },
+  { tags: ['mrt', 'ez-link', 'ezlink', 'transit', 'bus', 'train', 'smrt', 'sbs', 'public transport', 'lrt'], subcategory: 'Bus and Train' },
+  { tags: ['taxi', 'cab', 'gojek', 'tada', 'comfort', 'comfortdelgro', 'cdg', 'grab', 'grabcar', 'grab car'], subcategory: 'Taxi' },
   // Living
   { tags: ['aircon', 'air con', 'air conditioning', 'aircon service', 'aircon servicing'], subcategory: 'Aircon Service' },
   { tags: ['electricity', 'power', 'electric', 'sp services', 'singapore power'], subcategory: 'Electricity' },
@@ -58,7 +55,7 @@ const TAG_RULES: Array<{ tags: string[]; subcategory: string }> = [
   { tags: ['supplements', 'vitamins', 'protein', 'omega', 'collagen', 'probiotics', 'health supplements'], subcategory: 'Supplements' },
   // Lifestyle
   { tags: ['apparel', 'clothing', 'clothes', 'fashion', 'shoes', 'outfit', 'garment', 'dress'], subcategory: 'Apparel' },
-  { tags: ['delivery', 'food delivery', 'foodpanda', 'deliveroo', 'grab food', 'grabfood'], subcategory: 'Delivery' },
+  { tags: ['delivery', 'food delivery'], subcategory: 'Delivery' },
   { tags: ['electronics', 'tech', 'gadgets', 'device', 'laptop', 'tablet', 'headphones', 'charger'], subcategory: 'Electronics' },
   { tags: ['gifts', 'gift', 'present', 'souvenir'], subcategory: 'Gifts' },
   { tags: ['shopping', 'zalora', 'shopee', 'lazada', 'amazon', 'taobao', 'online shopping'], subcategory: 'Shopping' },
@@ -93,29 +90,27 @@ const PAYEE_RULES: Array<{ pattern: string; subcategory: string }> = [
   { pattern: 'cold storage', subcategory: 'Groceries' },
   { pattern: 'redmart', subcategory: 'Groceries' },
   { pattern: 'prime supermarket', subcategory: 'Groceries' },
-  // Coffee
+  // Coffee (includes bubble tea and cafe chains)
   { pattern: 'starbucks', subcategory: 'Coffee' },
   { pattern: 'coffee bean', subcategory: 'Coffee' },
   { pattern: 'flash coffee', subcategory: 'Coffee' },
   { pattern: 'ya kun', subcategory: 'Coffee' },
-  // Cafe
-  { pattern: 'toast box', subcategory: 'Cafe' },
-  // Snacks (bubble tea)
-  { pattern: 'koi the', subcategory: 'Snacks' },
-  { pattern: 'liho', subcategory: 'Snacks' },
-  { pattern: 'gong cha', subcategory: 'Snacks' },
-  { pattern: 'gongcha', subcategory: 'Snacks' },
-  { pattern: 'playmade', subcategory: 'Snacks' },
-  { pattern: 'tiger sugar', subcategory: 'Snacks' },
-  { pattern: 'one zo', subcategory: 'Snacks' },
-  { pattern: 'r&b tea', subcategory: 'Snacks' },
+  { pattern: 'toast box', subcategory: 'Coffee' },
+  { pattern: 'koi the', subcategory: 'Coffee' },
+  { pattern: 'liho', subcategory: 'Coffee' },
+  { pattern: 'gong cha', subcategory: 'Coffee' },
+  { pattern: 'gongcha', subcategory: 'Coffee' },
+  { pattern: 'playmade', subcategory: 'Coffee' },
+  { pattern: 'tiger sugar', subcategory: 'Coffee' },
+  { pattern: 'one zo', subcategory: 'Coffee' },
+  { pattern: 'r&b tea', subcategory: 'Coffee' },
   // Transport / Travel
-  { pattern: 'grab', subcategory: 'Grab' },
+  { pattern: 'grab', subcategory: 'Taxi' },
   { pattern: 'gojek', subcategory: 'Taxi' },
-  { pattern: 'smrt', subcategory: 'MRT' },
-  { pattern: 'sbs transit', subcategory: 'MRT' },
-  { pattern: 'transitlink', subcategory: 'MRT' },
-  { pattern: 'ez-link', subcategory: 'MRT' },
+  { pattern: 'smrt', subcategory: 'Bus and Train' },
+  { pattern: 'sbs transit', subcategory: 'Bus and Train' },
+  { pattern: 'transitlink', subcategory: 'Bus and Train' },
+  { pattern: 'ez-link', subcategory: 'Bus and Train' },
   { pattern: 'comfortdelgro', subcategory: 'Taxi' },
   { pattern: 'citycab', subcategory: 'Taxi' },
   { pattern: 'comfort taxi', subcategory: 'Taxi' },

@@ -193,10 +193,10 @@ describe('category_remap tag matching', () => {
     expect(row.rows[0].category_id).toBe('groceries')
   })
 
-  it('remaps Food tx tagged "hawker" → Hawker', async () => {
+  it('remaps Food tx tagged "hawker" → Meals', async () => {
     seedAccount('acc1', 'POSB', 'bank')
     seedCategory('food-parent', 'Food', 'expense')
-    seedCategory('hawker', 'Hawker', 'expense', 'food-parent')
+    seedCategory('meals', 'Meals', 'expense', 'food-parent')
     seedTag('tag1', 'hawker')
     seedTransaction('tx1', 'acc1', { categoryId: 'food-parent' })
     seedTransactionTag('tx1', 'tag1')
@@ -205,7 +205,7 @@ describe('category_remap tag matching', () => {
 
     const { db } = await import('@/lib/db')
     const row = await db.execute({ sql: 'SELECT category_id FROM transactions WHERE id = ?', args: ['tx1'] })
-    expect(row.rows[0].category_id).toBe('hawker')
+    expect(row.rows[0].category_id).toBe('meals')
   })
 
   it('remaps Food tx tagged "coffee" → Coffee', async () => {
@@ -223,10 +223,10 @@ describe('category_remap tag matching', () => {
     expect(row.rows[0].category_id).toBe('coffee')
   })
 
-  it('remaps Food tx tagged "restaurant" → Dining', async () => {
+  it('remaps Food tx tagged "restaurant" → Meals', async () => {
     seedAccount('acc1', 'POSB', 'bank')
     seedCategory('food-parent', 'Food', 'expense')
-    seedCategory('dining', 'Dining', 'expense', 'food-parent')
+    seedCategory('meals', 'Meals', 'expense', 'food-parent')
     seedTag('tag1', 'restaurant')
     seedTransaction('tx1', 'acc1', { categoryId: 'food-parent' })
     seedTransactionTag('tx1', 'tag1')
@@ -235,13 +235,13 @@ describe('category_remap tag matching', () => {
 
     const { db } = await import('@/lib/db')
     const row = await db.execute({ sql: 'SELECT category_id FROM transactions WHERE id = ?', args: ['tx1'] })
-    expect(row.rows[0].category_id).toBe('dining')
+    expect(row.rows[0].category_id).toBe('meals')
   })
 
-  it('remaps Food tx tagged "bubble tea" → Snacks', async () => {
+  it('remaps Food tx tagged "bubble tea" → Coffee', async () => {
     seedAccount('acc1', 'POSB', 'bank')
     seedCategory('food-parent', 'Food', 'expense')
-    seedCategory('snacks', 'Snacks', 'expense', 'food-parent')
+    seedCategory('coffee', 'Coffee', 'expense', 'food-parent')
     seedTag('tag1', 'bubble tea')
     seedTransaction('tx1', 'acc1', { categoryId: 'food-parent' })
     seedTransactionTag('tx1', 'tag1')
@@ -250,7 +250,7 @@ describe('category_remap tag matching', () => {
 
     const { db } = await import('@/lib/db')
     const row = await db.execute({ sql: 'SELECT category_id FROM transactions WHERE id = ?', args: ['tx1'] })
-    expect(row.rows[0].category_id).toBe('snacks')
+    expect(row.rows[0].category_id).toBe('coffee')
   })
 
   it('remaps Pet tx tagged "vet" → Vet', async () => {
@@ -315,10 +315,10 @@ describe('category_remap tag matching', () => {
     expect(row.rows[0].category_id).toBe('food-parent')
   })
 
-  it('remaps tx tagged "grab" → Grab subcategory', async () => {
+  it('remaps tx tagged "grab" → Taxi subcategory', async () => {
     seedAccount('acc1', 'POSB', 'bank')
     seedCategory('travel-parent', 'Travel', 'expense')
-    seedCategory('grab', 'Grab', 'expense', 'travel-parent')
+    seedCategory('taxi', 'Taxi', 'expense', 'travel-parent')
     seedTag('tag1', 'grab')
     seedTransaction('tx1', 'acc1', { categoryId: 'travel-parent' })
     seedTransactionTag('tx1', 'tag1')
@@ -327,13 +327,13 @@ describe('category_remap tag matching', () => {
 
     const { db } = await import('@/lib/db')
     const row = await db.execute({ sql: 'SELECT category_id FROM transactions WHERE id = ?', args: ['tx1'] })
-    expect(row.rows[0].category_id).toBe('grab')
+    expect(row.rows[0].category_id).toBe('taxi')
   })
 
-  it('remaps tx tagged "mrt" → MRT subcategory', async () => {
+  it('remaps tx tagged "mrt" → Bus and Train subcategory', async () => {
     seedAccount('acc1', 'POSB', 'bank')
     seedCategory('travel-parent', 'Travel', 'expense')
-    seedCategory('mrt', 'MRT', 'expense', 'travel-parent')
+    seedCategory('bus-and-train', 'Bus and Train', 'expense', 'travel-parent')
     seedTag('tag1', 'mrt')
     seedTransaction('tx1', 'acc1', { categoryId: 'travel-parent' })
     seedTransactionTag('tx1', 'tag1')
@@ -342,7 +342,7 @@ describe('category_remap tag matching', () => {
 
     const { db } = await import('@/lib/db')
     const row = await db.execute({ sql: 'SELECT category_id FROM transactions WHERE id = ?', args: ['tx1'] })
-    expect(row.rows[0].category_id).toBe('mrt')
+    expect(row.rows[0].category_id).toBe('bus-and-train')
   })
 
   it('remaps Entertainment tx tagged "netflix" → Netflix', async () => {
@@ -403,17 +403,17 @@ describe('category_remap payee matching', () => {
     expect(row.rows[0].category_id).toBe('netflix')
   })
 
-  it('remaps payee "Grab" → Grab subcategory', async () => {
+  it('remaps payee "Grab" → Taxi subcategory', async () => {
     seedAccount('acc1', 'POSB', 'bank')
     seedCategory('travel-parent', 'Travel', 'expense')
-    seedCategory('grab', 'Grab', 'expense', 'travel-parent')
+    seedCategory('taxi', 'Taxi', 'expense', 'travel-parent')
     seedTransaction('tx1', 'acc1', { categoryId: 'travel-parent', payee: 'Grab' })
 
     await callMigrate()
 
     const { db } = await import('@/lib/db')
     const row = await db.execute({ sql: 'SELECT category_id FROM transactions WHERE id = ?', args: ['tx1'] })
-    expect(row.rows[0].category_id).toBe('grab')
+    expect(row.rows[0].category_id).toBe('taxi')
   })
 
   it('remaps payee "Spotify" → Spotify subcategory', async () => {
