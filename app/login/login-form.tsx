@@ -55,16 +55,16 @@ export function LoginForm() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center p-4"
-      style={{ background: isDark ? '#0d1117' : '#f6f8fa' }}
+      style={{ background: 'var(--bg)' }}
     >
       {/* Theme toggle */}
       <button
         onClick={() => setTheme(isDark ? 'light' : 'dark')}
         className="fixed top-4 right-4 p-2 rounded-lg transition-colors"
         style={{
-          background: isDark ? '#21262d' : '#e1e4e8',
-          color: isDark ? '#8b949e' : '#57606a',
-          border: `1px solid ${isDark ? '#30363d' : '#d0d7de'}`,
+          background: 'var(--bg-dim)',
+          color: 'var(--text-muted)',
+          border: '1px solid var(--border)',
         }}
         aria-label="Toggle theme"
       >
@@ -83,8 +83,8 @@ export function LoginForm() {
       <div
         className="w-full max-w-sm rounded-xl p-8"
         style={{
-          background: isDark ? '#161b22' : '#ffffff',
-          border: `1px solid ${isDark ? '#30363d' : '#d0d7de'}`,
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           boxShadow: isDark
             ? '0 8px 32px rgba(0,0,0,0.4)'
             : '0 8px 32px rgba(0,0,0,0.08)',
@@ -93,7 +93,7 @@ export function LoginForm() {
         {/* Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
-            style={{ background: 'linear-gradient(135deg, #f0b429 0%, #d4a017 100%)' }}
+            style={{ background: 'var(--accent-gradient)' }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="2" y="17" width="5" height="5" rx="1" fill="white" fillOpacity="0.75"/>
@@ -104,11 +104,11 @@ export function LoginForm() {
           </div>
           <h1
             className="text-xl font-semibold tracking-tight"
-            style={{ color: isDark ? '#e6edf3' : '#1f2328' }}
+            style={{ color: 'var(--text)' }}
           >
             Root OS
           </h1>
-          <p className="text-sm mt-1" style={{ color: isDark ? '#8b949e' : '#636c76' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
             Root of All Blessings
           </p>
         </div>
@@ -119,7 +119,7 @@ export function LoginForm() {
             <label
               htmlFor="password"
               className="block text-sm font-medium mb-2"
-              style={{ color: isDark ? '#8b949e' : '#636c76' }}
+              style={{ color: 'var(--text-muted)' }}
             >
               Password
             </label>
@@ -134,21 +134,21 @@ export function LoginForm() {
               autoFocus
               className="w-full px-3 py-2.5 rounded-lg text-sm outline-none transition-all"
               style={{
-                background: isDark ? '#0d1117' : '#f6f8fa',
-                border: `1px solid ${error ? '#f85149' : isDark ? '#30363d' : '#d0d7de'}`,
-                color: isDark ? '#e6edf3' : '#1f2328',
+                background: 'var(--bg)',
+                border: `1px solid ${error ? 'var(--red)' : 'var(--border)'}`,
+                color: 'var(--text)',
               }}
               onFocus={(e) => {
-                e.target.style.border = `1px solid ${error ? '#f85149' : '#f0b429'}`
+                e.target.style.border = `1px solid ${error ? 'var(--red)' : 'var(--accent)'}`
               }}
               onBlur={(e) => {
-                e.target.style.border = `1px solid ${error ? '#f85149' : isDark ? '#30363d' : '#d0d7de'}`
+                e.target.style.border = `1px solid ${error ? 'var(--red)' : 'var(--border)'}`
               }}
             />
           </div>
 
           {error && (
-            <p className="text-sm" style={{ color: '#f85149' }}>
+            <p className="text-sm" style={{ color: 'var(--red)' }}>
               {error}
             </p>
           )}
@@ -158,8 +158,8 @@ export function LoginForm() {
             disabled={loading || !password}
             className="w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
             style={{
-              background: loading || !password ? (isDark ? '#21262d' : '#e1e4e8') : '#f0b429',
-              color: loading || !password ? (isDark ? '#484f58' : '#8c959f') : '#0d1117',
+              background: loading || !password ? 'var(--bg-dim)' : 'var(--accent)',
+              color: loading || !password ? 'var(--text-dim)' : 'var(--bg)',
               cursor: loading || !password ? 'not-allowed' : 'pointer',
             }}
           >
@@ -178,7 +178,7 @@ export function LoginForm() {
         </form>
       </div>
 
-      <p className="mt-6 text-xs" style={{ color: isDark ? '#484f58' : '#8c959f' }}>
+      <p className="mt-6 text-xs" style={{ color: 'var(--text-dim)' }}>
         Personal finance tracker
       </p>
     </div>
