@@ -5,10 +5,10 @@ import { useToast } from '../components/toast'
 import type { Tag } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
-const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
-const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
+const BTN_PRI = { ...BTN, background: 'var(--accent)', color: 'var(--bg)' }
+const BTN_SEC = { ...BTN, background: 'var(--bg-muted)', color: 'var(--text)', border: '1px solid var(--border)' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
-const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
+const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
 
 type TagWithCount = Tag & { tx_count: number }
 
@@ -109,8 +109,8 @@ export default function TagsPage() {
   return (
     <main style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.4rem', color: '#e6edf3' }}>Tags</h1>
-        <span style={{ fontSize: '0.85rem', color: '#8b949e' }}>{tags.length} total</span>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)' }}>Tags</h1>
+        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{tags.length} total</span>
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
@@ -134,15 +134,15 @@ export default function TagsPage() {
       />
 
       {loading ? (
-        <p style={{ color: '#8b949e' }}>Loading...</p>
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
       ) : visible.length === 0 ? (
-        <p style={{ color: '#8b949e' }}>{search ? 'No tags match.' : 'No tags yet.'}</p>
+        <p style={{ color: 'var(--text-muted)' }}>{search ? 'No tags match.' : 'No tags yet.'}</p>
       ) : (
         <div>
           {visible.map(t => (
             <div
               key={t.id}
-              style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
             >
               {editingId === t.id ? (
                 <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -161,8 +161,8 @@ export default function TagsPage() {
               ) : (
                 <>
                   <div style={{ flex: 1 }}>
-                    <span style={{ color: '#e6edf3', fontWeight: 500 }}>{t.name}</span>
-                    <span style={{ fontSize: '0.78rem', color: '#8b949e', marginLeft: '0.6rem' }}>
+                    <span style={{ color: 'var(--text)', fontWeight: 500 }}>{t.name}</span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '0.6rem' }}>
                       {t.tx_count} transaction{t.tx_count !== 1 ? 's' : ''}
                     </span>
                   </div>
