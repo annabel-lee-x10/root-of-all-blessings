@@ -35,13 +35,13 @@ function fmt(n: number) {
 
 const card: React.CSSProperties = {
   background: '#1c2128',
-  border: '1px solid #30363d',
+  border: '1px solid var(--border)',
   borderRadius: '10px',
   padding: '1rem',
 }
 
 const labelStyle: React.CSSProperties = {
-  color: '#8b949e',
+  color: 'var(--text-muted)',
   fontSize: '11px',
   fontWeight: 600,
   letterSpacing: '0.06em',
@@ -50,7 +50,7 @@ const labelStyle: React.CSSProperties = {
 }
 
 const valueStyle: React.CSSProperties = {
-  color: '#e6edf3',
+  color: 'var(--text)',
   fontSize: '22px',
   fontWeight: 700,
   letterSpacing: '-0.5px',
@@ -97,15 +97,15 @@ export function ExpenseDashboard() {
     <section style={{ marginBottom: '2rem' }}>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           padding: '1.25rem 1.5rem',
         }}
       >
         {/* Header + range selector */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-          <h2 style={{ color: '#8b949e', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
+          <h2 style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
             Expense Dashboard
           </h2>
           <div style={{ display: 'flex', gap: '4px' }}>
@@ -121,9 +121,9 @@ export function ExpenseDashboard() {
                   fontSize: '12px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  border: range === r.id ? '1px solid #f0b429' : '1px solid #30363d',
+                  border: range === r.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                   background: range === r.id ? 'rgba(240,180,41,0.12)' : 'transparent',
-                  color: range === r.id ? '#f0b429' : '#8b949e',
+                  color: range === r.id ? 'var(--accent)' : 'var(--text-muted)',
                 }}
               >
                 {r.label}
@@ -144,8 +144,8 @@ export function ExpenseDashboard() {
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
                 style={{
-                  background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#e6edf3', padding: '6px 10px', fontSize: '13px', width: '100%',
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+                  color: 'var(--text)', padding: '6px 10px', fontSize: '13px', width: '100%',
                   boxSizing: 'border-box',
                 }}
               />
@@ -159,8 +159,8 @@ export function ExpenseDashboard() {
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
                 style={{
-                  background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px',
-                  color: '#e6edf3', padding: '6px 10px', fontSize: '13px', width: '100%',
+                  background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+                  color: 'var(--text)', padding: '6px 10px', fontSize: '13px', width: '100%',
                   boxSizing: 'border-box',
                 }}
               />
@@ -196,7 +196,7 @@ export function ExpenseDashboard() {
 
               <div style={card}>
                 <div style={labelStyle}>Daily Avg</div>
-                <div style={{ ...valueStyle, color: loading ? '#484f58' : '#e6edf3' }}>
+                <div style={{ ...valueStyle, color: loading ? '#484f58' : 'var(--text)' }}>
                   {loading ? '…' : fmt(data?.daily_average ?? 0)}
                 </div>
                 <div style={{ color: '#484f58', fontSize: '11px', marginTop: '2px' }}>SGD / day</div>
@@ -218,11 +218,11 @@ export function ExpenseDashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {data.category_breakdown.slice(0, 6).map((cat) => (
                     <div key={cat.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: '#e6edf3', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                      <span style={{ color: 'var(--text)', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
                       <div style={{ flex: 1, background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: '#f0b429', borderRadius: '4px' }} />
+                        <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: 'var(--accent)', borderRadius: '4px' }} />
                       </div>
-                      <span style={{ color: '#8b949e', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
                         {fmt(cat.total)}
                       </span>
                       <span style={{ color: '#484f58', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>

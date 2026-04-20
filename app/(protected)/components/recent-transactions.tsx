@@ -16,7 +16,7 @@ function formatAmount(row: TransactionRow) {
 function typeColor(type: string) {
   if (type === 'expense') return '#f85149'
   if (type === 'income') return '#3fb884'
-  return '#8b949e'
+  return 'var(--text-muted)'
 }
 
 function formatDatetime(iso: string) {
@@ -75,7 +75,7 @@ export function RecentTransactions() {
     <section>
       <h2
         style={{
-          color: '#8b949e', fontSize: '11px', fontWeight: 600,
+          color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600,
           letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 12px',
         }}
       >
@@ -83,18 +83,18 @@ export function RecentTransactions() {
       </h2>
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
           overflow: 'hidden',
         }}
       >
         {loading ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
             Loading...
           </div>
         ) : transactions.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
             No transactions yet. Add one above.
           </div>
         ) : (
@@ -119,11 +119,11 @@ export function RecentTransactions() {
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--text)', fontSize: '14px', fontWeight: 500 }}>
                       {tx.payee ?? tx.category_name ?? tx.account_name}
                     </span>
                     {tx.tags && tx.tags.length > 0 && (
-                      <span style={{ color: '#8b949e', fontSize: '11px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
                         {tx.tags.map((t) => t.name).join(', ')}
                       </span>
                     )}
@@ -138,12 +138,12 @@ export function RecentTransactions() {
                         : tx.account_name}
                     </span>
                     {tx.payment_method && (
-                      <span style={{ color: '#8b949e', fontSize: '12px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                         {tx.payment_method as string}
                       </span>
                     )}
                     {tx.note && (
-                      <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
                         {(tx.note as string).length > 50
                           ? (tx.note as string).slice(0, 50) + '...'
                           : tx.note as string}
@@ -182,7 +182,7 @@ export function RecentTransactions() {
               <Link
                 href="/transactions"
                 style={{
-                  color: '#8b949e', fontSize: '12px', textDecoration: 'none',
+                  color: 'var(--text-muted)', fontSize: '12px', textDecoration: 'none',
                   fontWeight: 500,
                 }}
               >
