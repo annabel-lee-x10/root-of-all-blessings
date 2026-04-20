@@ -94,29 +94,35 @@ export function parseBlessThis(text: string): BlessThisData {
         break
       case 'type':
       case 'transaction type': {
-        const t = value.toLowerCase()
-        if (t === 'expense' || t === 'income' || t === 'transfer') result.type = t
+        const v = value.toLowerCase()
+        if (v === 'income' || v === 'expense' || v === 'transfer') {
+          result.type = v
+        }
         break
       }
     }
   }
 
+  // Infer type from context if not explicitly set
   if (!result.type) {
-    const haystack = [result.tags?.join(' '), result.notes, result.payee, result.category]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    const incomeKeywords = [
-      'sold', 'sale', 'resale', 'repayment', 'refund', 'rebate', 'cashback',
-      'reimbursement', 'payout', 'dividend', 'salary', 'bonus', 'freelance',
-      'commission', 'rental income', 'interest earned',
-    ]
-    if (incomeKeywords.some((kw) => haystack.includes(kw))) {
-      result.type = 'income'
-    }
+    result.type = inferType(result)
   }
 
   return result
+}
+
+const INCOME_KEYWORDS = /\b(sold|sale|resale|repayment|refund|rebate|cashback|reimbursement|payout|dividend|salary|bonus|freelance|commission|rental income|interest earned)\b/i
+
+function inferType(data: BlessThisData): 'expense' | 'income' | undefined {
+  // Check tags
+  if (data.tags?.some((t) => INCOME_KEYWORDS.test(t))) return 'income'
+  // Check notes
+  if (data.notes && INCOME_KEYWORDS.test(data.notes)) return 'income'
+  // Check payee context - "sold to X" pattern
+  if (data.payee && /\bsold\b/i.test(data.payee)) return 'income'
+  // Check category
+  if (data.category && INCOME_KEYWORDS.test(data.category)) return 'income'
+  return undefined
 }
 
 function normaliseDate(raw: string): string {

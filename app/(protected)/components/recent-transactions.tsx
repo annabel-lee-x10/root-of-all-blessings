@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import type { Account, TransactionRow } from '@/lib/types'
-import type { TxType } from '@/lib/types'
+import type { TransactionRow, Account, TxType } from '@/lib/types'
 import { useToast } from './toast'
 
 function formatAmount(row: TransactionRow) {
@@ -15,32 +14,9 @@ function formatAmount(row: TransactionRow) {
 }
 
 function typeColor(type: string) {
-  if (type === 'expense') return 'var(--red)'
-  if (type === 'income') return 'var(--green)'
-  return 'var(--text-muted)'
-}
-
-function pillStyle(isActive: boolean, color: string): React.CSSProperties {
-  return {
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontSize: '11px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    border: `1px solid ${isActive ? color : 'var(--border)'}`,
-    background: isActive ? `${color}20` : 'transparent',
-    color: isActive ? color : '#6e7681',
-  }
-}
-
-const inlineSelectStyle: React.CSSProperties = {
-  background: 'var(--bg)',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  color: 'var(--text-muted)',
-  padding: '2px 6px',
-  fontSize: '12px',
-  cursor: 'pointer',
+  if (type === 'expense') return '#f85149'
+  if (type === 'income') return '#3fb884'
+  return '#8b949e'
 }
 
 function formatDatetime(iso: string) {
@@ -51,13 +27,37 @@ function formatDatetime(iso: string) {
   })
 }
 
+const pillStyle = (active: boolean, color: string): React.CSSProperties => ({
+  padding: '2px 8px',
+  borderRadius: '10px',
+  fontSize: '11px',
+  fontWeight: 500,
+  cursor: 'pointer',
+  border: active ? `1px solid ${color}` : '1px solid #30363d',
+  background: active ? `${color}20` : 'transparent',
+  color: active ? color : '#484f58',
+  transition: 'all 0.15s',
+  lineHeight: '18px',
+})
+
+const selectStyle: React.CSSProperties = {
+  background: '#0d1117',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  color: '#e6edf3',
+  padding: '2px 6px',
+  fontSize: '11px',
+  outline: 'none',
+  cursor: 'pointer',
+}
+
 export function RecentTransactions() {
   const { showToast } = useToast()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [accounts, setAccounts] = useState<Account[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,19 +74,44 @@ export function RecentTransactions() {
 
   useEffect(() => {
     load()
+    fetch('/api/accounts').then((r) => r.json()).then(setAccounts).catch(() => {})
     const handler = () => load()
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)
   }, [load])
 
-  useEffect(() => {
-    fetch('/api/accounts')
-      .then((r) => r.json())
-      .then((data: unknown) => setAccounts(Array.isArray(data) ? data as Account[] : []))
-      .catch(() => {})
-  }, [])
-
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
+
+  async function patchTransaction(id: string, updates: Record<string, unknown>) {
+    setSavingId(id)
+    try {
+      const res = await fetch(`/api/transactions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+      if (res.ok) {
+        showToast('Updated', 'success')
+        load()
+      } else {
+        showToast('Failed to update', 'error')
+      }
+    } catch {
+      showToast('Network error', 'error')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function changeType(tx: TransactionRow, newType: TxType) {
+    if (newType === tx.type) return
+    await patchTransaction(tx.id, { type: newType })
+  }
+
+  async function changeAccount(tx: TransactionRow, newAccountId: string) {
+    if (newAccountId === tx.account_id) return
+    await patchTransaction(tx.id, { account_id: newAccountId })
+  }
 
   async function deleteTransaction(id: string) {
     if (!confirm('Delete this transaction?')) return
@@ -106,55 +131,11 @@ export function RecentTransactions() {
     }
   }
 
-  async function changeType(tx: TransactionRow, newType: TxType) {
-    if (tx.type === newType) return
-    setSavingId(tx.id)
-    try {
-      const res = await fetch(`/api/transactions/${tx.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: newType }),
-      })
-      if (res.ok) {
-        showToast('Type updated', 'success')
-        await load()
-      } else {
-        showToast('Failed to update type', 'error')
-      }
-    } catch {
-      showToast('Network error', 'error')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
-  async function changeAccount(tx: TransactionRow, newAccountId: string) {
-    if (tx.account_id === newAccountId) return
-    setSavingId(tx.id)
-    try {
-      const res = await fetch(`/api/transactions/${tx.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: newAccountId }),
-      })
-      if (res.ok) {
-        showToast('Account updated', 'success')
-        await load()
-      } else {
-        showToast('Failed to update account', 'error')
-      }
-    } catch {
-      showToast('Network error', 'error')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
   return (
     <section>
       <h2
         style={{
-          color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600,
+          color: '#8b949e', fontSize: '11px', fontWeight: 600,
           letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 12px',
         }}
       >
@@ -162,18 +143,18 @@ export function RecentTransactions() {
       </h2>
       <div
         style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
+          background: '#161b22',
+          border: '1px solid #30363d',
           borderRadius: '12px',
           overflow: 'hidden',
         }}
       >
         {loading ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
             Loading...
           </div>
         ) : transactions.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e', fontSize: '14px' }}>
             No transactions yet. Add one above.
           </div>
         ) : (
@@ -186,10 +167,12 @@ export function RecentTransactions() {
                   data-tx-row
                   style={{
                     padding: '11px 16px',
-                    borderBottom: '1px solid var(--bg-dim)',
+                    borderBottom: '1px solid #21262d',
+                    opacity: isSaving ? 0.6 : 1,
+                    transition: 'opacity 0.15s',
                   }}
                 >
-                  {/* Top row */}
+                  {/* Top row: label + amount + delete */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div
                       style={{
@@ -199,31 +182,26 @@ export function RecentTransactions() {
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ color: 'var(--text)', fontSize: '14px', fontWeight: 500 }}>
+                        <span style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 500 }}>
                           {tx.payee ?? tx.category_name ?? tx.account_name}
                         </span>
                         {tx.tags && tx.tags.length > 0 && (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+                          <span style={{ color: '#8b949e', fontSize: '11px' }}>
                             {tx.tags.map((t) => t.name).join(', ')}
                           </span>
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: '10px', marginTop: '2px', flexWrap: 'wrap' }}>
-                        <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
+                        <span style={{ color: '#484f58', fontSize: '12px' }}>
                           {formatDatetime(tx.datetime)}
                         </span>
-                        <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
-                          {tx.type === 'transfer'
-                            ? `${tx.account_name} → ${tx.to_account_name ?? ''}`
-                            : tx.account_name}
-                        </span>
                         {tx.payment_method && (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                          <span style={{ color: '#8b949e', fontSize: '12px' }}>
                             {tx.payment_method as string}
                           </span>
                         )}
                         {tx.note && (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
+                          <span style={{ color: '#8b949e', fontSize: '12px', fontStyle: 'italic' }}>
                             {(tx.note as string).length > 50
                               ? (tx.note as string).slice(0, 50) + '...'
                               : tx.note as string}
@@ -245,41 +223,50 @@ export function RecentTransactions() {
                       title="Delete transaction"
                       style={{
                         background: 'none', border: 'none',
-                        color: 'var(--text-dim)',
+                        color: '#484f58',
                         cursor: deletingId === tx.id ? 'not-allowed' : 'pointer',
                         padding: '4px 6px', fontSize: '16px', lineHeight: 1,
                         flexShrink: 0, borderRadius: '4px',
                         transition: 'color 0.1s',
                       }}
-                      onMouseEnter={(e) => { if (deletingId !== tx.id) (e.currentTarget as HTMLElement).style.color = 'var(--red)' }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}
+                      onMouseEnter={(e) => { if (deletingId !== tx.id) (e.currentTarget as HTMLElement).style.color = '#f85149' }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#484f58' }}
                     >
                       {deletingId === tx.id ? '...' : '×'}
                     </button>
                   </div>
 
                   {/* Bottom row: type toggle + account selector */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', paddingLeft: '20px', flexWrap: 'wrap' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    marginTop: '8px', paddingLeft: '20px', flexWrap: 'wrap',
+                  }}>
                     {/* Type pills */}
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
-                        <button key={t} type="button" disabled={isSaving}
+                        <button
+                          key={t}
+                          type="button"
+                          disabled={isSaving}
                           onClick={() => changeType(tx, t)}
-                          style={pillStyle(tx.type === t, typeColor(t))}>
+                          style={pillStyle(tx.type === t, typeColor(t))}
+                        >
                           {t.charAt(0).toUpperCase() + t.slice(1)}
                         </button>
                       ))}
                     </div>
+
                     {/* Account selector */}
-                    {activeAccounts.length > 0 && (
-                      <select value={tx.account_id} disabled={isSaving}
-                        onChange={(e) => changeAccount(tx, e.target.value)}
-                        style={inlineSelectStyle}>
-                        {activeAccounts.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                      </select>
-                    )}
+                    <select
+                      value={tx.account_id}
+                      disabled={isSaving}
+                      onChange={(e) => changeAccount(tx, e.target.value)}
+                      style={selectStyle}
+                    >
+                      {activeAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               )
@@ -288,7 +275,7 @@ export function RecentTransactions() {
               <Link
                 href="/transactions"
                 style={{
-                  color: 'var(--text-muted)', fontSize: '12px', textDecoration: 'none',
+                  color: '#8b949e', fontSize: '12px', textDecoration: 'none',
                   fontWeight: 500,
                 }}
               >
