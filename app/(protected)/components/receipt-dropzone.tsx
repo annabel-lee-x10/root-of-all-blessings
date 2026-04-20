@@ -220,11 +220,11 @@ export function ReceiptDropzone() {
               type="checkbox"
               checked={merchantLookup}
               onChange={(e) => setMerchantLookup(e.target.checked)}
-              style={{ accentColor: '#f0b429', width: '14px', height: '14px' }}
+              style={{ accentColor: '#CC5500', width: '14px', height: '14px' }}
             />
             <span style={{ color: '#8b949e', fontSize: '12px' }}>
               Merchant lookup
-              {merchantLookup && <span style={{ color: '#f0b429' }}> (adds ~5s)</span>}
+              {merchantLookup && <span style={{ color: '#CC5500' }}> (adds ~5s)</span>}
             </span>
           </label>
         </div>
@@ -239,12 +239,12 @@ export function ReceiptDropzone() {
           tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter') fileInputRef.current?.click() }}
           style={{
-            border: `2px dashed ${dragOver ? '#f0b429' : '#30363d'}`,
+            border: `2px dashed ${dragOver ? '#CC5500' : '#30363d'}`,
             borderRadius: '10px',
             padding: '2rem 1rem',
             textAlign: 'center',
             cursor: 'pointer',
-            background: dragOver ? 'rgba(240,180,41,0.05)' : 'transparent',
+            background: dragOver ? 'rgba(204,85,0,0.05)' : 'transparent',
             transition: 'all 0.15s',
             minHeight: '120px',
             display: 'flex',
@@ -260,7 +260,7 @@ export function ReceiptDropzone() {
             height="24"
             viewBox="0 0 24 24"
             fill="none"
-            stroke={dragOver ? '#f0b429' : '#8b949e'}
+            stroke={dragOver ? '#CC5500' : '#8b949e'}
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -343,10 +343,10 @@ export function ReceiptDropzone() {
                     viewBox="0 0 24 24"
                     fill="none"
                   >
-                    <circle cx="12" cy="12" r="10" stroke="#f0b429" strokeWidth="3" opacity="0.25" />
+                    <circle cx="12" cy="12" r="10" stroke="#CC5500" strokeWidth="3" opacity="0.25" />
                     <path
                       d="M12 2a10 10 0 0110 10"
-                      stroke="#f0b429"
+                      stroke="#CC5500"
                       strokeWidth="3"
                       strokeLinecap="round"
                     />
@@ -468,7 +468,7 @@ export function ReceiptDropzone() {
                 fontSize: '14px',
                 fontWeight: 600,
                 cursor: hasPending && !uploading ? 'pointer' : 'not-allowed',
-                background: hasPending && !uploading ? '#f0b429' : '#21262d',
+                background: hasPending && !uploading ? '#CC5500' : '#21262d',
                 color: hasPending && !uploading ? '#0d1117' : '#484f58',
                 transition: 'all 0.15s',
                 minHeight: '48px',

@@ -72,7 +72,7 @@ const BTN: React.CSSProperties = {
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontSize: '12px', fontWeight: 500, padding: '5px 10px',
 }
-const BTN_PRI: React.CSSProperties = { ...BTN, background: '#f0b429', color: '#0d1117' }
+const BTN_PRI: React.CSSProperties = { ...BTN, background: '#CC5500', color: '#0d1117' }
 const BTN_SEC: React.CSSProperties = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
 const BTN_DNG: React.CSSProperties = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f8514940' }
 
@@ -306,7 +306,7 @@ export default function TransactionsPage() {
                   onClick={() => setFilter('type', t)}
                   style={{
                     ...BTN, padding: '4px 8px', fontSize: '11px',
-                    background: filters.type === t ? '#f0b429' : '#21262d',
+                    background: filters.type === t ? '#CC5500' : '#21262d',
                     color: filters.type === t ? '#0d1117' : '#8b949e',
                     border: '1px solid #30363d',
                   }}
@@ -519,9 +519,9 @@ export default function TransactionsPage() {
                             )}
                             style={{
                               ...BTN, padding: '3px 10px', fontSize: '12px',
-                              background: selected ? '#f0b42920' : '#21262d',
-                              color: selected ? '#f0b429' : '#8b949e',
-                              border: `1px solid ${selected ? '#f0b42960' : '#30363d'}`,
+                              background: selected ? '#CC550020' : '#21262d',
+                              color: selected ? '#CC5500' : '#8b949e',
+                              border: `1px solid ${selected ? '#CC550060' : '#30363d'}`,
                             }}
                           >
                             {tag.name}

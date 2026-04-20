@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import { ThemeToggle } from './theme-toggle'
 
 const TOP_TABS = [
   {
@@ -33,13 +34,13 @@ export function NavBar() {
 
   function tabStyle(active: boolean): React.CSSProperties {
     return {
-      color: active ? '#f0b429' : '#8b949e',
+      color: active ? '#CC5500' : '#8b949e',
       textDecoration: 'none',
       fontSize: '13px',
       fontWeight: active ? 500 : 400,
       padding: '4px 10px',
       borderRadius: '6px',
-      background: active ? 'rgba(240,180,41,0.08)' : 'transparent',
+      background: active ? 'rgba(204,85,0,0.08)' : 'transparent',
       whiteSpace: 'nowrap',
       transition: 'color 0.1s',
       display: 'inline-block',
@@ -67,12 +68,13 @@ export function NavBar() {
           <div
             style={{
               width: '28px', height: '28px', borderRadius: '8px',
-              background: 'linear-gradient(135deg, #f0b429 0%, #d4a017 100%)',
+              background: 'linear-gradient(135deg, #CC5500 0%, #A34400 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z" fill="white" opacity="0.9" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3,17 8,12 12,14 18,7 21,10"/>
+              <polyline points="18,7 21,7 21,10"/>
             </svg>
           </div>
           <span style={{ color: '#e6edf3', fontWeight: 600, fontSize: '14px' }}>Root OS</span>
@@ -96,7 +98,7 @@ export function NavBar() {
                     onClick={() => setSubOpen((v) => !v)}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: active ? '#f0b429' : '#8b949e',
+                      color: active ? '#CC5500' : '#8b949e',
                       padding: '2px 4px', fontSize: '10px', lineHeight: 1,
                     }}
                   >
@@ -119,7 +121,7 @@ export function NavBar() {
                           onClick={() => setSubOpen(false)}
                           style={{
                             display: 'block',
-                            color: pathname.startsWith(sub.href) ? '#f0b429' : '#e6edf3',
+                            color: pathname.startsWith(sub.href) ? '#CC5500' : '#e6edf3',
                             textDecoration: 'none',
                             padding: '8px 14px',
                             fontSize: '13px',
@@ -142,7 +144,8 @@ export function NavBar() {
         </div>
 
         {/* Right side */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <ThemeToggle />
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
@@ -191,12 +194,12 @@ export function NavBar() {
                 onClick={() => setMobileOpen(false)}
                 style={{
                   display: 'block',
-                  color: active ? '#f0b429' : '#e6edf3',
+                  color: active ? '#CC5500' : '#e6edf3',
                   textDecoration: 'none',
                   padding: '11px 1rem',
                   fontSize: '14px',
                   fontWeight: active ? 500 : 400,
-                  borderLeft: `3px solid ${active ? '#f0b429' : 'transparent'}`,
+                  borderLeft: `3px solid ${active ? '#CC5500' : 'transparent'}`,
                 }}
               >
                 {tab.label}
@@ -211,7 +214,7 @@ export function NavBar() {
               onClick={() => setMobileOpen(false)}
               style={{
                 display: 'block',
-                color: pathname.startsWith(sub.href) ? '#f0b429' : '#8b949e',
+                color: pathname.startsWith(sub.href) ? '#CC5500' : '#8b949e',
                 textDecoration: 'none',
                 padding: '9px 1.5rem',
                 fontSize: '13px',

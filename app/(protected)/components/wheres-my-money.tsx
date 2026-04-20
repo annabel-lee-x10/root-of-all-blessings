@@ -325,9 +325,9 @@ export function WheresMyMoney() {
       fontSize: '13px',
       fontWeight: 500,
       cursor: 'pointer',
-      border: active ? '1px solid #f0b429' : '1px solid #30363d',
-      background: active ? '#f0b42920' : 'transparent',
-      color: active ? '#f0b429' : '#8b949e',
+      border: active ? '1px solid #CC5500' : '1px solid #30363d',
+      background: active ? '#CC550020' : 'transparent',
+      color: active ? '#CC5500' : '#8b949e',
       transition: 'all 0.15s',
     }
   }
@@ -356,8 +356,8 @@ export function WheresMyMoney() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
                 padding: '6px 12px', borderRadius: '8px', border: '1px solid #30363d',
-                background: listening ? '#f0b42915' : 'transparent',
-                color: listening ? '#f0b429' : '#8b949e',
+                background: listening ? '#CC550015' : 'transparent',
+                color: listening ? '#CC5500' : '#8b949e',
                 fontSize: '13px', fontWeight: 500, cursor: 'pointer',
                 minHeight: '36px',
                 animation: listening ? 'micPulse 1.2s ease-in-out infinite' : 'none',
@@ -377,8 +377,8 @@ export function WheresMyMoney() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
                 padding: '6px 12px', borderRadius: '8px', border: '1px solid #30363d',
-                background: pasteOpen ? '#f0b42915' : 'transparent',
-                color: pasteOpen ? '#f0b429' : '#8b949e',
+                background: pasteOpen ? '#CC550015' : 'transparent',
+                color: pasteOpen ? '#CC5500' : '#8b949e',
                 fontSize: '13px', fontWeight: 500, cursor: 'pointer',
                 minHeight: '36px',
               }}
@@ -413,7 +413,7 @@ export function WheresMyMoney() {
         {/* Paste panel */}
         {pasteOpen && (
           <div style={{
-            background: '#0d1117', border: '1px solid #f0b42940',
+            background: '#0d1117', border: '1px solid #CC550040',
             borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem',
           }}>
             <textarea
@@ -443,7 +443,7 @@ export function WheresMyMoney() {
               style={{
                 width: '100%', padding: '10px', borderRadius: '8px', border: 'none',
                 fontSize: '14px', fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'not-allowed',
-                background: pasteText.trim() ? '#f0b429' : '#21262d',
+                background: pasteText.trim() ? '#CC5500' : '#21262d',
                 color: pasteText.trim() ? '#0d1117' : '#484f58',
               }}
             >
@@ -601,9 +601,9 @@ export function WheresMyMoney() {
                       key={tid}
                       onClick={() => toggleTag(tid)}
                       style={{
-                        background: '#f0b42920', border: '1px solid #f0b42960',
+                        background: '#CC550020', border: '1px solid #CC550060',
                         borderRadius: '12px', padding: '2px 10px', fontSize: '12px',
-                        color: '#f0b429', cursor: 'pointer', userSelect: 'none',
+                        color: '#CC5500', cursor: 'pointer', userSelect: 'none',
                       }}
                     >
                       {tag.name} ×
@@ -640,7 +640,7 @@ export function WheresMyMoney() {
                   {!filteredTagSuggestions.some((t) => t.name.toLowerCase() === tagSearch.toLowerCase()) && (
                     <div
                       onMouseDown={(e) => { e.preventDefault(); createAndAddTag(tagSearch) }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#f0b429' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#CC5500' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#30363d' }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
@@ -696,7 +696,7 @@ export function WheresMyMoney() {
               fontSize: '14px',
               fontWeight: 600,
               cursor: canSubmit ? 'pointer' : 'not-allowed',
-              background: canSubmit ? '#f0b429' : '#21262d',
+              background: canSubmit ? '#CC5500' : '#21262d',
               color: canSubmit ? '#0d1117' : '#484f58',
               display: 'flex',
               alignItems: 'center',

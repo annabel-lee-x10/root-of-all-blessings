@@ -6,7 +6,7 @@ import { useToast } from '../components/toast'
 import type { Account } from '@/lib/types'
 
 const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
-const BTN_PRI = { ...BTN, background: '#f0b429', color: '#0d1117' }
+const BTN_PRI = { ...BTN, background: '#CC5500', color: '#0d1117' }
 const BTN_SEC = { ...BTN, background: '#21262d', color: '#e6edf3', border: '1px solid #30363d' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: '#f85149', border: '1px solid #f85149' }
 const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
@@ -150,7 +150,7 @@ export default function AccountsPage() {
       </div>
 
       {showCreate && (
-        <div style={{ ...CARD, marginBottom: '1.5rem', borderColor: '#f0b429' }}>
+        <div style={{ ...CARD, marginBottom: '1.5rem', borderColor: '#CC5500' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
             <div>
               <label style={{ fontSize: '0.8rem', color: '#8b949e', display: 'block', marginBottom: '0.3rem' }}>Name</label>
