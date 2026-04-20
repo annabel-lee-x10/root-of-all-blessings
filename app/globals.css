@@ -3,18 +3,24 @@
 :root {
   --bg: #0d1117;
   --bg-card: #161b22;
+  --bg-secondary: #1c2128;
+  --bg-muted: #21262d;
   --border: #30363d;
   --text: #e6edf3;
   --text-muted: #8b949e;
+  --text-subtle: #484f58;
   --accent: #f0b429;
 }
 
 [data-theme="light"] {
   --bg: #f6f8fa;
   --bg-card: #ffffff;
+  --bg-secondary: #eaeef2;
+  --bg-muted: #e1e4e8;
   --border: #d0d7de;
   --text: #1f2328;
   --text-muted: #636c76;
+  --text-subtle: #8c959f;
   --accent: #d4a017;
 }
 
