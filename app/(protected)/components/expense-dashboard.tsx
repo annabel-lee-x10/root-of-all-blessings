@@ -324,7 +324,7 @@ export function ExpenseDashboard() {
               <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
                 <div style={labelStyle}>Budget</div>
                 <div style={{ color: 'var(--text-dim)', fontSize: '14px', fontWeight: 700 }}>
-                  {loading ? '…' : (data?.budget_remaining != null ? fmt(data.budget_remaining) : '--')}
+                  {loading ? '…' : (data?.budget_remaining != null ? fmt(data.budget_remaining) : '—')}
                 </div>
               </div>
             </div>

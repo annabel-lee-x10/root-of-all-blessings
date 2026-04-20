@@ -142,7 +142,7 @@ describe('ExpenseDashboard', () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => {
-      expect(screen.getByText('--')).toBeInTheDocument()
+      expect(screen.getByText('—')).toBeInTheDocument()
     })
   })
 
