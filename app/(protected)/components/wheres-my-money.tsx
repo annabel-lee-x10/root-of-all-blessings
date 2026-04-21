@@ -7,11 +7,11 @@ import { parseBlessThis } from '@/lib/parse-bless-this'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
 
-const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
-const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
+const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund', 'credit_card'] as const
+const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund', credit_card: 'Credit Card' }
 
 function AccountOptions({ accounts }: { accounts: Account[] }) {
-  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
+  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [], credit_card: [] }
   for (const a of accounts) {
     if (groups[a.type]) groups[a.type].push(a)
     else groups[a.type] = [a]
@@ -74,6 +74,8 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   const [tagSearch, setTagSearch] = useState('')
   const [showNoteField, setShowNoteField] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [parentCategoryId, setParentCategoryId] = useState('')
+  const [paymentMethodLocked, setPaymentMethodLocked] = useState(false)
 
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -124,20 +126,44 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // BUG-026: lock payment method when a credit card account is selected
+  useEffect(() => {
+    const account = accounts.find((a) => a.id === accountId)
+    if (account?.type === 'credit_card') {
+      setPaymentMethod('credit card')
+      setPaymentMethodLocked(true)
+    } else {
+      setPaymentMethodLocked(false)
+    }
+  }, [accountId, accounts])
+
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
   const filteredCategories = categories.filter(
     (c) => c.type === (type === 'transfer' ? 'expense' : type)
   )
+  // BUG-028: parent/child category derivations for two-step picker
+  const parentCategories = filteredCategories.filter((c) => c.parent_id === null)
+  const subCategories = filteredCategories.filter((c) => c.parent_id === parentCategoryId)
+  // BUG-029: exclude tags whose names match any category name (avoids surfacing category-named DB entries)
+  const categoryNameSet = new Set(categories.map((c) => c.name.toLowerCase()))
   const filteredTagSuggestions = tags.filter(
     (t) =>
       t.name.toLowerCase().includes(tagSearch.toLowerCase()) &&
-      !selectedTagIds.includes(t.id)
+      !selectedTagIds.includes(t.id) &&
+      !categoryNameSet.has(t.name.toLowerCase())
   )
 
   function toggleTag(id: string) {
     setSelectedTagIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     )
+  }
+
+  function handleParentChange(pid: string) {
+    setParentCategoryId(pid)
+    if (!pid) { setCategoryId(''); return }
+    const children = filteredCategories.filter((c) => c.parent_id === pid)
+    setCategoryId(children.length === 0 ? pid : '')
   }
 
   async function createAndAddTag(name: string) {
@@ -180,12 +206,21 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       setDatetime(`${datePart}T${timePart}`)
     }
 
-    // Category: match by name (case-insensitive)
+    // Category: match by name (case-insensitive); set both parent and child for two-step picker
     if (data.category) {
       const match = categories.find(
         (c) => c.name.toLowerCase() === data.category!.toLowerCase()
       )
-      if (match) setCategoryId(match.id)
+      if (match) {
+        if (match.parent_id) {
+          setParentCategoryId(match.parent_id)
+          setCategoryId(match.id)
+        } else {
+          setParentCategoryId(match.id)
+          const hasChildren = categories.some((c) => c.parent_id === match.id)
+          if (!hasChildren) setCategoryId(match.id)
+        }
+      }
     }
 
     // Account: match by name (case-insensitive)
@@ -279,9 +314,11 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     setFxRate('')
     setFxDate('')
     setCategoryId('')
+    setParentCategoryId('')
     setPayee('')
     setNote('')
     setPaymentMethod('')
+    setPaymentMethodLocked(false)
     setDatetime(sgtNow())
     setSelectedTagIds([])
     setTagSearch('')
@@ -584,7 +621,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
           {/* Account / To Account */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
             <div style={{ flex: 1 }}>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle}>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle} data-testid="account-select">
                 <option value="">Account</option>
                 <AccountOptions accounts={activeAccounts} />
               </select>
@@ -599,15 +636,33 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
             )}
           </div>
 
-          {/* Category */}
+          {/* Category — BUG-028: two-step parent → subcategory picker */}
           {type !== 'transfer' && (
             <div style={{ marginBottom: '12px' }}>
-              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={selectStyle}>
+              <select
+                value={parentCategoryId}
+                onChange={(e) => handleParentChange(e.target.value)}
+                style={selectStyle}
+                data-testid="parent-category-select"
+              >
                 <option value="">Category (optional)</option>
-                {filteredCategories.map((c) => (
+                {parentCategories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              {parentCategoryId && subCategories.length > 0 && (
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  style={{ ...selectStyle, marginTop: '6px' }}
+                  data-testid="subcategory-select"
+                >
+                  <option value="">— Subcategory</option>
+                  {subCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 
@@ -624,9 +679,15 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
             </datalist>
           </div>
 
-          {/* Payment Method */}
+          {/* Payment Method — BUG-026: disabled when credit_card account selected */}
           <div style={{ marginBottom: '12px' }}>
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={selectStyle}>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              disabled={paymentMethodLocked}
+              style={{ ...selectStyle, opacity: paymentMethodLocked ? 0.6 : 1 }}
+              data-testid="payment-method-select"
+            >
               <option value="">Payment method (optional)</option>
               <option value="cash">Cash</option>
               <option value="credit card">Credit card</option>

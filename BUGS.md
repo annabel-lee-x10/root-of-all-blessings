@@ -352,3 +352,67 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** Added `onOpen?: () => void` prop to `SectionBlock`. The toggle function now calls `onOpen()` when transitioning to open with `items.length === 0 && !loading`. Added `handlePropOpen` in `NewsClient` (guarded by `propFetchedRef` to prevent re-fetching on subsequent collapses/re-expands). Property `SectionBlock` receives `onOpen={handlePropOpen}`.
 
 **Regression test:** `tests/components/news-property-auto-fetch.test.tsx`
+
+---
+
+## BUG-026 · WheresMyMoney: credit card account does not lock payment method
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `lib/types.ts`, `app/(protected)/components/wheres-my-money.tsx`
+
+**Symptom:** Selecting a credit card account (e.g. "Citi 9773", type `credit_card`) left the payment method dropdown editable with no default value. Users had to manually select "Credit card" every time.
+
+**Root cause:** `AccountType` in `lib/types.ts` did not include `'credit_card'`, so credit card accounts were grouped under no `<optgroup>` in `AccountOptions` and silently excluded from the dropdown. No logic existed to auto-lock payment method based on account type.
+
+**Fix:** Added `'credit_card'` to `AccountType`, `ACCOUNT_TYPE_ORDER`, and `ACCOUNT_TYPE_LABELS`. Added a `useEffect` watching `accountId` + `accounts`: when the selected account has `type === 'credit_card'`, it auto-sets `paymentMethod` to `'credit card'` and sets `paymentMethodLocked = true`, disabling the select. Unlocks automatically when a non-credit-card account is selected.
+
+**Regression test:** `tests/components/wheres-my-money.test.tsx` — BUG-026 describe block
+
+---
+
+## BUG-027 · WheresMyMoney: duplicate category names in category dropdown
+
+**Status:** Fixed (resolved by BUG-028 fix)
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/wheres-my-money.tsx`
+
+**Symptom:** The category dropdown showed duplicate names: "Tools" appeared three times, "Toys" twice, "Travel" twice.
+
+**Root cause:** `filteredCategories` returned all categories (both parent and child rows). Multiple parent categories had subcategories with the same name (e.g. "Toys" under both Shopping and Technology). A flat `<select>` rendering all rows produced visible duplicates.
+
+**Fix:** Resolved by the two-step category picker (BUG-028). Subcategories are now scoped to their selected parent, so duplicate names across different parents never appear simultaneously.
+
+**Regression test:** `tests/components/wheres-my-money.test.tsx` — BUG-027 describe block
+
+---
+
+## BUG-028 · WheresMyMoney: category picker is a flat list; ignores parent_id hierarchy
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/wheres-my-money.tsx`
+
+**Symptom:** The category dropdown showed all categories in a flat alphabetical list, mixing top-level categories ("Food", "Transport") with subcategories ("Dining Out", "Toys"). Users could not tell which subcategory belonged to which parent.
+
+**Root cause:** The category `<select>` rendered `filteredCategories` (all categories of the matching type) without using the `parent_id` field.
+
+**Fix:** Replaced the flat `<select>` with a two-step picker. The first select shows only parent categories (`parent_id === null`). When a parent with children is selected, a second select appears showing subcategories filtered to that parent (`parent_id === selectedParent`). If the selected parent has no children, it is used as the `category_id` directly. `applyPasteData` and `reset()` updated to handle `parentCategoryId` state.
+
+**Regression test:** `tests/components/wheres-my-money.test.tsx` — BUG-028 describe block
+
+---
+
+## BUG-029 · WheresMyMoney: tag suggestions surface category-named DB entries
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/wheres-my-money.tsx`
+
+**Symptom:** Typing in the Tags field surfaced entries like "APIs" and "Accessories" — names that are subcategory names rather than user-defined tags. This confused users into thinking the tag system and category system were the same.
+
+**Root cause:** The tags table contained entries whose names matched category/subcategory names (likely created by the OCR receipt flow). The `filteredTagSuggestions` filter had no guard against this.
+
+**Fix:** Added a `categoryNameSet` (case-insensitive Set of all category names) to `filteredTagSuggestions`. Tag suggestions whose names appear in `categoryNameSet` are excluded. Genuine user tags are unaffected; the "Create" option still appears if a user explicitly types a name that happens to match a category.
+
+**Regression test:** `tests/components/wheres-my-money.test.tsx` — BUG-029 describe block
