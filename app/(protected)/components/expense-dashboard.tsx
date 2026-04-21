@@ -91,8 +91,8 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
   const largeArc = progress > 50 ? 1 : 0
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '0.25rem 0 0', overflow: 'hidden' }}>
-      <svg viewBox="0 0 200 120" style={{ display: 'block', width: '200px', maxWidth: '100%', height: 'auto', overflow: 'hidden' }}>
+    <div style={{ textAlign: 'center', padding: '0.25rem 0 0', overflow: 'hidden' }}>
+      <svg viewBox="0 0 200 120" style={{ width: '100%', maxWidth: '200px', display: 'block', margin: '0 auto', overflow: 'hidden', aspectRatio: '200 / 120' }}>
         <path
           d="M 10,110 A 90,90 0 0,1 190,110"
           fill="none" stroke="var(--bg-dim)" strokeWidth="14" strokeLinecap="round"
