@@ -218,6 +218,15 @@ export async function POST(request: NextRequest) {
   const date = snapshot_date || new Date().toISOString()
   const now = new Date().toISOString()
 
+  // Auto-generate snap_label so the v2 GET route (WHERE snap_label IS NOT NULL) can see this snapshot
+  const autoLabel = snap_label ?? (() => {
+    const d = new Date(date)
+    const day = d.getUTCDate()
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]
+    const yr = d.getUTCFullYear()
+    return `${day} ${mon} ${yr} (HTML import)`
+  })()
+
   await db.execute({
     sql: `INSERT INTO portfolio_snapshots
             (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
@@ -227,8 +236,29 @@ export async function POST(request: NextRequest) {
     args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
            cash ?? 0, pending ?? 0, realised_pnl ?? 0, net_invested ?? null, net_deposited ?? null,
            dividends ?? 0, prior_value ?? null, prior_unrealised ?? null,
-           prior_realised ?? null, prior_cash ?? null, snap_label ?? null, prior_holdings ?? null],
+           prior_realised ?? null, prior_cash ?? null, autoLabel, prior_holdings ?? null],
   })
+
+  // Also insert into portfolio_holdings so the v2 snapshots route can serve individual holding rows.
+  // Apply enrichHolding so geo/sector/currency/ticker are resolved from the name-lookup table.
+  for (const h of holdings) {
+    const enriched = enrichHolding(h)
+    await db.execute({
+      sql: `INSERT INTO portfolio_holdings
+        (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
+         value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
+         is_new, approx, note, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [
+        crypto.randomUUID(), id,
+        enriched.ticker ?? null, enriched.name, enriched.geo ?? null, enriched.sector ?? null, enriched.currency ?? null,
+        enriched.current_price ?? null, enriched.change_1d_pct ?? null,
+        enriched.market_value, enriched.pnl ?? null, enriched.units ?? null, null, enriched.avg_cost ?? null,
+        null, null, null,
+        0, 0, null, now,
+      ],
+    })
+  }
 
   return Response.json({ id, total_value, total_pnl, holdings_count: holdings.length }, { status: 201 })
 }
