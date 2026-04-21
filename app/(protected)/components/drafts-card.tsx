@@ -34,13 +34,21 @@ const INPUT: React.CSSProperties = {
 }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 
+const EPOCH_ISO = '1970-01-01T00:00:00.000Z'
+
+function isEpoch(iso: string) {
+  return new Date(iso).getTime() === 0
+}
+
 function toInputDt(iso: string) {
+  if (isEpoch(iso)) return ''
   const d = new Date(iso)
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 function fromInputDt(val: string) {
+  if (!val) return EPOCH_ISO
   return `${val}:00.000+08:00`
 }
 
@@ -324,8 +332,10 @@ export function DraftsCard() {
                       {tx.payee ?? tx.category_name ?? '(unnamed)'}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
-                      <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
-                        {new Date(tx.datetime).toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })}
+                      <span style={{ color: isEpoch(tx.datetime as string) ? '#f0b429' : 'var(--text-dim)', fontSize: '12px' }}>
+                        {isEpoch(tx.datetime as string)
+                          ? 'Date?'
+                          : new Date(tx.datetime as string).toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })}
                       </span>
                       {tx.category_name && (
                         <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>{tx.category_name}</span>

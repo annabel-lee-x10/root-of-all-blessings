@@ -56,6 +56,13 @@ export async function POST(request: NextRequest) {
   const resolvedAccountId = await resolveAccount(accountId)
   if (!resolvedAccountId) return Response.json({ error: 'No active account found' }, { status: 400 })
 
+  // Look up account type to derive payment_method (account type IS the payment method)
+  const accountRow = await db.execute({
+    sql: 'SELECT type FROM accounts WHERE id = ?',
+    args: [resolvedAccountId],
+  })
+  const derivedPaymentMethod = (accountRow.rows[0]?.type as string) ?? null
+
   const anthropicRes = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -80,7 +87,9 @@ export async function POST(request: NextRequest) {
 
   const anthropicData = await anthropicRes.json()
   const rawText: string = anthropicData.content?.[0]?.text ?? ''
+  console.log('[receipt-process] rawText:', rawText.slice(0, 600))
   const parsed = parseBlessThis(rawText)
+  console.log('[receipt-process] parsed.date:', parsed.date, '| parsed.time:', parsed.time)
 
   // Optional merchant lookup: second Claude text call
   let merchantNote = ''
@@ -134,14 +143,19 @@ export async function POST(request: NextRequest) {
   // Build note: merchant description + parsed notes
   const noteText = [merchantNote, parsed.notes].filter(Boolean).join(' ') || null
 
-  // Build datetime from parsed date + time (default to now in SGT)
-  let datetime = new Date().toISOString()
+  // Build datetime from parsed date + time.
+  // Fallback: epoch sentinel (1970-01-01T00:00:00Z) signals "date not found" to the UI.
+  const EPOCH = '1970-01-01T00:00:00.000Z'
+  let datetime = EPOCH
+  let dateExtracted = false
   if (parsed.date) {
     const timePart = parsed.time ?? '00:00'
-    // Parse as SGT (UTC+8), then store as UTC ISO string for consistent string-sort
     const sgtDate = new Date(`${parsed.date}T${timePart}:00+08:00`)
-    if (!isNaN(sgtDate.getTime())) datetime = sgtDate.toISOString()
-    // else: normaliseDate returned an unrecognised format — fall back to current time
+    if (!isNaN(sgtDate.getTime())) {
+      datetime = sgtDate.toISOString()
+      dateExtracted = true
+    }
+    // else: normaliseDate returned an unrecognised format — keep epoch fallback
   }
 
   const draft = await insertDraftTransaction({
@@ -149,12 +163,12 @@ export async function POST(request: NextRequest) {
     categoryId,
     payee: parsed.payee ?? null,
     note: noteText,
-    paymentMethod: parsed.payment_method ?? null,
+    paymentMethod: derivedPaymentMethod,
     amount: parsed.amount,
     currency: parsed.currency ?? 'SGD',
     datetime,
     tagIds,
   })
 
-  return Response.json({ draft }, { status: 201 })
+  return Response.json({ draft, date_extracted: dateExtracted }, { status: 201 })
 }

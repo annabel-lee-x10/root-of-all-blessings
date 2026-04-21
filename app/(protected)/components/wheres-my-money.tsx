@@ -2,27 +2,33 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useToast } from './toast'
-import type { Account, Category, Tag, TxType } from '@/lib/types'
+import type { Account, Category, Tag, TxType, AccountType } from '@/lib/types'
 import { parseBlessThis } from '@/lib/parse-bless-this'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
 
-const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund', 'credit_card'] as const
-const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund', credit_card: 'Credit Card' }
+const ACCOUNT_TYPE_ORDER: AccountType[] = ['bank', 'wallet', 'cash', 'fund', 'credit_card']
+const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund', credit_card: 'Credit Card',
+}
+
+// Map Claude's old human-readable payment method guesses to account type filter
+const PAYMENT_METHOD_TO_ACCOUNT_TYPE: Record<string, AccountType> = {
+  'credit card': 'credit_card',
+  'debit card': 'bank',
+  'cash': 'cash',
+  'e-wallet': 'wallet',
+  // Also handle type strings directly (from backfilled data)
+  'credit_card': 'credit_card',
+  'bank': 'bank',
+  'wallet': 'wallet',
+  'fund': 'fund',
+}
 
 function AccountOptions({ accounts }: { accounts: Account[] }) {
-  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [], credit_card: [] }
-  for (const a of accounts) {
-    if (groups[a.type]) groups[a.type].push(a)
-    else groups[a.type] = [a]
-  }
   return (
     <>
-      {ACCOUNT_TYPE_ORDER.filter(t => groups[t] && groups[t].length > 0).map(type => (
-        <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
-          {groups[type].map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </optgroup>
-      ))}
+      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
     </>
   )
 }
@@ -63,19 +69,18 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   const [currency, setCurrency] = useState('SGD')
   const [fxRate, setFxRate] = useState('')
   const [fxDate, setFxDate] = useState('')
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<AccountType | ''>('')
   const [accountId, setAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [payee, setPayee] = useState('')
   const [note, setNote] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('')
   const [datetime, setDatetime] = useState(sgtNow)
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [tagSearch, setTagSearch] = useState('')
   const [showNoteField, setShowNoteField] = useState(false)
   const [saving, setSaving] = useState(false)
   const [parentCategoryId, setParentCategoryId] = useState('')
-  const [paymentMethodLocked, setPaymentMethodLocked] = useState(false)
 
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -126,18 +131,11 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // BUG-026: lock payment method when a credit card account is selected
-  useEffect(() => {
-    const account = accounts.find((a) => a.id === accountId)
-    if (account?.type === 'credit_card') {
-      setPaymentMethod('credit card')
-      setPaymentMethodLocked(true)
-    } else {
-      setPaymentMethodLocked(false)
-    }
-  }, [accountId, accounts])
-
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
+  const filteredAccounts = paymentTypeFilter
+    ? activeAccounts.filter((a) => a.type === paymentTypeFilter)
+    : activeAccounts
+
   const filteredCategories = categories.filter(
     (c) => c.type === (type === 'transfer' ? 'expense' : type)
   )
@@ -152,6 +150,17 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       !selectedTagIds.includes(t.id) &&
       !categoryNameSet.has(t.name.toLowerCase())
   )
+
+  function handlePaymentTypeChange(type: AccountType) {
+    const newFilter = paymentTypeFilter === type ? '' : type
+    setPaymentTypeFilter(newFilter)
+    if (newFilter) {
+      const inFilter = activeAccounts.filter((a) => a.type === newFilter)
+      if (!inFilter.some((a) => a.id === accountId)) {
+        setAccountId(inFilter.length === 1 ? inFilter[0].id : '')
+      }
+    }
+  }
 
   function toggleTag(id: string) {
     setSelectedTagIds((prev) =>
@@ -195,7 +204,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     if (data.amount) setAmount(String(data.amount))
     if (data.currency) setCurrency(data.currency)
     if (data.payee) setPayee(data.payee)
-    if (data.payment_method) setPaymentMethod(data.payment_method)
     if (data.notes) { setNote(data.notes); setShowNoteField(true) }
 
     // Datetime: combine date + time if present
@@ -223,12 +231,22 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       }
     }
 
-    // Account: match by name (case-insensitive)
+    // Account: match by name → also set payment type filter from account type
+    let accountMatched = false
     if (data.account) {
       const match = accounts.find(
         (a) => a.name.toLowerCase() === data.account!.toLowerCase() && a.is_active === 1
       )
-      if (match) setAccountId(match.id)
+      if (match) {
+        setAccountId(match.id)
+        setPaymentTypeFilter(match.type)
+        accountMatched = true
+      }
+    }
+    // No account match: try to infer payment type filter from Claude's payment_method guess
+    if (!accountMatched && data.payment_method) {
+      const typeFilter = PAYMENT_METHOD_TO_ACCOUNT_TYPE[data.payment_method.toLowerCase()]
+      if (typeFilter) setPaymentTypeFilter(typeFilter)
     }
 
     // Tags: match existing or create new
@@ -317,8 +335,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     setParentCategoryId('')
     setPayee('')
     setNote('')
-    setPaymentMethod('')
-    setPaymentMethodLocked(false)
+    setPaymentTypeFilter('')
     setDatetime(sgtNow())
     setSelectedTagIds([])
     setTagSearch('')
@@ -333,6 +350,9 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     setSaving(true)
 
     const amountNum = parseFloat(amount)
+    const selectedAccount = accounts.find((a) => a.id === accountId)
+    const derivedPaymentMethod = selectedAccount?.type ?? null
+
     const payload: Record<string, unknown> = {
       type,
       amount: amountNum,
@@ -346,7 +366,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     if (type !== 'transfer' && categoryId) payload.category_id = categoryId
     if (payee) payload.payee = payee
     if (note) payload.note = note
-    if (paymentMethod) payload.payment_method = paymentMethod
+    if (derivedPaymentMethod) payload.payment_method = derivedPaymentMethod
     if (currency !== 'SGD') {
       if (fxRate) payload.fx_rate = parseFloat(fxRate)
       if (fxDate) payload.fx_date = fxDate
@@ -397,6 +417,20 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       border: active ? `1px solid ${txTypeColor(t)}` : '1px solid var(--border)',
       background: active ? txTypeBg(t) : 'transparent',
       color: active ? txTypeColor(t) : 'var(--text-muted)',
+      transition: 'all 0.15s',
+    }
+  }
+
+  function paymentPillBtn(active: boolean): React.CSSProperties {
+    return {
+      padding: '5px 12px',
+      borderRadius: '20px',
+      fontSize: '12px',
+      fontWeight: 500,
+      cursor: 'pointer',
+      border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
+      background: active ? 'var(--accent-faint)' : 'transparent',
+      color: active ? 'var(--accent)' : 'var(--text-muted)',
       transition: 'all 0.15s',
     }
   }
@@ -499,7 +533,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               onPaste={(e) => {
-                // Auto-apply 300ms after paste to let value settle
                 const pasted = e.clipboardData.getData('text')
                 if (pasted) setTimeout(() => applyPasteData(pasted), 300)
               }}
@@ -547,12 +580,45 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
 
         <form onSubmit={handleSubmit}>
           {/* Type toggle */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem', flexWrap: 'wrap' }}>
             {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
               <button key={t} type="button" onClick={() => setType(t)} style={pillBtn(type === t, t)}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
+          </div>
+
+          {/* Payment type filter pills */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+            {ACCOUNT_TYPE_ORDER.filter(t => activeAccounts.some(a => a.type === t)).map((t) => (
+              <button
+                key={t}
+                type="button"
+                data-testid={`payment-type-${t}`}
+                onClick={() => handlePaymentTypeChange(t)}
+                style={paymentPillBtn(paymentTypeFilter === t)}
+              >
+                {ACCOUNT_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+
+          {/* Account / To Account */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle} data-testid="account-select">
+                <option value="">Account</option>
+                <AccountOptions accounts={filteredAccounts} />
+              </select>
+            </div>
+            {type === 'transfer' && (
+              <div style={{ flex: 1 }}>
+                <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
+                  <option value="">To Account</option>
+                  <AccountOptions accounts={activeAccounts.filter((a) => a.id !== accountId)} />
+              </select>
+              </div>
+            )}
           </div>
 
           {/* Amount + Currency */}
@@ -618,24 +684,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
             </div>
           )}
 
-          {/* Account / To Account */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <div style={{ flex: 1 }}>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle} data-testid="account-select">
-                <option value="">Account</option>
-                <AccountOptions accounts={activeAccounts} />
-              </select>
-            </div>
-            {type === 'transfer' && (
-              <div style={{ flex: 1 }}>
-                <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
-                  <option value="">To Account</option>
-                  <AccountOptions accounts={activeAccounts.filter((a) => a.id !== accountId)} />
-                </select>
-              </div>
-            )}
-          </div>
-
           {/* Category — BUG-028: two-step parent → subcategory picker */}
           {type !== 'transfer' && (
             <div style={{ marginBottom: '12px' }}>
@@ -679,25 +727,40 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
             </datalist>
           </div>
 
-          {/* Payment Method — BUG-026: disabled when credit_card account selected */}
+          {/* DateTime */}
           <div style={{ marginBottom: '12px' }}>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              disabled={paymentMethodLocked}
-              style={{ ...selectStyle, opacity: paymentMethodLocked ? 0.6 : 1 }}
-              data-testid="payment-method-select"
-            >
-              <option value="">Payment method (optional)</option>
-              <option value="cash">Cash</option>
-              <option value="credit card">Credit card</option>
-              <option value="debit card">Debit card</option>
-              <option value="e-wallet">E-wallet</option>
-            </select>
+            <input
+              type="datetime-local" value={datetime}
+              onChange={(e) => setDatetime(e.target.value)}
+              style={inputStyle}
+            />
           </div>
 
+          {/* Note */}
+          {!showNoteField ? (
+            <button
+              type="button"
+              onClick={() => setShowNoteField(true)}
+              style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)',
+                fontSize: '13px', cursor: 'pointer', marginBottom: '12px', padding: 0,
+              }}
+            >
+              + Add note
+            </button>
+          ) : (
+            <div style={{ marginBottom: '12px' }}>
+              <textarea
+                placeholder="Note (optional)" value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2} autoFocus
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </div>
+          )}
+
           {/* Tags */}
-          <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '1.25rem' }}>
             {selectedTagIds.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                 {selectedTagIds.map((tid) => {
@@ -757,38 +820,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Note */}
-          {!showNoteField ? (
-            <button
-              type="button"
-              onClick={() => setShowNoteField(true)}
-              style={{
-                background: 'none', border: 'none', color: 'var(--text-muted)',
-                fontSize: '13px', cursor: 'pointer', marginBottom: '12px', padding: 0,
-              }}
-            >
-              + Add note
-            </button>
-          ) : (
-            <div style={{ marginBottom: '12px' }}>
-              <textarea
-                placeholder="Note (optional)" value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2} autoFocus
-                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-              />
-            </div>
-          )}
-
-          {/* DateTime */}
-          <div style={{ marginBottom: '1.25rem' }}>
-            <input
-              type="datetime-local" value={datetime}
-              onChange={(e) => setDatetime(e.target.value)}
-              style={inputStyle}
-            />
           </div>
 
           {/* Submit */}
