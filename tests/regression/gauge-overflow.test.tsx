@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
-// Regression test for BUG-031: savings gauge SVG overflows card on mobile
-// Root cause: overflow:'visible' on SVG caused arc to paint outside element bounds,
-// covering header/pills on mobile when flex container height collapses.
+// Regression test for BUG-031: savings gauge SVG overflows / fragments on mobile
+// Root cause: SVG height collapses to ~0 in flex containers on mobile browsers;
+// overflow:visible then paints arc outside the element (3rd report).
+// overflow:hidden without aspectRatio caused visible fragments as the SVG clipped
+// a near-zero-height viewport.
+// Fix: aspectRatio:'200 / 120' prevents height collapse; overflow:'hidden' contains
+// the arc within SVG bounds; wrapper overflow:'hidden' is defense-in-depth.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import '@testing-library/jest-dom'
@@ -19,7 +23,7 @@ const loadedData = {
   budget_remaining: null,
   range: '1m',
   start_date: '2026-04-01T00:00:00+08:00',
-  end_date: '2026-04-21T23:59:59+08:00',
+  end_date: '2026-04-22T23:59:59+08:00',
 }
 
 beforeEach(() => {
@@ -34,32 +38,28 @@ afterEach(() => {
 })
 
 describe('BUG-031 · SavingsGauge SVG overflow containment', () => {
-  it('SVG must NOT have overflow:visible — it must be hidden or unset', async () => {
+  it('SVG must NOT have overflow:visible — it must be hidden', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
     const svg = container.querySelector('svg')
     expect(svg).not.toBeNull()
-    const overflow = svg!.style.overflow
-    // overflow:visible lets the arc paint outside the SVG box and cover header/pills
-    expect(overflow).not.toBe('visible')
+    expect(svg!.style.overflow).toBe('hidden')
   })
 
-  it('SVG wrapper div must not allow overflow', async () => {
+  it('SVG wrapper div must clip overflow to prevent arc escaping card', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
     const svg = container.querySelector('svg')!
     const wrapper = svg.parentElement!
-    // The wrapper must clip or hide overflow so the arc cannot escape the card
-    const wrapperOverflow = wrapper.style.overflow
-    expect(wrapperOverflow).toBe('hidden')
+    expect(wrapper.style.overflow).toBe('hidden')
   })
 
-  it('SVG has height:auto so intrinsic aspect ratio is maintained in flex containers', async () => {
+  it('SVG has aspectRatio to prevent height collapsing to zero in mobile flex containers', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
     const svg = container.querySelector('svg')!
-    // Without explicit height:auto, some browsers collapse the SVG height to 0
-    // inside flex containers, causing the viewBox to misalign and overflow
-    expect(svg.style.height).toBe('auto')
+    // Without aspectRatio, Safari/iOS collapses SVG height to ~0 in flex containers.
+    // A collapsed SVG + overflow:hidden clips the arc into disconnected fragments.
+    expect(svg.style.aspectRatio).toBe('200 / 120')
   })
 })
