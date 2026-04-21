@@ -172,12 +172,12 @@ function HoldingsTab({ holdings, orders = [] }: { holdings: Holding[]; orders?: 
                     )}
                     {h.ticker && sellTickers.has(h.ticker) && (
                       <span data-testid={`limit-badge-${h.ticker}`}
-                        style={{ fontSize: 9, background: `${COL.red}20`, color: COL.red,
+                        style={{ fontSize: 9, background: `${COL.purple}20`, color: COL.purple,
                         padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>SELL</span>
                     )}
                     {h.ticker && buyTickers.has(h.ticker) && (
                       <span data-testid={`limit-badge-${h.ticker}`}
-                        style={{ fontSize: 9, background: `${COL.teal}20`, color: COL.teal,
+                        style={{ fontSize: 9, background: `${COL.green}20`, color: COL.green,
                         padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>BUY</span>
                     )}
                     {h.approx && <span style={{ fontSize: 9, color: t.mid }}>~APPROX</span>}

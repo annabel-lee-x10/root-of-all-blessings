@@ -5,12 +5,12 @@ import Link from 'next/link'
 import { useToast } from '../components/toast'
 import type { Account } from '@/lib/types'
 
-const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }
+const BTN = { padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }
 const BTN_PRI = { ...BTN, background: 'var(--accent)', color: 'var(--bg)' }
 const BTN_SEC = { ...BTN, background: 'var(--bg-dim)', color: 'var(--text)', border: '1px solid var(--border)' }
 const BTN_DNG = { ...BTN, background: 'transparent', color: 'var(--red)', border: '1px solid var(--red)' }
 const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' as const }
-const SELECT = { ...INPUT }
+const SELECT = { ...INPUT, maxWidth: '100%' }
 const CARD = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.25rem 1.5rem', marginBottom: '1rem' }
 
 const TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
@@ -18,6 +18,19 @@ const TYPE_LABEL: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cas
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'HKD', 'MYR', 'THB']
 
 type AccountWithCount = Account & { tx_count: number }
+
+function useMobile(bp = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${bp - 1}px)`)
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [bp])
+  return mobile
+}
 
 function groupByType(accounts: AccountWithCount[]) {
   const groups: Record<string, AccountWithCount[]> = {}
@@ -31,6 +44,7 @@ function groupByType(accounts: AccountWithCount[]) {
 
 export default function AccountsPage() {
   const { showToast } = useToast()
+  const isMobile = useMobile()
   const [accounts, setAccounts] = useState<AccountWithCount[]>([])
   const [stats, setStats] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -151,7 +165,7 @@ export default function AccountsPage() {
 
       {showCreate && (
         <div style={{ ...CARD, marginBottom: '1.5rem', borderColor: 'var(--accent)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
             <div>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</label>
               <input
@@ -197,7 +211,7 @@ export default function AccountsPage() {
                 <div key={a.id} style={{ ...CARD, opacity: a.is_active ? 1 : 0.55 }}>
                   {editingId === a.id ? (
                     <div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                         <div>
                           <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.3rem' }}>Name</label>
                           <input style={INPUT} value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
