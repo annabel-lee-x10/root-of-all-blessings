@@ -91,8 +91,8 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
   const largeArc = progress > 50 ? 1 : 0
 
   return (
-    <div style={{ textAlign: 'center', padding: '0.25rem 0 0' }}>
-      <svg viewBox="0 0 200 120" style={{ width: '100%', maxWidth: '200px', display: 'block', margin: '0 auto', overflow: 'visible' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '0.25rem 0 0' }}>
+      <svg viewBox="0 0 200 120" style={{ display: 'block', width: '200px', maxWidth: '100%', overflow: 'visible' }}>
         <path
           d="M 10,110 A 90,90 0 0,1 190,110"
           fill="none" stroke="var(--bg-dim)" strokeWidth="14" strokeLinecap="round"
@@ -255,11 +255,11 @@ export function ExpenseDashboard() {
         }}
       >
         {/* Header + range selector */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
           <h2 style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
             Expense Dashboard
           </h2>
-          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', width: '100%' }}>
             {RANGES.map((r) => (
               <button
                 key={r.id}
@@ -272,6 +272,8 @@ export function ExpenseDashboard() {
                   fontSize: '12px',
                   fontWeight: 500,
                   cursor: 'pointer',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
                   border: range === r.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                   background: range === r.id ? 'var(--accent-faint)' : 'transparent',
                   color: range === r.id ? 'var(--accent)' : 'var(--text-muted)',
