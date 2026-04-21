@@ -888,33 +888,36 @@ export function PortfolioClient() {
                 {themeToggle}
               </div>
             </div>
-
-            {/* Mini KPI chips */}
+            {/* 4-cell KPI grid (2×2) */}
             {(snapshot.cash != null || snapshot.pending != null ||
               snapshot.total_pnl != null || snapshot.realised_pnl != null) && (
-              <div style={{ display: 'flex', gap: 4, marginTop: 10, fontSize: 10, ...MONO }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 10, marginBottom: 10, ...MONO }}>
                 {snapshot.cash != null && (
-                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
-                    <div style={{ color: t.mid, fontSize: 9 }}>CASH</div>
-                    <div style={{ color: t.pale }}>${snapshot.cash.toFixed(0)}</div>
+                  <div style={{ textAlign: 'center', padding: '6px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: '0.7rem' }}>CASH</div>
+                    <div style={{ color: t.pale, fontSize: '0.88rem' }}>${snapshot.cash.toFixed(0)}</div>
                   </div>
                 )}
                 {snapshot.pending != null && (
-                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
-                    <div style={{ color: t.mid, fontSize: 9 }}>PEND</div>
-                    <div style={{ color: COL.yellow }}>${snapshot.pending.toFixed(0)}</div>
+                  <div style={{ textAlign: 'center', padding: '6px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: '0.7rem' }}>PEND</div>
+                    <div style={{ color: COL.yellow, fontSize: '0.88rem' }}>${snapshot.pending.toFixed(0)}</div>
                   </div>
                 )}
                 {snapshot.total_pnl != null && (
-                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
-                    <div style={{ color: t.mid, fontSize: 9 }}>URZ</div>
-                    <div style={{ color: COL.green }}>+${snapshot.total_pnl.toFixed(0)}</div>
+                  <div style={{ textAlign: 'center', padding: '6px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: '0.7rem' }}>URZ</div>
+                    <div style={{ color: snapshot.total_pnl >= 0 ? COL.green : COL.red, fontSize: '0.88rem' }}>
+                      {snapshot.total_pnl >= 0 ? '+' : ''}${Math.abs(snapshot.total_pnl).toFixed(0)}
+                    </div>
                   </div>
                 )}
                 {snapshot.realised_pnl != null && (
-                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
-                    <div style={{ color: t.mid, fontSize: 9 }}>RLZ</div>
-                    <div style={{ color: COL.green }}>+${snapshot.realised_pnl.toFixed(0)}</div>
+                  <div style={{ textAlign: 'center', padding: '6px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: '0.7rem' }}>RLZ</div>
+                    <div style={{ color: snapshot.realised_pnl >= 0 ? COL.green : COL.red, fontSize: '0.88rem' }}>
+                      {snapshot.realised_pnl >= 0 ? '+' : ''}${Math.abs(snapshot.realised_pnl).toFixed(0)}
+                    </div>
                   </div>
                 )}
               </div>
