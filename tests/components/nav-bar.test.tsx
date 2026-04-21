@@ -53,25 +53,19 @@ describe('Top nav', () => {
     expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Portfolio')
   })
 
-  it('shows News label on /news', () => {
-    vi.mocked(usePathname).mockReturnValue('/news')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('News')
-  })
-
   it('opens view switcher dropdown when button is clicked', () => {
     render(<NavBar />)
     fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
-  it('dropdown contains Budget, Portfolio, News menu items', () => {
+  it('dropdown contains Budget and Portfolio menu items (no News)', () => {
     render(<NavBar />)
     fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
     const menu = screen.getByRole('menu')
     expect(within(menu).getByRole('menuitem', { name: 'Budget' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Portfolio' })).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitem', { name: 'News' })).toBeInTheDocument()
+    expect(within(menu).queryByRole('menuitem', { name: 'News' })).not.toBeInTheDocument()
   })
 
   it('closes dropdown when clicking a menu item', () => {
@@ -86,13 +80,6 @@ describe('Top nav', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Portfolio' }))
     expect(mockPush).toHaveBeenCalledWith('/portfolio')
-  })
-
-  it('navigates to /news when News view is selected', () => {
-    render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'News' }))
-    expect(mockPush).toHaveBeenCalledWith('/news')
   })
 
   it('navigates to /dashboard when Budget view is selected from another view', () => {
@@ -235,45 +222,17 @@ describe('Portfolio view bottom nav', () => {
     expect(within(bottomNav).queryByRole('link', { name: /Categories/i })).not.toBeInTheDocument()
   })
 
-  it('FAB points to /portfolio', () => {
-    render(<NavBar />)
-    expect(within(getBottomNav()).getByRole('link', { name: 'Upload portfolio snapshot' })).toHaveAttribute('href', '/portfolio')
-  })
-
-  it('does not show More button', () => {
-    render(<NavBar />)
-    expect(within(getBottomNav()).queryByRole('button', { name: /More/i })).not.toBeInTheDocument()
-  })
-})
-
-// ── News bottom nav ───────────────────────────────────────────────────────────
-
-describe('News view bottom nav', () => {
-  beforeEach(() => {
-    vi.mocked(usePathname).mockReturnValue('/news')
-  })
-
-  it('shows only the FAB — no Budget tabs', () => {
-    render(<NavBar />)
-    const bottomNav = getBottomNav()
-    expect(within(bottomNav).queryByRole('link', { name: /Dashboard/i })).not.toBeInTheDocument()
-    expect(within(bottomNav).queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument()
-  })
-
-  it('FAB is a button (not a link) on news view', () => {
-    render(<NavBar />)
-    expect(within(getBottomNav()).getByRole('button', { name: 'Add news' })).toBeInTheDocument()
-    expect(within(getBottomNav()).queryByRole('link', { name: 'Add news' })).not.toBeInTheDocument()
-  })
-
-  it('FAB dispatches news:open-upload custom event when clicked', () => {
+  it('FAB is a button that dispatches portfolio:open-upload (not a link)', () => {
     render(<NavBar />)
     const dispatched: Event[] = []
     const handler = (e: Event) => dispatched.push(e)
-    window.addEventListener('news:open-upload', handler)
-    fireEvent.click(within(getBottomNav()).getByRole('button', { name: 'Add news' }))
-    window.removeEventListener('news:open-upload', handler)
+    window.addEventListener('portfolio:open-upload', handler)
+    const fab = within(getBottomNav()).getByRole('button', { name: 'Upload portfolio snapshot' })
+    expect(fab).toBeInTheDocument()
+    fireEvent.click(fab)
+    window.removeEventListener('portfolio:open-upload', handler)
     expect(dispatched).toHaveLength(1)
+    expect(within(getBottomNav()).queryByRole('link', { name: 'Upload portfolio snapshot' })).not.toBeInTheDocument()
   })
 
   it('does not show More button', () => {
@@ -281,6 +240,10 @@ describe('News view bottom nav', () => {
     expect(within(getBottomNav()).queryByRole('button', { name: /More/i })).not.toBeInTheDocument()
   })
 })
+
+// ── News view (removed — /news redirects to /portfolio) ──────────────────────
+// The news view has been removed from the NavBar. /news redirects to /portfolio.
+// No 'news' view entry exists in the view switcher or bottom nav.
 
 // ── View detection ────────────────────────────────────────────────────────────
 
@@ -315,9 +278,9 @@ describe('View detection from URL', () => {
     expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Portfolio')
   })
 
-  it('news view for /news', () => {
+  it('budget view for /news (news removed — redirects to /portfolio)', () => {
     vi.mocked(usePathname).mockReturnValue('/news')
     render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('News')
+    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Budget')
   })
 })
