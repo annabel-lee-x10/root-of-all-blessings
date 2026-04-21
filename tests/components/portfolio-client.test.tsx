@@ -41,6 +41,13 @@ const SNAP = {
   total_value: 10000,
   total_pnl: -30,
   holdings: BASE_HOLDINGS,
+  orders: [
+    { id: 'o1', ticker: 'ABBV', geo: 'US', type: 'SELL LIMIT', price: 230, qty: 3, currency: 'USD', new_flag: 0 },
+    { id: 'o2', ticker: 'AGIX', geo: 'US', type: 'BUY LIMIT', price: 15.50, qty: 10, currency: 'USD', new_flag: 0 },
+  ],
+  realised_trades: [],
+  growth: [],
+  milestones: [],
 }
 
 const ORDERS = [
