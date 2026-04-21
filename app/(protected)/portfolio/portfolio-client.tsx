@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, useContext, createContext } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts'
 import { useToast } from '../components/toast'
 import type { Holding } from '@/lib/types'
 
@@ -103,21 +103,6 @@ const UPCOMING_DIVS = [
   { ticker: 'CMCL', name: 'Caledonia Mining', amount: 0.14, currency: 'USD', exDate: '17 Apr 2026', qty: 10 },
 ]
 
-const THESIS: Record<string, { thesis: string; entry: string; status: string; risk: string }> = {
-  MU: {
-    thesis: 'HBM/AI infrastructure play. One of only 3 global DRAM manufacturers. Nvidia HBM3E supply chain. AI capex cycle supports sustained DRAM pricing.',
-    entry: 'avg cost $337.20, qty 5, target $500',
-    status: 'INTACT: price rising, AI capex news positive, no DRAM inventory glut news',
-    risk: 'DRAM inventory cycle turns, major customer cuts AI capex, China competition escalates',
-  },
-  ABBV: {
-    thesis: 'Lowest pharma risk score (3.4 composite) across 6 peers. Humira patent cliff already priced in. Growth now Skyrizi + Rinvoq. Strong dividend (~3.5-4% yield).',
-    entry: 'avg cost $213.20, qty 3 — research-driven entry from 5-factor pharma analysis',
-    status: 'EXIT PLAN: SELL LIMIT $218 active',
-    risk: 'Pipeline failure, FDA action on Skyrizi/Rinvoq, IRA surprise, management change',
-  },
-}
-
 const PRICE_TARGETS: Record<string, number> = {
   MU: 500,
 }
@@ -131,15 +116,15 @@ interface SnapResponse {
   holdings: Holding[]
 }
 
-type Tab = 'holdings' | 'orders' | 'geo' | 'sector' | 'dividends' | 'pnl' | 'thesis'
+type Tab = 'holdings' | 'orders' | 'geo' | 'sector' | 'pnl' | 'whatif' | 'growth'
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'holdings',  label: 'Holdings' },
-  { id: 'orders',    label: 'Orders' },
-  { id: 'geo',       label: 'Geo' },
-  { id: 'sector',    label: 'Sector' },
-  { id: 'dividends', label: 'Dividends' },
-  { id: 'pnl',       label: 'P&L' },
-  { id: 'thesis',    label: 'Thesis' },
+  { id: 'holdings', label: 'Holdings' },
+  { id: 'orders',   label: 'Orders' },
+  { id: 'geo',      label: 'Geo' },
+  { id: 'sector',   label: 'Sector' },
+  { id: 'pnl',      label: 'P&L' },
+  { id: 'whatif',   label: 'What-If' },
+  { id: 'growth',   label: 'Growth' },
 ]
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
@@ -646,49 +631,6 @@ function SectorTab({ holdings }: { holdings: Holding[] }) {
   )
 }
 
-// ── Tab: Dividends ────────────────────────────────────────────────────────────
-function DividendsTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      <div style={{ fontSize: '0.75rem', color: T.mid, marginBottom: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Upcoming
-      </div>
-      {UPCOMING_DIVS.map((d, i) => {
-        const h = holdings.find(hh => hh.ticker === d.ticker)
-        const qty = h?.units ?? d.qty
-        const total = d.amount * qty
-        return (
-          <div key={i} style={{ ...cardBase, ...lb(C.yellow), padding: '12px 14px', marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ ...MONO, fontWeight: 700, color: T.pale }}>{d.ticker}</div>
-                <div style={{ color: T.mid, fontSize: '0.78rem', marginTop: 2 }}>{d.name}</div>
-                <div style={{ fontSize: '0.72rem', color: C.yellow, marginTop: 4 }}>Ex-date: {d.exDate}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ ...MONO, fontSize: '0.9rem', fontWeight: 600, color: C.yellow }}>${fmt(d.amount)}/sh</div>
-                <div style={{ ...MONO, fontSize: '0.78rem', color: T.pale, marginTop: 2 }}>~${fmt(total)} total ({qty} sh)</div>
-              </div>
-            </div>
-          </div>
-        )
-      })}
-      <div style={{ ...cardBase, padding: '16px', textAlign: 'center', color: T.mid, fontSize: '0.82rem' }}>
-        Past dividend data not tracked in snapshot
-      </div>
-    </div>
-  )
-}
-
 // ── Tab: P&L ─────────────────────────────────────────────────────────────────
 function PnlTab({ holdings, totalPnl }: { holdings: Holding[]; totalPnl: number | null }) {
   const T = useTheme()
@@ -747,63 +689,231 @@ function PnlTab({ holdings, totalPnl }: { holdings: Holding[]; totalPnl: number 
   )
 }
 
-// ── Tab: Thesis ───────────────────────────────────────────────────────────────
-function ThesisTab({ holdings }: { holdings: Holding[] }) {
+// ── Tab: What-If ──────────────────────────────────────────────────────────────
+function WhatIfTab({ holdings }: { holdings: Holding[] }) {
   const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
+  const [deltas, setDeltas] = useState<Record<string, number>>({})
 
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const tickersWithThesis = holdings.filter(h => h.ticker && THESIS[h.ticker])
+  const sorted = [...holdings].sort((a, b) => valueUSD(b) - valueUSD(a))
+  const totalCurrent = sorted.reduce((s, h) => s + valueUSD(h), 0)
+  const totalProjected = sorted.reduce((s, h) => {
+    const key = h.ticker ?? h.name
+    const delta = deltas[key] ?? 0
+    return s + valueUSD(h) * (1 + delta / 100)
+  }, 0)
+  const impact = totalProjected - totalCurrent
+  const impactPct = totalCurrent > 0 ? (impact / totalCurrent) * 100 : 0
 
-  function toggle(t: string) {
-    setExpanded(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
-  }
+  function resetAll() { setDeltas({}) }
 
   return (
     <div style={{ padding: '0 12px' }}>
-      {tickersWithThesis.length === 0 && (
-        <div style={{ ...cardBase, padding: '24px', textAlign: 'center', color: T.mid, fontSize: '0.85rem' }}>
-          No thesis notes for current holdings
-        </div>
-      )}
-      {tickersWithThesis.map(h => {
-        const ticker = h.ticker!
-        const th = THESIS[ticker]
-        const isOpen = expanded.has(ticker)
-        const sc = sectorColor(holdingSector(h))
-        return (
-          <div key={ticker} style={{ ...cardBase, ...lb(sc), marginBottom: 8, cursor: 'pointer', overflow: 'hidden' }}
-            onClick={() => toggle(ticker)}>
-            <div style={{ padding: '10px 14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ ...MONO, fontWeight: 700, color: T.pale }}>{ticker}</span>
-                <span style={{ fontSize: '0.75rem', color: T.mid }}>{isOpen ? '▲' : '▼'}</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: T.mid, marginTop: 2 }}>{th.entry}</div>
+      <div data-testid="whatif-summary" style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: '0.63rem', color: T.mid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Current</div>
+            <div style={{ ...MONO, fontSize: '1rem', fontWeight: 700, color: T.pale }}>~${fmt(totalCurrent)}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.63rem', color: T.mid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Projected</div>
+            <div data-testid="whatif-projected" style={{ ...MONO, fontSize: '1rem', fontWeight: 700, color: pnlColor(impact) }}>
+              ~${fmt(totalProjected)}
             </div>
-            {isOpen && (
-              <div style={{ borderTop: `1px solid ${T.border}`, padding: '12px 14px', background: T.inset }}>
-                <div style={{ fontSize: '0.78rem', color: T.pale, lineHeight: 1.6, marginBottom: 10 }}>{th.thesis}</div>
-                <div style={{ fontSize: '0.7rem', color: C.green, marginBottom: 6 }}>✓ {th.status}</div>
-                <div style={{ fontSize: '0.7rem', color: C.red }}>⚠ AT RISK IF: {th.risk}</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', ...MONO, fontSize: '1.1rem', fontWeight: 700, color: pnlColor(impact) }}>
+          {impact >= 0 ? '+' : ''}${fmt(Math.abs(impact))} ({fmtPct(impactPct)})
+        </div>
+      </div>
+
+      {sorted.map((h, i) => {
+        const key = h.ticker ?? h.name + i
+        const tickerKey = h.ticker ?? h.name + i
+        const delta = deltas[tickerKey] ?? 0
+        const projectedValue = valueUSD(h) * (1 + delta / 100)
+        const currency = holdingCurrency(h)
+        const sym = currency === 'SGD' ? 'S$' : currency === 'GBP' ? '£' : '$'
+        const sc = sectorColor(holdingSector(h))
+
+        return (
+          <div key={key} style={{
+            background: T.card, borderRadius: 10, marginBottom: 8,
+            borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
+            borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${sc}`,
+            padding: '10px 12px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ ...MONO, fontSize: '0.88rem', fontWeight: 700, color: T.pale }}>
+                  {h.ticker ?? h.name.slice(0, 10)}
+                </div>
+                <div style={{ ...MONO, fontSize: '0.75rem', color: T.mid }}>{sym}{fmt(h.market_value)}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  data-testid={`whatif-input-${h.ticker ?? h.name + i}`}
+                  type="number"
+                  step="0.5"
+                  value={delta}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value) || 0
+                    setDeltas(prev => ({ ...prev, [tickerKey]: v }))
+                  }}
+                  style={{
+                    width: 70, ...MONO, fontSize: '0.85rem', textAlign: 'right',
+                    background: T.inset, border: `1px solid ${T.border}`, borderRadius: 6,
+                    padding: '4px 6px',
+                    color: delta === 0 ? T.mid : delta > 0 ? T.green : T.red,
+                  }}
+                />
+                <span style={{ color: T.mid, fontSize: '0.78rem' }}>%</span>
+              </div>
+            </div>
+            {delta !== 0 && (
+              <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.7rem', color: T.mid }}>Projected</div>
+                <div style={{ ...MONO, fontSize: '0.8rem', color: pnlColor(projectedValue - valueUSD(h)) }}>
+                  ~${fmt(projectedValue)} ({delta >= 0 ? '+' : ''}{fmt(delta, 1)}%)
+                </div>
               </div>
             )}
           </div>
         )
       })}
-      {holdings.filter(h => h.ticker && !THESIS[h.ticker]).map(h => (
-        <div key={h.ticker ?? h.name} style={{ ...cardBase, ...lb(sectorColor(holdingSector(h))), padding: '10px 14px', marginBottom: 8, opacity: 0.5 }}>
-          <div style={{ ...MONO, fontSize: '0.82rem', color: T.mid }}>
-            {h.ticker ?? h.name.slice(0, 12)} — no thesis notes
-          </div>
+
+      <button
+        style={{
+          width: '100%', marginTop: 4,
+          padding: '0.35rem 0.85rem', borderRadius: 6, border: `1px solid ${T.border}`, cursor: 'pointer',
+          fontSize: '0.8rem', fontWeight: 600, background: T.inset, color: T.pale,
+        }}
+        onClick={resetAll}
+      >
+        Reset All
+      </button>
+    </div>
+  )
+}
+
+// ── Tab: Growth ───────────────────────────────────────────────────────────────
+interface HistoryPoint {
+  id: string
+  snapshot_date: string
+  total_value: number
+  total_pnl: number | null
+  created_at: string
+}
+
+function GrowthTab() {
+  const T = useTheme()
+  const [history, setHistory] = useState<HistoryPoint[] | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/portfolio/history')
+      .then(r => r.json())
+      .then((data: HistoryPoint[]) => setHistory(data))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return <div style={{ padding: '2rem', textAlign: 'center', color: T.mid }}>Loading…</div>
+  }
+
+  if (!history || history.length === 0) {
+    return (
+      <div style={{ padding: '2rem 12px', textAlign: 'center', color: T.mid }}>
+        No snapshot history available
+      </div>
+    )
+  }
+
+  const chartData = history.map(h => ({
+    date: h.snapshot_date.slice(0, 10),
+    value: Math.round(h.total_value),
+  }))
+
+  const first = chartData[0].value
+  const last = chartData[chartData.length - 1].value
+  const gain = last - first
+  const gainPct = first > 0 ? (gain / first) * 100 : 0
+  const minVal = Math.min(...chartData.map(d => d.value))
+  const maxVal = Math.max(...chartData.map(d => d.value))
+
+  return (
+    <div style={{ padding: '0 12px' }}>
+      <div
+        data-testid="growth-summary"
+        style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px', marginBottom: 16, textAlign: 'center' }}
+      >
+        <div style={{ fontSize: '0.63rem', color: T.mid, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+          {history.length} Snapshots · {chartData[0].date} → {chartData[chartData.length - 1].date}
         </div>
-      ))}
+        <div style={{ ...MONO, fontSize: '1.3rem', fontWeight: 700, color: pnlColor(gain) }}>
+          {gain >= 0 ? '+' : ''}${fmt(Math.abs(gain))} ({fmtPct(gainPct)})
+        </div>
+      </div>
+
+      <div style={{ height: 220, marginBottom: 16 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+            <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.mid }} tickLine={false} axisLine={false} />
+            <YAxis
+              domain={[minVal * 0.96, maxVal * 1.04]}
+              tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
+              tick={{ fontSize: 9, fill: T.mid }}
+              tickLine={false}
+              axisLine={false}
+              width={36}
+            />
+            <Tooltip
+              contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: '0.8rem' }}
+              formatter={(v) => [`$${fmt(Number(v ?? 0))}`, 'Value']}
+            />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={T.orange}
+              strokeWidth={2}
+              dot={{ fill: T.orange, r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {[...history].reverse().map((h, i) => {
+        const prev = [...history].reverse()[i + 1]
+        const delta = prev ? h.total_value - prev.total_value : null
+        const deltaPct = prev && prev.total_value > 0
+          ? ((h.total_value - prev.total_value) / prev.total_value) * 100
+          : null
+
+        return (
+          <div
+            key={h.id}
+            data-testid={`growth-row-${h.id}`}
+            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ ...MONO, fontSize: '0.85rem', fontWeight: 600, color: T.pale }}>
+                ${fmt(h.total_value)}
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                {delta !== null && deltaPct !== null && (
+                  <div style={{ ...MONO, fontSize: '0.75rem', color: pnlColor(delta) }}>
+                    {delta >= 0 ? '+' : ''}${fmt(Math.abs(delta))} ({fmtPct(deltaPct)})
+                  </div>
+                )}
+                <div style={{ fontSize: '0.72rem', color: T.mid }}>
+                  {h.snapshot_date.slice(0, 10)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -999,13 +1109,13 @@ export function PortfolioClient() {
 
           {/* Tab content */}
           <div style={{ paddingTop: 12 }}>
-            {tab === 'holdings'  && <HoldingsTab  holdings={holdings} />}
-            {tab === 'orders'    && <OrdersTab    holdings={holdings} />}
-            {tab === 'geo'       && <GeoTab       holdings={holdings} />}
-            {tab === 'sector'    && <SectorTab    holdings={holdings} />}
-            {tab === 'dividends' && <DividendsTab holdings={holdings} />}
-            {tab === 'pnl'       && <PnlTab       holdings={holdings} totalPnl={total_pnl} />}
-            {tab === 'thesis'    && <ThesisTab    holdings={holdings} />}
+            {tab === 'holdings' && <HoldingsTab holdings={holdings} />}
+            {tab === 'orders'   && <OrdersTab   holdings={holdings} />}
+            {tab === 'geo'      && <GeoTab      holdings={holdings} />}
+            {tab === 'sector'   && <SectorTab   holdings={holdings} />}
+            {tab === 'pnl'      && <PnlTab      holdings={holdings} totalPnl={total_pnl} />}
+            {tab === 'whatif'   && <WhatIfTab   holdings={holdings} />}
+            {tab === 'growth'   && <GrowthTab />}
           </div>
 
         </div>

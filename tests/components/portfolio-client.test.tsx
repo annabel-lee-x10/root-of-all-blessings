@@ -13,6 +13,10 @@ vi.mock('recharts', () => ({
   Cell: () => null,
   Tooltip: () => null,
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  LineChart: ({ children }: { children: React.ReactNode }) => <div data-testid="line-chart">{children}</div>,
+  Line: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
 }))
 
 const BASE_HOLDINGS = [
@@ -50,10 +54,25 @@ const SNAP = {
   holdings: BASE_HOLDINGS,
 }
 
+const HISTORY = [
+  { id: 'snap-a', snapshot_date: '2026-03-01T00:00:00.000Z', total_value: 9500, total_pnl: -200, created_at: '2026-03-01T00:00:00.000Z' },
+  { id: 'snap-b', snapshot_date: '2026-03-15T00:00:00.000Z', total_value: 9800, total_pnl: 100, created_at: '2026-03-15T00:00:00.000Z' },
+  { id: 'snap-c', snapshot_date: '2026-04-09T07:19:00.000Z', total_value: 10000, total_pnl: -30, created_at: '2026-04-09T07:19:00.000Z' },
+]
+
 function mockFetch(data: unknown) {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve(data),
+  }))
+}
+
+function mockFetchWithHistory(portfolioData: unknown, historyData: unknown) {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+    if (url.includes('/history')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(historyData) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(portfolioData) })
   }))
 }
 
@@ -249,5 +268,143 @@ describe('theme toggle', () => {
     const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
     render(<PortfolioClient />)
     await waitFor(() => expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument())
+  })
+})
+
+// ── Feature 6: What-If tab ────────────────────────────────────────────────────
+describe('What-If tab', () => {
+  it('renders a What-If tab button in the tab bar', async () => {
+    await renderDashboard()
+    expect(screen.getByRole('button', { name: /what.if/i })).toBeInTheDocument()
+  })
+
+  it('clicking What-If tab shows holding rows with delta inputs', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('whatif-input-MU')).toBeInTheDocument()
+    })
+  })
+
+  it('shows delta inputs for each holding', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
+    await waitFor(() => {
+      const inputs = screen.getAllByTestId(/^whatif-input-/)
+      expect(inputs).toHaveLength(BASE_HOLDINGS.length)
+    })
+  })
+
+  it('shows a summary card with current and projected totals', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('whatif-summary')).toBeInTheDocument()
+    })
+  })
+
+  it('projected total updates when a delta input changes', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
+    await waitFor(() => screen.getByTestId('whatif-input-MU'))
+
+    const summaryBefore = screen.getByTestId('whatif-projected').textContent
+
+    fireEvent.change(screen.getByTestId('whatif-input-MU'), { target: { value: '10' } })
+
+    await waitFor(() => {
+      const summaryAfter = screen.getByTestId('whatif-projected').textContent
+      expect(summaryAfter).not.toBe(summaryBefore)
+    })
+  })
+
+  it('Reset All button resets all deltas to 0', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
+    await waitFor(() => screen.getByTestId('whatif-input-MU'))
+
+    fireEvent.change(screen.getByTestId('whatif-input-MU'), { target: { value: '10' } })
+    fireEvent.click(screen.getByRole('button', { name: /reset all/i }))
+
+    await waitFor(() => {
+      const input = screen.getByTestId('whatif-input-MU') as HTMLInputElement
+      expect(Number(input.value)).toBe(0)
+    })
+  })
+})
+
+// ── Feature 7: Growth tab ─────────────────────────────────────────────────────
+describe('Growth tab', () => {
+  it('renders a Growth tab button in the tab bar', async () => {
+    await renderDashboard()
+    expect(screen.getByRole('button', { name: /growth/i })).toBeInTheDocument()
+  })
+
+  it('clicking Growth tab fetches /api/portfolio/history', async () => {
+    mockFetchWithHistory(SNAP, HISTORY)
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
+
+    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
+
+    await waitFor(() => {
+      const fetchMock = vi.mocked(fetch)
+      const historyCalls = fetchMock.mock.calls.filter(([url]) => (url as string).includes('/history'))
+      expect(historyCalls.length).toBeGreaterThan(0)
+    })
+  })
+
+  it('Growth tab shows a line chart when history has data', async () => {
+    mockFetchWithHistory(SNAP, HISTORY)
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
+
+    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('line-chart')).toBeInTheDocument()
+    })
+  })
+
+  it('Growth tab shows snapshot summary card with gain/loss', async () => {
+    mockFetchWithHistory(SNAP, HISTORY)
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
+
+    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('growth-summary')).toBeInTheDocument()
+    })
+  })
+
+  it('Growth tab shows "No snapshot history" when history is empty', async () => {
+    mockFetchWithHistory(SNAP, [])
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
+
+    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/no snapshot history/i)).toBeInTheDocument()
+    })
+  })
+
+  it('Growth tab shows individual snapshot rows', async () => {
+    mockFetchWithHistory(SNAP, HISTORY)
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
+
+    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
+
+    await waitFor(() => {
+      const rows = screen.getAllByTestId(/^growth-row-/)
+      expect(rows).toHaveLength(HISTORY.length)
+    })
   })
 })
