@@ -1,221 +1,685 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, useContext, createContext } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToast } from '../components/toast'
-import type { Holding } from '@/lib/types'
 
-// ── Theme tokens ───────────────────────────────────────────────────────────────
-const DARK = {
-  bg:     '#0E1117',
-  card:   '#161C27',
-  border: '#242C3A',
-  pale:   '#C8D0DC',
-  mid:    '#6B7A92',
-  inset:  '#0A0D14',
-  orange: '#E8520A',
-  green:  '#3DD68C',
-  red:    '#FF5A5A',
-  yellow: '#F5C842',
-  teal:   '#06D6A0',
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const TOKENS = {
+  dark: {
+    bg: '#0E1117', card: '#161C27', border: '#242C3A',
+    pale: '#C8D0DC', mid: '#6B7A92', inset: '#0A0D14', title: '#FFFFFF',
+  },
+  light: {
+    bg: '#F5F5F7', card: '#FFFFFF', border: '#E0E0E7',
+    pale: '#1A1D2B', mid: '#6B7A92', inset: '#EAEAEE', title: '#0A0D14',
+  },
 }
-const LIGHT = {
-  bg:     '#F1F5F9',
-  card:   '#FFFFFF',
-  border: '#CBD5E1',
-  pale:   '#1E293B',
-  mid:    '#64748B',
-  inset:  '#E2E8F0',
-  orange: '#E8520A',
-  green:  '#16A34A',
-  red:    '#DC2626',
-  yellow: '#D97706',
-  teal:   '#06D6A0',
+const COL = {
+  orange: '#E8520A', slate: '#4A6FA5', green: '#3DD68C',
+  red: '#FF5A5A', yellow: '#F5C842', purple: '#9B6DFF',
+  pink: '#FF6B9D', teal: '#06D6A0', amber: '#F0A500',
+  sky: '#38BDF8', lime: '#A3E635', agri: '#84CC16',
 }
-type Theme = typeof DARK
-const ThemeCtx = createContext<Theme>(DARK)
-function useTheme() { return useContext(ThemeCtx) }
-// C = dark constants used in theme-independent statics (sector/geo colors)
-const C = DARK
-
-// ── Static color maps ──────────────────────────────────────────────────────────
-const SECTOR_COLOR: Record<string, string> = {
-  'ETF':               '#4A6FA5',
-  'Technology':        '#9B6DFF',
-  'Metals':            '#F5C842',
-  'Financials':        '#3DD68C',
-  'Media':             '#E8520A',
-  'Healthcare':        '#FF6B9D',
-  'Utilities':         '#06D6A0',
-  'Energy':            '#F0A500',
-  'Telecommunications':'#38BDF8',
-  'Consumer Staples':  '#A3E635',
-  'Agriculture ETF':   '#84CC16',
+const SECTOR_COL: Record<string, string> = {
+  'ETF': COL.slate, 'Technology': COL.purple, 'Metals': COL.yellow,
+  'Financials': COL.green, 'Media': COL.orange, 'Healthcare': COL.pink,
+  'Utilities': COL.teal, 'Energy': COL.amber, 'Telecommunications': COL.sky,
+  'Consumer Staples': COL.lime, 'Agriculture ETF': COL.agri,
+  'Software': COL.purple, 'Materials': COL.yellow,
 }
-const GEO_COLOR: Record<string, string> = {
-  US: '#4A6FA5', SG: '#E8520A', UK: '#3DD68C', HK: '#F5C842',
+const GEO_COL: Record<string, string> = {
+  US: COL.slate, SG: COL.orange, UK: COL.green, HK: COL.yellow,
 }
 const FX: Record<string, number> = { USD: 1, SGD: 0.74, GBP: 1.29 }
 
-// ── Ticker metadata fallback ───────────────────────────────────────────────────
-const TICKER_META: Record<string, { geo: 'US'|'SG'|'UK'|'HK'; sector: string; currency: string }> = {
-  MU:    { geo: 'US', sector: 'Technology',          currency: 'USD' },
-  ABBV:  { geo: 'US', sector: 'Healthcare',           currency: 'USD' },
-  Z74:   { geo: 'SG', sector: 'Telecommunications',   currency: 'SGD' },
-  NEE:   { geo: 'US', sector: 'Utilities',            currency: 'USD' },
-  GOOG:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
-  GOOGL: { geo: 'US', sector: 'Technology',           currency: 'USD' },
-  SLB:   { geo: 'US', sector: 'Energy',               currency: 'USD' },
-  PG:    { geo: 'US', sector: 'Consumer Staples',     currency: 'USD' },
-  RING:  { geo: 'US', sector: 'Metals',               currency: 'USD' },
-  AGIX:  { geo: 'US', sector: 'ETF',                  currency: 'USD' },
-  NFLX:  { geo: 'US', sector: 'Media',                currency: 'USD' },
-  D05:   { geo: 'SG', sector: 'Financials',           currency: 'SGD' },
-  CMCL:  { geo: 'US', sector: 'Metals',               currency: 'USD' },
-  MOO:   { geo: 'US', sector: 'Agriculture ETF',      currency: 'USD' },
-  FXI:   { geo: 'HK', sector: 'ETF',                  currency: 'USD' },
-  WISE:  { geo: 'UK', sector: 'Financials',           currency: 'GBP' },
-  ICLN:  { geo: 'US', sector: 'ETF',                  currency: 'USD' },
-  QQQ:   { geo: 'US', sector: 'ETF',                  currency: 'USD' },
-  AAPL:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
-  MSFT:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
-  AMZN:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
-  NVDA:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
-  META:  { geo: 'US', sector: 'Media',                currency: 'USD' },
-  TSLA:  { geo: 'US', sector: 'Technology',           currency: 'USD' },
+type ThemeKey = 'dark' | 'light'
+type Theme = typeof TOKENS.dark
+const ThemeCtx = createContext<Theme>(TOKENS.dark)
+function useTheme() { return useContext(ThemeCtx) }
+
+// ── Data types ─────────────────────────────────────────────────────────────────
+interface Holding {
+  name: string; ticker?: string; units?: number; avg_cost?: number
+  current_price?: number; market_value: number; pnl?: number; pnl_pct?: number
+  allocation_pct?: number; change_1d_pct?: number; geo?: string; sector?: string
+  currency?: string; target?: number; sell_limit?: number; buy_limit?: number
+  is_new?: boolean; approx?: boolean; note?: string
+  dividend?: { amount: number; date: string }; value_usd?: number
 }
-
-function getTickerMeta(ticker?: string): { geo: 'US'|'SG'|'UK'|'HK'; sector: string; currency: string } {
-  if (!ticker) return { geo: 'US', sector: 'ETF', currency: 'USD' }
-  return TICKER_META[ticker.toUpperCase()] ?? { geo: 'US', sector: 'ETF', currency: 'USD' }
+interface Order {
+  id: string; ticker: string; geo: string; type: string; price: number
+  qty: number; currency: string; placed?: string; current_price?: number
+  note?: string; new_flag: number
 }
-
-// ── Static Snap 19 data ────────────────────────────────────────────────────────
-const OPEN_ORDERS = [
-  { ticker: 'AGIX', geo: 'US', type: 'BUY LIMIT',  currency: 'USD', price: 15.39, qty: 2,   placed: '08 Apr 01:17 SGT' },
-  { ticker: 'NEE',  geo: 'US', type: 'SELL LIMIT', currency: 'USD', price: 95.88, qty: 5,   placed: '07 Apr 20:47 SGT' },
-  { ticker: 'ABBV', geo: 'US', type: 'SELL LIMIT', currency: 'USD', price: 218.00, qty: 3,  placed: '07 Apr 20:44 SGT' },
-  { ticker: 'WISE', geo: 'UK', type: 'SELL LIMIT', currency: 'GBP', price: 11.28, qty: 10,  placed: '03 Apr 00:22 SGT' },
-  { ticker: 'Z74',  geo: 'SG', type: 'SELL LIMIT', currency: 'SGD', price: 5.25,  qty: 100, placed: '02 Apr 19:22 SGT' },
-]
-
-const UPCOMING_DIVS = [
-  { ticker: 'CMCL', name: 'Caledonia Mining', amount: 0.14, currency: 'USD', exDate: '17 Apr 2026', qty: 10 },
-]
-
-const THESIS: Record<string, { thesis: string; entry: string; status: string; risk: string }> = {
-  MU: {
-    thesis: 'HBM/AI infrastructure play. One of only 3 global DRAM manufacturers. Nvidia HBM3E supply chain. AI capex cycle supports sustained DRAM pricing.',
-    entry: 'avg cost $337.20, qty 5, target $500',
-    status: 'INTACT: price rising, AI capex news positive, no DRAM inventory glut news',
-    risk: 'DRAM inventory cycle turns, major customer cuts AI capex, China competition escalates',
-  },
-  ABBV: {
-    thesis: 'Lowest pharma risk score (3.4 composite) across 6 peers. Humira patent cliff already priced in. Growth now Skyrizi + Rinvoq. Strong dividend (~3.5-4% yield).',
-    entry: 'avg cost $213.20, qty 3 — research-driven entry from 5-factor pharma analysis',
-    status: 'EXIT PLAN: SELL LIMIT $218 active',
-    risk: 'Pipeline failure, FDA action on Skyrizi/Rinvoq, IRA surprise, management change',
-  },
-}
-
-const PRICE_TARGETS: Record<string, number> = {
-  MU: 500,
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+interface RealisedTrade { id: string; ticker: string; amount: number }
+interface GrowthScore { dimension: string; score: number; level: string; items: string[]; next?: string }
+interface Milestone { id: string; date: string; tags: string[]; text: string }
 interface SnapResponse {
-  id: string
-  snapshot_date: string
-  total_value: number
-  total_pnl: number | null
-  holdings: Holding[]
+  id: string; snapshot_date: string; snap_label?: string; snap_time?: string
+  total_value: number; total_pnl?: number; cash?: number; pending?: number
+  net_invested?: number; realised_pnl?: number; net_deposited?: number; dividends?: number
+  prior_value?: number; prior_unrealised?: number; prior_realised?: number
+  prior_cash?: number; prior_holdings?: number
+  holdings: Holding[]; orders: Order[]; realised_trades: RealisedTrade[]
+  growth: GrowthScore[]; milestones: Milestone[]
 }
 
-type Tab = 'holdings' | 'orders' | 'geo' | 'sector' | 'dividends' | 'pnl' | 'thesis'
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'holdings',  label: 'Holdings' },
-  { id: 'orders',    label: 'Orders' },
-  { id: 'geo',       label: 'Geo' },
-  { id: 'sector',    label: 'Sector' },
-  { id: 'dividends', label: 'Dividends' },
-  { id: 'pnl',       label: 'P&L' },
-  { id: 'thesis',    label: 'Thesis' },
-]
+// ── Utils ──────────────────────────────────────────────────────────────────────
+const MONO: React.CSSProperties = { fontFamily: "'DM Mono', 'Courier New', monospace" }
+const lb = (col: string, w = 1): React.CSSProperties => ({
+  borderTop: `${w}px solid ${col}`, borderRight: `${w}px solid ${col}`,
+  borderBottom: `${w}px solid ${col}`, borderLeft: `${w}px solid ${col}`,
+})
+function fmt(v: number, decimals = 2) {
+  return Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+function fmtSigned(v: number, ccy = 'USD') {
+  const sym = { USD: '$', SGD: 'S$', GBP: '£' }[ccy] ?? '$'
+  return v < 0 ? `-${sym}${fmt(Math.abs(v))}` : `+${sym}${fmt(v)}`
+}
+function currSym(ccy?: string) { return { SGD: 'S$', GBP: '£' }[ccy ?? ''] ?? '$' }
+function valueUSD(h: Holding) { return (h.value_usd ?? h.market_value) * (FX[h.currency ?? 'USD'] ?? 1) }
+function secCol(s?: string) { return SECTOR_COL[s ?? ''] ?? COL.slate }
+function geoCol(g?: string) { return GEO_COL[g ?? ''] ?? COL.slate }
+function pnlColor(n: number, theme: Theme) { return n >= 0 ? COL.green : COL.red }
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
-function sectorColor(sector?: string) { return SECTOR_COLOR[sector ?? ''] ?? '#6B7A92' }
-function geoColor(geo?: string) { return GEO_COLOR[geo ?? ''] ?? '#6B7A92' }
-function pnlColor(n: number | undefined | null) {
-  if (n === undefined || n === null) return C.mid
-  return n >= 0 ? C.green : C.red
-}
-function fmt(n: number, d = 2) {
-  return n.toLocaleString('en-SG', { minimumFractionDigits: d, maximumFractionDigits: d })
-}
-function fmtPct(n: number) { return (n >= 0 ? '+' : '') + fmt(n, 2) + '%' }
-function valueUSD(h: Holding): number {
-  const currency = h.currency ?? 'USD'
-  return h.market_value * (FX[currency] ?? 1)
-}
-function holdingGeo(h: Holding): 'US' | 'SG' | 'UK' | 'HK' {
-  return h.geo ?? getTickerMeta(h.ticker).geo
-}
-function holdingSector(h: Holding): string {
-  return h.sector ?? getTickerMeta(h.ticker).sector
-}
-function holdingCurrency(h: Holding): string {
-  return h.currency ?? getTickerMeta(h.ticker).currency
-}
-
-// ── Sparkline ─────────────────────────────────────────────────────────────────
-function hashStr(s: string): number {
-  return s.split('').reduce((h, c) => (Math.imul(31, h) + c.charCodeAt(0)) | 0, 0)
-}
-function mulberry32(seed: number) {
+// ── Sparkline (seeded deterministic) ──────────────────────────────────────────
+function seeded(seed: number) {
   let s = seed
-  return function () {
-    let t = (s += 0x6D2B79F5)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+  return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646 }
+}
+function makeSpark(ticker: string, price: number, len = 20) {
+  const seed = ticker.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  const r = seeded(seed)
+  const vol = 0.015 + r() * 0.02, drift = (r() - 0.48) * 0.002
+  const pts = [price]
+  for (let i = 1; i < len; i++) pts.unshift(pts[0] * (1 + drift + (r() - 0.5) * vol))
+  pts[len - 1] = price
+  return pts
+}
+function Sparkline({ ticker, price, color, width = 60, height = 20 }: {
+  ticker: string; price: number; color: string; width?: number; height?: number
+}) {
+  const data = makeSpark(ticker, price)
+  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * height}`).join(' ')
+  return <svg data-testid="sparkline" width={width} height={height} style={{ display: 'block', flexShrink: 0 }}>
+    <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
 }
 
-function Sparkline({ ticker, width = 60, height = 20 }: { ticker: string; width?: number; height?: number }) {
-  const T = useTheme()
-  const rng = mulberry32(Math.abs(hashStr(ticker)))
-  const N = 10
-  const raw = Array.from({ length: N }, () => rng())
-  const min = Math.min(...raw)
-  const max = Math.max(...raw)
-  const span = max - min || 1
-  const trendUp = raw[N - 1] >= raw[0]
-  const strokeColor = trendUp ? T.green : T.red
-  const points = raw
-    .map((v, i) => {
-      const x = ((i / (N - 1)) * width).toFixed(1)
-      const y = (height - 2 - ((v - min) / span) * (height - 4)).toFixed(1)
-      return `${x},${y}`
-    })
-    .join(' ')
+// ── Score ring ─────────────────────────────────────────────────────────────────
+function ScoreRing({ score, color, size = 72, stroke = 6 }: { score: number; color: string; size?: number; stroke?: number }) {
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const offset = circ * (1 - score / 10)
   return (
-    <svg data-testid="sparkline" width={width} height={height} style={{ display: 'block', flexShrink: 0 }}>
-      <polyline points={points} fill="none" stroke={strokeColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    <svg width={size} height={size}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#242C3A" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle"
+        fontFamily="DM Mono" fontSize="20" fontWeight="600" fill={color}>{score}</text>
     </svg>
   )
 }
 
-// ── Shared style atoms (theme-independent) ─────────────────────────────────────
-const MONO: React.CSSProperties = { fontFamily: "'DM Mono', 'Courier New', monospace" }
-const TAG: React.CSSProperties = {
-  display: 'inline-block', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px',
-  borderRadius: 4, letterSpacing: '0.04em',
-}
-const WRAP: React.CSSProperties = { maxWidth: 430, margin: '0 auto', padding: '0 0 80px' }
+// ── Holdings tab ───────────────────────────────────────────────────────────────
+function HoldingsTab({ holdings, orders = [] }: { holdings: Holding[]; orders?: Order[] }) {
+  const t = useTheme()
+  const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
+  const total = holdings.reduce((a, h) => a + valueUSD(h), 0)
+  const sorted = [...holdings].sort((a, b) => valueUSD(b) - valueUSD(a))
+  const sellTickers = new Set(orders.filter(o => o.type.includes('SELL')).map(o => o.ticker))
+  const buyTickers = new Set(orders.filter(o => o.type.includes('BUY')).map(o => o.ticker))
 
-// ── Upload panel ──────────────────────────────────────────────────────────────
+  return (
+    <div style={{ padding: '8px 0' }}>
+      {sorted.map(h => {
+        const sc = secCol(h.sector), gc = geoCol(h.geo)
+        const weight = (valueUSD(h) / total) * 100
+        const isOpen = expandedTicker === h.ticker
+        const sym = currSym(h.currency)
+        const chgCol = (h.change_1d_pct ?? 0) >= 0 ? COL.green : COL.red
+        const pnlCol = (h.pnl ?? 0) >= 0 ? COL.green : COL.red
+        return (
+          <div key={h.ticker ?? h.name}
+            data-testid={`holding-card-${h.ticker ?? h.name}`}
+            onClick={() => setExpandedTicker(isOpen ? null : (h.ticker ?? h.name))}
+            style={{ background: t.card, marginBottom: 8, borderRadius: 10,
+              ...lb(t.border), borderLeftWidth: 3, borderLeftColor: sc,
+              cursor: 'pointer', padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                {h.ticker && h.current_price !== undefined && (
+                  <Sparkline ticker={h.ticker} price={h.current_price} color={sc} />
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ ...MONO, fontWeight: 700, color: t.title }}>{h.ticker ?? h.name}</span>
+                    {h.geo && (
+                      <span style={{ fontSize: 9, background: `${gc}20`, color: gc,
+                        padding: '2px 5px', borderRadius: 3, letterSpacing: 1 }}>{h.geo}</span>
+                    )}
+                    {h.is_new && (
+                      <span style={{ fontSize: 9, background: `${COL.teal}20`, color: COL.teal,
+                        padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>NEW</span>
+                    )}
+                    {h.dividend && (
+                      <span style={{ fontSize: 9, background: `${COL.yellow}20`, color: COL.yellow,
+                        padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>DIV</span>
+                    )}
+                    {h.ticker && sellTickers.has(h.ticker) && (
+                      <span data-testid={`limit-badge-${h.ticker}`}
+                        style={{ fontSize: 9, background: `${COL.red}20`, color: COL.red,
+                        padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>SELL</span>
+                    )}
+                    {h.ticker && buyTickers.has(h.ticker) && (
+                      <span data-testid={`limit-badge-${h.ticker}`}
+                        style={{ fontSize: 9, background: `${COL.teal}20`, color: COL.teal,
+                        padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>BUY</span>
+                    )}
+                    {h.approx && <span style={{ fontSize: 9, color: t.mid }}>~APPROX</span>}
+                  </div>
+                  <div style={{ fontSize: 10, color: t.mid, marginTop: 2 }}>{h.sector}</div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ ...MONO, fontSize: 13, color: t.pale }}>{sym}{fmt(h.market_value)}</div>
+                {h.pnl !== undefined && (
+                  <div style={{ ...MONO, fontSize: 11, color: pnlCol }}>{fmtSigned(h.pnl, h.currency)}</div>
+                )}
+                {h.change_1d_pct !== undefined && (
+                  <div data-testid={h.ticker ? `change-1d-${h.ticker}` : undefined}
+                    style={{ ...MONO, fontSize: 10, color: chgCol, marginTop: 2 }}>
+                    {h.change_1d_pct >= 0 ? '+' : ''}{h.change_1d_pct.toFixed(2)}%
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ marginTop: 8, height: 4, background: t.inset, borderRadius: 2 }}>
+              <div style={{ width: `${Math.min(weight * 3.5, 100)}%`, height: '100%', background: sc, borderRadius: 2 }} />
+            </div>
+            <div style={{ fontSize: 10, color: t.mid, marginTop: 4, ...MONO }}>{weight.toFixed(2)}% weight</div>
+            {isOpen && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${t.border}`,
+                fontSize: 12, color: t.pale }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {h.units !== undefined && (
+                    <div><span style={{ color: t.mid }}>Qty: </span><span style={MONO}>{h.units}</span></div>
+                  )}
+                  {h.current_price !== undefined && (
+                    <div><span style={{ color: t.mid }}>Price: </span><span style={MONO}>{sym}{fmt(h.current_price)}</span></div>
+                  )}
+                  {h.avg_cost !== undefined && (
+                    <div><span style={{ color: t.mid }}>Avg cost: </span><span style={MONO}>{sym}{fmt(h.avg_cost)}</span></div>
+                  )}
+                  <div><span style={{ color: t.mid }}>USD val: </span><span style={MONO}>${fmt(valueUSD(h))}</span></div>
+                </div>
+                {h.target !== undefined && h.current_price !== undefined && (
+                  <div data-testid={h.ticker ? `target-bar-${h.ticker}` : undefined} style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 10, color: t.mid, marginBottom: 3 }}>
+                      Target {sym}{fmt(h.target)} · {((h.current_price / h.target) * 100).toFixed(1)}% there
+                    </div>
+                    <div style={{ height: 5, background: t.inset, borderRadius: 2 }}>
+                      <div style={{ width: `${Math.min((h.current_price / h.target) * 100, 100)}%`, height: '100%', background: COL.orange, borderRadius: 2 }} />
+                    </div>
+                  </div>
+                )}
+                {h.sell_limit !== undefined && h.current_price !== undefined && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: COL.purple }}>
+                    SELL LIMIT {sym}{fmt(h.sell_limit)} · {(((h.sell_limit - h.current_price) / h.current_price) * 100).toFixed(1)}% away
+                  </div>
+                )}
+                {h.buy_limit !== undefined && h.current_price !== undefined && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: COL.green }}>
+                    BUY LIMIT {sym}{fmt(h.buy_limit)} · {(((h.buy_limit - h.current_price) / h.current_price) * 100).toFixed(1)}% from current
+                  </div>
+                )}
+                {h.dividend && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: COL.yellow }}>
+                    DIV {sym}{fmt(h.dividend.amount)}/sh · ex {h.dividend.date}
+                  </div>
+                )}
+                {h.note && <div style={{ marginTop: 8, fontSize: 11, color: t.mid, fontStyle: 'italic' }}>{h.note}</div>}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      <div style={{ fontSize: 9, color: t.mid, textAlign: 'center', marginTop: 16, ...MONO }}>
+        SPARKLINES INDICATIVE · NON-USD APPROXIMATED
+      </div>
+    </div>
+  )
+}
+
+// ── Orders tab ─────────────────────────────────────────────────────────────────
+function OrdersTab({ orders }: { orders: Order[] }) {
+  const t = useTheme()
+  return (
+    <div style={{ padding: '8px 0' }}>
+      {orders.length === 0 && (
+        <div style={{ textAlign: 'center', color: t.mid, padding: '2rem', fontSize: '0.9rem' }}>
+          No open orders in this snapshot
+        </div>
+      )}
+      {orders.map((o, i) => {
+        const gc = geoCol(o.geo)
+        const isBuy = o.type.includes('BUY')
+        const orderCol = isBuy ? COL.green : COL.purple
+        const sym = currSym(o.currency)
+        const curPrice = o.current_price
+        const distance = curPrice ? ((o.price - curPrice) / curPrice) * 100 : null
+        const progress = curPrice
+          ? isBuy
+            ? Math.min((o.price / curPrice) * 100, 100)
+            : Math.min((curPrice / o.price) * 100, 100)
+          : null
+        return (
+          <div key={o.id ?? i} style={{ background: t.card, marginBottom: 8, borderRadius: 10,
+            ...lb(t.border), borderLeftWidth: 3, borderLeftColor: orderCol, padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, color: t.title, ...MONO }}>{o.ticker}</span>
+                  <span style={{ fontSize: 9, background: `${gc}20`, color: gc,
+                    padding: '2px 5px', borderRadius: 3, letterSpacing: 1 }}>{o.geo}</span>
+                  <span style={{ fontSize: 9, background: `${orderCol}20`, color: orderCol,
+                    padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>{o.type}</span>
+                  {!!o.new_flag && (
+                    <span style={{ fontSize: 9, background: `${COL.teal}20`, color: COL.teal,
+                      padding: '2px 5px', borderRadius: 3, letterSpacing: 0.5 }}>NEW</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: t.mid, marginTop: 4, ...MONO }}>
+                  {o.qty} shares{o.placed ? ` · ${o.placed}` : ''}
+                </div>
+                {o.note && <div style={{ fontSize: 11, color: t.pale, marginTop: 4 }}>{o.note}</div>}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ ...MONO, fontSize: 16, fontWeight: 600, color: t.title }}>{sym}{fmt(o.price)}</div>
+                {distance !== null && (
+                  <div style={{ fontSize: 10, color: distance >= 0 ? COL.green : COL.red, ...MONO, marginTop: 2 }}>
+                    {distance >= 0 ? '+' : ''}{distance.toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            </div>
+            {progress !== null && (
+              <>
+                <div style={{ marginTop: 10, height: 4, background: t.inset, borderRadius: 2 }}>
+                  <div style={{ width: `${progress}%`, height: '100%', background: orderCol, borderRadius: 2 }} />
+                </div>
+                {curPrice !== undefined && curPrice !== null && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: t.mid,
+                    marginTop: 3, ...MONO }}>
+                    <span>now {sym}{fmt(curPrice)}</span>
+                    <span>limit {sym}{fmt(o.price)}</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Geo tab ────────────────────────────────────────────────────────────────────
+function GeoTab({ holdings }: { holdings: Holding[] }) {
+  const t = useTheme()
+  const byGeo = holdings.reduce<Record<string, number>>((acc, h) => {
+    acc[h.geo ?? 'US'] = (acc[h.geo ?? 'US'] ?? 0) + valueUSD(h)
+    return acc
+  }, {})
+  const total = Object.values(byGeo).reduce((a, b) => a + b, 0)
+  const entries = Object.entries(byGeo).sort((a, b) => b[1] - a[1])
+  let cumulative = 0
+  const segments = entries.map(([g, v]) => {
+    const pct = (v / total) * 100
+    const start = cumulative
+    cumulative += pct
+    return { geo: g, value: v, pct, start, color: geoCol(g) }
+  })
+  const size = 180, stroke = 32, radius = (size - stroke) / 2
+  const circ = 2 * Math.PI * radius
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+        <svg width={size} height={size}>
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={t.inset} strokeWidth={stroke} />
+          {segments.map((s, i) => (
+            <circle key={i} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={s.color}
+              strokeWidth={stroke}
+              strokeDasharray={`${(s.pct / 100) * circ} ${circ}`}
+              strokeDashoffset={-((s.start / 100) * circ)}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+          ))}
+          <text x="50%" y="46%" textAnchor="middle" fontFamily="DM Mono" fontSize="11" fill={t.mid}>TOTAL</text>
+          <text x="50%" y="58%" textAnchor="middle" fontFamily="DM Mono" fontSize="14" fontWeight="600" fill={t.title}>${total.toFixed(0)}</text>
+        </svg>
+      </div>
+      {entries.map(([g, v]) => {
+        const pct = (v / total) * 100
+        const count = holdings.filter(h => (h.geo ?? 'US') === g).length
+        const gc = geoCol(g)
+        return (
+          <div key={g} style={{ background: t.card, padding: '10px 14px', marginBottom: 6, borderRadius: 8,
+            ...lb(t.border), borderLeftWidth: 3, borderLeftColor: gc,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontWeight: 600, color: t.title }}>{g}</div>
+              <div style={{ fontSize: 11, color: t.mid, ...MONO }}>{count} holding{count !== 1 ? 's' : ''}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ ...MONO, fontSize: 13, color: t.pale }}>${v.toFixed(2)}</div>
+              <div style={{ ...MONO, fontSize: 11, color: gc }}>{pct.toFixed(1)}%</div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Sector tab ─────────────────────────────────────────────────────────────────
+function SectorTab({ holdings }: { holdings: Holding[] }) {
+  const t = useTheme()
+  const bySector = holdings.reduce<Record<string, number>>((acc, h) => {
+    const s = h.sector ?? 'Other'
+    acc[s] = (acc[s] ?? 0) + valueUSD(h)
+    return acc
+  }, {})
+  const total = Object.values(bySector).reduce((a, b) => a + b, 0)
+  const entries = Object.entries(bySector).sort((a, b) => b[1] - a[1])
+  const maxVal = entries[0]?.[1] ?? 1
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border), marginBottom: 12 }}>
+        {entries.map(([s, v]) => {
+          const pct = (v / total) * 100
+          const barWidth = (v / maxVal) * 100
+          const col = secCol(s)
+          return (
+            <div key={s} style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                <span style={{ color: t.pale }}>{s}</span>
+                <span style={{ color: col, ...MONO }}>{pct.toFixed(1)}%</span>
+              </div>
+              <div style={{ height: 8, background: t.inset, borderRadius: 3 }}>
+                <div style={{ width: `${barWidth}%`, height: '100%', background: col, borderRadius: 3 }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── P&L tab ────────────────────────────────────────────────────────────────────
+function PnlTab({
+  holdings, totalPnl, realisedPnl, realisedTrades,
+  priorUnrealised, priorRealised,
+}: {
+  holdings: Holding[]
+  totalPnl?: number
+  realisedPnl?: number
+  realisedTrades: RealisedTrade[]
+  priorUnrealised?: number
+  priorRealised?: number
+}) {
+  const t = useTheme()
+  const sorted = [...holdings].filter(h => h.pnl !== undefined).sort((a, b) => (b.pnl ?? 0) - (a.pnl ?? 0))
+  const maxAbs = Math.max(...sorted.map(h => Math.abs(h.pnl ?? 0)), 0.01)
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+        <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border) }}>
+          <div style={{ fontSize: 10, color: t.mid, letterSpacing: 1, textTransform: 'uppercase' }}>Unrealised</div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: COL.green, ...MONO, marginTop: 4 }}>
+            {totalPnl !== undefined ? fmtSigned(totalPnl) : '—'}
+          </div>
+          {priorUnrealised !== undefined && totalPnl !== undefined && (
+            <div style={{ fontSize: 10, color: t.mid, ...MONO }}>
+              {fmtSigned(totalPnl - priorUnrealised)} vs prior
+            </div>
+          )}
+        </div>
+        <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border) }}>
+          <div style={{ fontSize: 10, color: t.mid, letterSpacing: 1, textTransform: 'uppercase' }}>Realised</div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: COL.green, ...MONO, marginTop: 4 }}>
+            {realisedPnl !== undefined ? fmtSigned(realisedPnl) : '—'}
+          </div>
+          {priorRealised !== undefined && realisedPnl !== undefined && (
+            <div style={{ fontSize: 10, color: t.mid, ...MONO }}>
+              {fmtSigned(realisedPnl - priorRealised)} · prior
+            </div>
+          )}
+        </div>
+      </div>
+
+      {sorted.length > 0 && (
+        <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border), marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: COL.orange, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+            Gainers / Losers · Unrealised
+          </div>
+          {sorted.map(h => {
+            const barPct = (Math.abs(h.pnl ?? 0) / maxAbs) * 100
+            const col = (h.pnl ?? 0) >= 0 ? COL.green : COL.red
+            return (
+              <div key={h.ticker ?? h.name} style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                  <span style={{ fontWeight: 600, color: t.pale, ...MONO }}>{h.ticker ?? h.name}</span>
+                  <span style={{ color: col, ...MONO }}>{fmtSigned(h.pnl ?? 0, h.currency)}</span>
+                </div>
+                <div style={{ height: 5, background: t.inset, borderRadius: 2,
+                  display: 'flex', justifyContent: (h.pnl ?? 0) >= 0 ? 'flex-start' : 'flex-end' }}>
+                  <div style={{ width: `${barPct}%`, height: '100%', background: col, borderRadius: 2 }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {realisedTrades.length > 0 && (
+        <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border) }}>
+          <div style={{ fontSize: 11, color: COL.orange, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
+            Realised breakdown · {realisedPnl !== undefined ? fmtSigned(realisedPnl) : ''}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {realisedTrades.map((r, i) => (
+              <div key={i} style={{ padding: '5px 10px', background: t.inset, ...lb(t.border),
+                borderRadius: 16, fontSize: 10, ...MONO,
+                color: r.amount >= 0 ? COL.green : COL.red }}>
+                {r.ticker}: {r.amount >= 0 ? '+' : ''}${Math.abs(r.amount).toFixed(2)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── What-If tab ────────────────────────────────────────────────────────────────
+function WhatIfTab({ holdings }: { holdings: Holding[] }) {
+  const t = useTheme()
+  const [deltas, setDeltas] = useState<Record<string, number>>({})
+  const [preset, setPreset] = useState<string | null>(null)
+
+  function applyPreset(name: string, pct: number) {
+    const n: Record<string, number> = {}
+    holdings.forEach(h => { if (h.ticker) n[h.ticker] = pct })
+    setDeltas(n); setPreset(name)
+  }
+  function reset() { setDeltas({}); setPreset(null) }
+
+  const currentTotal = holdings.reduce((a, h) => a + valueUSD(h), 0)
+  const scenarioTotal = holdings.reduce((a, h) => {
+    const d = h.ticker ? (deltas[h.ticker] ?? 0) : 0
+    return a + valueUSD(h) * (1 + d / 100)
+  }, 0)
+  const delta = scenarioTotal - currentTotal
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border), marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 10, color: t.mid, letterSpacing: 1 }}>SCENARIO</div>
+            <div style={{ fontSize: 18, fontWeight: 600, ...MONO, color: t.title }}>${scenarioTotal.toFixed(2)}</div>
+            <div style={{ fontSize: 11, ...MONO, color: delta >= 0 ? COL.green : COL.red, marginTop: 2 }}>
+              {delta >= 0 ? '+' : ''}${delta.toFixed(2)} · {delta >= 0 ? '+' : ''}{((delta / currentTotal) * 100).toFixed(2)}%
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, color: t.mid, letterSpacing: 1 }}>NOW</div>
+            <div style={{ fontSize: 15, fontWeight: 600, ...MONO, color: t.pale }}>${currentTotal.toFixed(2)}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {([['Crash', -20], ['Dip', -10], ['Flat', 0], ['Rally', 10], ['Moon', 25]] as [string, number][]).map(([name, pct]) => (
+          <button key={name} onClick={() => applyPreset(name, pct)}
+            style={{ flex: 1, minWidth: 60, padding: '8px 4px', borderRadius: 6,
+              background: preset === name ? COL.orange : t.inset,
+              color: preset === name ? '#fff' : t.pale,
+              ...lb(preset === name ? COL.orange : t.border),
+              fontSize: 11, fontFamily: 'Sora, sans-serif', fontWeight: 600, cursor: 'pointer' }}>
+            {name}<br /><span style={{ fontSize: 9, opacity: 0.7 }}>{pct >= 0 ? '+' : ''}{pct}%</span>
+          </button>
+        ))}
+        <button onClick={reset} style={{ padding: '8px 12px', borderRadius: 6, background: t.inset,
+          color: t.mid, ...lb(t.border), fontSize: 10, fontFamily: 'Sora, sans-serif', cursor: 'pointer' }}>
+          Reset
+        </button>
+      </div>
+      {holdings.map(h => {
+        const d = h.ticker ? (deltas[h.ticker] ?? 0) : 0
+        const newVal = valueUSD(h) * (1 + d / 100)
+        const diff = newVal - valueUSD(h)
+        const sc = secCol(h.sector)
+        return (
+          <div key={h.ticker ?? h.name} style={{ background: t.card, padding: '10px 14px', marginBottom: 6,
+            borderRadius: 8, ...lb(t.border), borderLeftWidth: 3, borderLeftColor: sc }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontWeight: 600, color: t.title, ...MONO }}>{h.ticker ?? h.name}</span>
+              <span style={{ ...MONO, fontSize: 11, color: diff >= 0 ? COL.green : COL.red }}>
+                {diff >= 0 ? '+' : ''}${diff.toFixed(2)}
+              </span>
+            </div>
+            <input type="range" min="-50" max="50" value={d}
+              onChange={e => {
+                if (!h.ticker) return
+                setDeltas({ ...deltas, [h.ticker]: parseInt(e.target.value) })
+                setPreset(null)
+              }}
+              style={{ width: '100%', accentColor: sc }} />
+            <div style={{ fontSize: 10, color: t.mid, ...MONO, marginTop: 2,
+              display: 'flex', justifyContent: 'space-between' }}>
+              <span>{d >= 0 ? '+' : ''}{d}%</span><span>${newVal.toFixed(2)}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Growth tab ─────────────────────────────────────────────────────────────────
+function GrowthTab({ growth, milestones }: { growth: GrowthScore[]; milestones: Milestone[] }) {
+  const t = useTheme()
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const tagCol: Record<string, string> = { K: COL.slate, S: COL.orange, E: COL.green }
+
+  if (growth.length === 0 && milestones.length === 0) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', color: t.mid, fontSize: '0.9rem' }}>
+        No growth data in this snapshot
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      {growth.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-around', background: t.card,
+          padding: '16px 8px', borderRadius: 10, ...lb(t.border), marginBottom: 16 }}>
+          {growth.map(g => (
+            <div key={g.dimension}
+              onClick={() => setExpanded(expanded === g.dimension ? null : g.dimension)}
+              style={{ textAlign: 'center', cursor: 'pointer' }}>
+              <ScoreRing score={g.score} color={tagCol[g.dimension] ?? COL.slate} />
+              <div style={{ fontSize: 11, color: t.pale, marginTop: 6, fontWeight: 600 }}>{g.dimension === 'K' ? 'Knowledge' : g.dimension === 'S' ? 'Strategy' : 'Execution'}</div>
+              <div style={{ fontSize: 9, color: t.mid, letterSpacing: 1 }}>{g.level.toUpperCase()}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {expanded && (() => {
+        const g = growth.find(x => x.dimension === expanded)
+        if (!g) return null
+        const col = tagCol[g.dimension] ?? COL.slate
+        return (
+          <div style={{ background: t.card, padding: 14, borderRadius: 10, ...lb(t.border),
+            borderLeftWidth: 3, borderLeftColor: col, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontWeight: 600, color: t.title }}>
+                {g.dimension === 'K' ? 'Knowledge' : g.dimension === 'S' ? 'Strategy' : 'Execution'}
+              </div>
+              <div style={{ fontSize: 11, color: t.mid, ...MONO }}>{g.score}/10 · {g.level}</div>
+            </div>
+            <div style={{ fontSize: 11, color: t.pale, marginBottom: 8 }}>Items logged:</div>
+            {g.items.map((it, i) => (
+              <div key={i} style={{ fontSize: 11, color: t.mid, padding: '3px 0', lineHeight: 1.5 }}>• {it}</div>
+            ))}
+            {g.next && (
+              <div style={{ fontSize: 10, color: col, marginTop: 10, fontStyle: 'italic' }}>Next: {g.next}</div>
+            )}
+          </div>
+        )
+      })()}
+      {milestones.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, color: COL.orange, letterSpacing: 1, textTransform: 'uppercase',
+            marginBottom: 10, padding: '0 4px' }}>Milestones</div>
+          <div style={{ position: 'relative', paddingLeft: 20 }}>
+            <div style={{ position: 'absolute', left: 7, top: 0, bottom: 0, width: 1, background: t.border }} />
+            {milestones.map((m, i) => (
+              <div key={m.id ?? i} style={{ position: 'relative', marginBottom: 12 }}>
+                <div style={{ position: 'absolute', left: -17, top: 5, width: 10, height: 10,
+                  borderRadius: '50%', background: t.bg, border: `2px solid ${COL.orange}` }} />
+                <div style={{ background: t.card, padding: '8px 12px', borderRadius: 8, ...lb(t.border) }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 11, color: t.mid, ...MONO }}>{m.date}</div>
+                    <div style={{ display: 'flex', gap: 3 }}>
+                      {m.tags.map(tag => (
+                        <span key={tag} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3,
+                          background: `${tagCol[tag] ?? COL.slate}20`, color: tagCol[tag] ?? COL.slate, fontWeight: 600 }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: t.pale, marginTop: 3 }}>{m.text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Upload panel ───────────────────────────────────────────────────────────────
 function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
-  const T = useTheme()
+  const t = useTheme()
   const { showToast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
@@ -224,615 +688,95 @@ function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
   async function handleFile(file: File) {
     setUploading(true)
     try {
-      const html = await file.text()
+      const text = await file.text()
+      const isJson = file.name.endsWith('.json')
+      let body: object
+      if (isJson) {
+        try { body = JSON.parse(text) }
+        catch { showToast('Invalid JSON file', 'error'); return }
+      } else {
+        body = { html: text, snapshot_date: new Date().toISOString() }
+      }
       const res = await fetch('/api/portfolio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, snapshot_date: new Date().toISOString() }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) { showToast(data.error || 'Parse failed', 'error'); return }
+      if (!res.ok) { showToast(data.error || 'Import failed', 'error'); return }
       showToast(`Imported ${data.holdings_count} holdings`, 'success')
       onUploaded()
     } catch { showToast('Upload failed', 'error') }
     finally { setUploading(false) }
   }
 
-  const BTN: React.CSSProperties = {
-    padding: '0.35rem 0.85rem', borderRadius: 6, border: 'none', cursor: 'pointer',
-    fontSize: '0.8rem', fontWeight: 600, background: T.orange, color: '#fff',
-  }
-
   return (
     <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
       <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>
-      <div style={{ color: T.pale, fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>No portfolio data yet</div>
-      <div style={{ color: T.mid, fontSize: '0.85rem', marginBottom: 24, lineHeight: 1.6 }}>
-        Go to your Syfe portfolio page, press Ctrl+S to save as HTML, then upload here.
+      <div style={{ color: t.pale, fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>No portfolio data yet</div>
+      <div style={{ color: t.mid, fontSize: '0.85rem', marginBottom: 24, lineHeight: 1.6 }}>
+        Upload a Syfe HTML export or a JSON snapshot file.
       </div>
-      <div
-        onClick={() => fileRef.current?.click()}
+      <div onClick={() => fileRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDrag(true) }}
         onDragLeave={() => setDrag(false)}
         onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-        style={{
-          border: `2px dashed ${drag ? T.orange : T.border}`, borderRadius: 10,
+        style={{ border: `2px dashed ${drag ? COL.orange : t.border}`, borderRadius: 10,
           padding: '2.5rem', cursor: 'pointer', marginBottom: 12,
-          background: drag ? 'rgba(232,82,10,0.05)' : 'transparent',
-        }}
-      >
-        <div style={{ color: drag ? T.orange : T.mid, fontSize: '0.9rem' }}>
-          {uploading ? 'Parsing…' : 'Drop HTML file here, or click to browse'}
+          background: drag ? 'rgba(232,82,10,0.05)' : 'transparent' }}>
+        <div style={{ color: drag ? COL.orange : t.mid, fontSize: '0.9rem' }}>
+          {uploading ? 'Importing…' : 'Drop .html or .json here, or click to browse'}
         </div>
       </div>
-      <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
+      <input ref={fileRef} type="file" accept=".html,.htm,.json" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-      <button style={BTN} onClick={() => fileRef.current?.click()} disabled={uploading}>
+      <button style={{ padding: '0.35rem 0.85rem', borderRadius: 6, border: 'none', cursor: 'pointer',
+        fontSize: '0.8rem', fontWeight: 600, background: COL.orange, color: '#fff', minHeight: 44 }}
+        onClick={() => fileRef.current?.click()} disabled={uploading}>
         {uploading ? 'Importing…' : 'Choose File'}
       </button>
     </div>
   )
 }
 
-// ── Tab: Holdings ─────────────────────────────────────────────────────────────
-function HoldingsTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const sorted = [...holdings].sort((a, b) => valueUSD(b) - valueUSD(a))
-  const totalUSD = sorted.reduce((s, h) => s + valueUSD(h), 0)
+// ── Main component ─────────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'holdings', label: 'Holdings' },
+  { id: 'orders',   label: 'Orders'   },
+  { id: 'geo',      label: 'Geo'      },
+  { id: 'sector',   label: 'Sector'   },
+  { id: 'pnl',      label: 'P&L'      },
+  { id: 'whatif',   label: 'What If'  },
+  { id: 'growth',   label: 'Growth'   },
+] as const
+type TabId = typeof TABS[number]['id']
 
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  function toggle(key: string) {
-    setExpanded(prev => {
-      const n = new Set(prev)
-      n.has(key) ? n.delete(key) : n.add(key)
-      return n
-    })
-  }
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      {sorted.map((h, i) => {
-        const key = h.ticker ?? h.name + i
-        const isOpen = expanded.has(key)
-        const sector = holdingSector(h)
-        const geo = holdingGeo(h)
-        const currency = holdingCurrency(h)
-        const sc = sectorColor(sector)
-        const gc = geoColor(geo)
-        const sym = currency === 'SGD' ? 'S$' : currency === 'GBP' ? '£' : '$'
-        const weightPct = totalUSD > 0 ? (valueUSD(h) / totalUSD) * 100 : 0
-        const divMeta = h.ticker ? UPCOMING_DIVS.find(d => d.ticker === h.ticker) : undefined
-        const limitOrders = h.ticker ? OPEN_ORDERS.filter(o => o.ticker === h.ticker) : []
-        const hasSell = limitOrders.some(o => o.type === 'SELL LIMIT')
-        const hasBuy = limitOrders.some(o => o.type === 'BUY LIMIT')
-        const target = h.ticker ? PRICE_TARGETS[h.ticker] : undefined
-
-        return (
-          <div
-            key={key}
-            data-testid={`holding-card-${key}`}
-            style={{ ...cardBase, ...lb(sc), cursor: 'pointer', overflow: 'hidden' }}
-            onClick={() => toggle(key)}
-          >
-            {/* Main row */}
-            <div style={{ padding: '10px 12px 8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ ...MONO, fontSize: '0.95rem', fontWeight: 700, color: T.pale }}>
-                      {h.ticker ?? h.name.slice(0, 8)}
-                    </span>
-                    <span style={{ ...TAG, background: gc + '22', color: gc }}>{geo}</span>
-                    {divMeta && (
-                      <span style={{ ...TAG, background: C.yellow + '22', color: C.yellow }}>DIV</span>
-                    )}
-                    {hasSell && (
-                      <span
-                        data-testid={`limit-badge-${h.ticker}`}
-                        style={{ ...TAG, background: C.red + '22', color: C.red }}
-                      >SELL</span>
-                    )}
-                    {hasBuy && (
-                      <span
-                        data-testid={`limit-badge-${h.ticker}`}
-                        style={{ ...TAG, background: C.teal + '22', color: C.teal }}
-                      >BUY</span>
-                    )}
-                    <span style={{ fontSize: '0.7rem', color: T.mid }}>{sector}</span>
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: T.mid, marginTop: 2 }}>
-                    {h.ticker ? h.name.slice(0, 30) : ''}
-                  </div>
-                </div>
-                {/* Sparkline */}
-                {h.ticker && (
-                  <div style={{ marginLeft: 8, marginTop: 4, flexShrink: 0 }}>
-                    <Sparkline ticker={h.ticker} />
-                  </div>
-                )}
-                {/* Value + P&L + 1D% */}
-                <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
-                  <div style={{ ...MONO, fontSize: '0.92rem', fontWeight: 600, color: T.pale }}>
-                    {sym}{fmt(h.market_value)}
-                  </div>
-                  {h.pnl !== undefined && (
-                    <div style={{ ...MONO, fontSize: '0.78rem', color: pnlColor(h.pnl) }}>
-                      {h.pnl >= 0 ? '+' : ''}{sym}{fmt(Math.abs(h.pnl))}
-                      {h.pnl_pct !== undefined && (
-                        <span style={{ marginLeft: 4, opacity: 0.85 }}>{fmtPct(h.pnl_pct)}</span>
-                      )}
-                    </div>
-                  )}
-                  {h.change_1d_pct !== undefined && (
-                    <div
-                      data-testid={`change-1d-${h.ticker}`}
-                      style={{ ...MONO, fontSize: '0.72rem', color: pnlColor(h.change_1d_pct) }}
-                    >
-                      {fmtPct(h.change_1d_pct)} 1D
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Weight bar */}
-              <div style={{ marginTop: 8, height: 3, background: T.inset, borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min(weightPct, 100)}%`, background: sc, borderRadius: 2 }} />
-              </div>
-              <div style={{ fontSize: '0.68rem', color: T.mid, marginTop: 2 }}>
-                {weightPct.toFixed(1)}% of portfolio
-              </div>
-            </div>
-            {/* Expanded detail */}
-            {isOpen && (
-              <div style={{
-                borderTop: `1px solid ${T.border}`, padding: '10px 12px', background: T.inset,
-                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px 8px',
-              }}>
-                {h.avg_cost !== undefined && (
-                  <div>
-                    <div style={{ fontSize: '0.65rem', color: T.mid, marginBottom: 2 }}>AVG COST</div>
-                    <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>{sym}{fmt(h.avg_cost)}</div>
-                  </div>
-                )}
-                {h.units !== undefined && (
-                  <div>
-                    <div style={{ fontSize: '0.65rem', color: T.mid, marginBottom: 2 }}>QTY</div>
-                    <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>{h.units}</div>
-                  </div>
-                )}
-                {h.current_price !== undefined && (
-                  <div>
-                    <div style={{ fontSize: '0.65rem', color: T.mid, marginBottom: 2 }}>PRICE</div>
-                    <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>{sym}{fmt(h.current_price)}</div>
-                  </div>
-                )}
-                {h.allocation_pct !== undefined && (
-                  <div>
-                    <div style={{ fontSize: '0.65rem', color: T.mid, marginBottom: 2 }}>WEIGHT</div>
-                    <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>{h.allocation_pct.toFixed(1)}%</div>
-                  </div>
-                )}
-                {divMeta && (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: '0.65rem', color: C.yellow, marginBottom: 2 }}>UPCOMING DIVIDEND</div>
-                    <div style={{ fontSize: '0.8rem', color: T.pale }}>
-                      ${divMeta.amount}/sh · ex-date {divMeta.exDate}
-                    </div>
-                  </div>
-                )}
-                {/* Target price progress bar */}
-                {target !== undefined && h.avg_cost !== undefined && h.current_price !== undefined && (
-                  <div data-testid={`target-bar-${h.ticker}`} style={{ gridColumn: '1 / -1', marginTop: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: T.mid, marginBottom: 4 }}>
-                      <span>ENTRY {sym}{fmt(h.avg_cost)}</span>
-                      <span style={{ color: C.orange }}>TARGET {sym}{fmt(target)}</span>
-                    </div>
-                    {(() => {
-                      const range = target - h.avg_cost
-                      const curr = h.current_price - h.avg_cost
-                      const pct = range > 0 ? Math.max(0, Math.min(100, (curr / range) * 100)) : 0
-                      return (
-                        <div style={{ height: 5, background: T.border, borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${pct}%`, background: C.orange, borderRadius: 3 }} />
-                        </div>
-                      )
-                    })()}
-                    <div style={{ ...MONO, fontSize: '0.68rem', color: T.mid, marginTop: 3 }}>
-                      {sym}{fmt(h.current_price)} · {sym}{fmt(target)} target
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Tab: Orders ───────────────────────────────────────────────────────────────
-function OrdersTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      <div style={{ fontSize: '0.72rem', color: T.mid, marginBottom: 12, textAlign: 'center' }}>
-        Snap 19 · 07:19 SGT 9 Apr 2026
-      </div>
-      {OPEN_ORDERS.map((o, i) => {
-        const isSell = o.type === 'SELL LIMIT'
-        const typeColor = isSell ? T.red : T.green
-        const sym = o.currency === 'SGD' ? 'S$' : o.currency === 'GBP' ? '£' : '$'
-        const gc = geoColor(o.geo)
-        const h = holdings.find(hh => hh.ticker === o.ticker)
-        const curPrice = h?.current_price
-        const fillDist = curPrice
-          ? isSell
-            ? ((o.price - curPrice) / curPrice) * 100
-            : ((curPrice - o.price) / o.price) * 100
-          : null
-        const progress = curPrice
-          ? isSell
-            ? Math.max(0, Math.min(100, (curPrice / o.price) * 100))
-            : Math.max(0, Math.min(100, (o.price / curPrice) * 100))
-          : null
-
-        return (
-          <div key={i} style={{ ...cardBase, ...lb(typeColor), padding: '12px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ ...MONO, fontWeight: 700, color: T.pale }}>{o.ticker}</span>
-                  <span style={{ ...TAG, background: gc + '22', color: gc }}>{o.geo}</span>
-                  <span style={{ ...TAG, background: typeColor + '22', color: typeColor }}>{o.type}</span>
-                </div>
-                <div style={{ fontSize: '0.72rem', color: T.mid, marginTop: 2 }}>
-                  Qty {o.qty} · {o.placed}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ ...MONO, fontSize: '1.1rem', fontWeight: 700, color: T.pale }}>
-                  {sym}{fmt(o.price)}
-                </div>
-                {fillDist !== null && (
-                  <div style={{ fontSize: '0.72rem', color: fillDist > 0 ? T.mid : T.green }}>
-                    {fillDist > 0 ? '+' : ''}{fmt(fillDist, 1)}% to fill
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ height: 4, background: T.inset, borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${progress ?? 60}%`,
-                background: typeColor,
-                borderRadius: 2,
-                opacity: progress === null ? 0.4 : 1,
-              }} />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Tab: Geo ──────────────────────────────────────────────────────────────────
-function GeoTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  const geos = ['US', 'SG', 'UK', 'HK'] as const
-  const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
-  const byGeo = geos
-    .map(g => {
-      const hs = holdings.filter(h => holdingGeo(h) === g)
-      const val = hs.reduce((s, h) => s + valueUSD(h), 0)
-      return { geo: g, val, pct: totalUSD > 0 ? (val / totalUSD) * 100 : 0, count: hs.length }
-    })
-    .filter(g => g.val > 0)
-
-  const pieData = byGeo.map(g => ({ name: g.geo, value: parseFloat(g.pct.toFixed(1)) }))
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      <div style={{ height: 220, marginBottom: 16 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={pieData} cx="50%" cy="50%" innerRadius="55%" outerRadius="78%"
-              dataKey="value" paddingAngle={3}>
-              {pieData.map((d, i) => (
-                <Cell key={i} fill={GEO_COLOR[d.name] ?? T.mid} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: '0.8rem' }}
-              formatter={(v) => [Number(v ?? 0).toFixed(1) + '%', 'Allocation']}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      {byGeo.map(g => (
-        <div key={g.geo} style={{ ...cardBase, ...lb(geoColor(g.geo)), padding: '10px 14px', marginBottom: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ ...TAG, background: geoColor(g.geo) + '22', color: geoColor(g.geo), fontSize: '0.75rem', padding: '2px 8px' }}>{g.geo}</span>
-              <span style={{ color: T.mid, fontSize: '0.8rem' }}>{g.count} holding{g.count !== 1 ? 's' : ''}</span>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ ...MONO, color: T.pale, fontSize: '0.88rem', fontWeight: 600 }}>~${fmt(g.val)}</div>
-              <div style={{ ...MONO, fontSize: '0.75rem', color: T.mid }}>{g.pct.toFixed(1)}%</div>
-            </div>
-          </div>
-          <div style={{ marginTop: 8, height: 4, background: T.inset, borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${g.pct}%`, background: geoColor(g.geo), borderRadius: 2 }} />
-          </div>
-        </div>
-      ))}
-      <div style={{ fontSize: '0.68rem', color: T.mid, textAlign: 'center', marginTop: 8 }}>
-        ~USD totals · SGD≈0.74 · GBP≈1.29
-      </div>
-    </div>
-  )
-}
-
-// ── Tab: Sector ───────────────────────────────────────────────────────────────
-function SectorTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
-  const sectorMap = new Map<string, { val: number; count: number }>()
-  for (const h of holdings) {
-    const s = holdingSector(h)
-    const prev = sectorMap.get(s) ?? { val: 0, count: 0 }
-    sectorMap.set(s, { val: prev.val + valueUSD(h), count: prev.count + 1 })
-  }
-  const sectors = [...sectorMap.entries()]
-    .map(([s, d]) => ({ sector: s, val: d.val, count: d.count, pct: totalUSD > 0 ? (d.val / totalUSD) * 100 : 0 }))
-    .sort((a, b) => b.val - a.val)
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      {sectors.map(s => (
-        <div key={s.sector} style={{ ...cardBase, ...lb(sectorColor(s.sector)), padding: '10px 14px', marginBottom: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <div>
-              <span style={{ color: sectorColor(s.sector), fontSize: '0.8rem', fontWeight: 600 }}>{s.sector}</span>
-              <span style={{ color: T.mid, fontSize: '0.72rem', marginLeft: 6 }}>{s.count} holding{s.count !== 1 ? 's' : ''}</span>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ ...MONO, color: T.pale, fontSize: '0.85rem', fontWeight: 600 }}>~${fmt(s.val)}</span>
-              <span style={{ ...MONO, color: T.mid, fontSize: '0.75rem', marginLeft: 6 }}>{s.pct.toFixed(1)}%</span>
-            </div>
-          </div>
-          <div style={{ height: 5, background: T.inset, borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${s.pct}%`, background: sectorColor(s.sector), borderRadius: 3 }} />
-          </div>
-        </div>
-      ))}
-      <div style={{ fontSize: '0.68rem', color: T.mid, textAlign: 'center', marginTop: 8 }}>
-        ~USD totals · NON-USD APPROXIMATED
-      </div>
-    </div>
-  )
-}
-
-// ── Tab: Dividends ────────────────────────────────────────────────────────────
-function DividendsTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      <div style={{ fontSize: '0.75rem', color: T.mid, marginBottom: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Upcoming
-      </div>
-      {UPCOMING_DIVS.map((d, i) => {
-        const h = holdings.find(hh => hh.ticker === d.ticker)
-        const qty = h?.units ?? d.qty
-        const total = d.amount * qty
-        return (
-          <div key={i} style={{ ...cardBase, ...lb(C.yellow), padding: '12px 14px', marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ ...MONO, fontWeight: 700, color: T.pale }}>{d.ticker}</div>
-                <div style={{ color: T.mid, fontSize: '0.78rem', marginTop: 2 }}>{d.name}</div>
-                <div style={{ fontSize: '0.72rem', color: C.yellow, marginTop: 4 }}>Ex-date: {d.exDate}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ ...MONO, fontSize: '0.9rem', fontWeight: 600, color: C.yellow }}>${fmt(d.amount)}/sh</div>
-                <div style={{ ...MONO, fontSize: '0.78rem', color: T.pale, marginTop: 2 }}>~${fmt(total)} total ({qty} sh)</div>
-              </div>
-            </div>
-          </div>
-        )
-      })}
-      <div style={{ ...cardBase, padding: '16px', textAlign: 'center', color: T.mid, fontSize: '0.82rem' }}>
-        Past dividend data not tracked in snapshot
-      </div>
-    </div>
-  )
-}
-
-// ── Tab: P&L ─────────────────────────────────────────────────────────────────
-function PnlTab({ holdings, totalPnl }: { holdings: Holding[]; totalPnl: number | null }) {
-  const T = useTheme()
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  const withPnl = holdings.filter(h => h.pnl !== undefined && h.pnl_pct !== undefined)
-  const sorted = [...withPnl].sort((a, b) => (b.pnl_pct ?? 0) - (a.pnl_pct ?? 0))
-  const maxAbsPct = Math.max(...sorted.map(h => Math.abs(h.pnl_pct ?? 0)), 1)
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      {totalPnl !== null && (
-        <div style={{ ...cardBase, padding: '14px', marginBottom: 12, textAlign: 'center' }}>
-          <div style={{ fontSize: '0.7rem', color: T.mid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Unrealised P&L
-          </div>
-          <div style={{ ...MONO, fontSize: '1.6rem', fontWeight: 700, color: pnlColor(totalPnl) }}>
-            {totalPnl >= 0 ? '+' : ''}${fmt(Math.abs(totalPnl))}
-          </div>
-        </div>
-      )}
-      <div style={{ ...cardBase, padding: '10px 14px', marginBottom: 12 }}>
-        <div style={{ fontSize: '0.72rem', color: T.mid, marginBottom: 2 }}>REALISED (cumulative)</div>
-        <div style={{ ...MONO, fontSize: '0.9rem', color: C.green }}>+$9.46</div>
-        <div style={{ fontSize: '0.7rem', color: T.mid }}>QQQ +$20.50 · AAPL -$11.03</div>
-      </div>
-      <div style={{ fontSize: '0.72rem', color: T.mid, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Holdings ranked by return
-      </div>
-      {sorted.map((h, i) => {
-        const pct = h.pnl_pct ?? 0
-        const barW = Math.abs(pct) / maxAbsPct * 100
-        const color = pnlColor(pct)
-        const currency = holdingCurrency(h)
-        const sym = currency === 'SGD' ? 'S$' : currency === 'GBP' ? '£' : '$'
-        return (
-          <div key={i} style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-              <span style={{ ...MONO, fontSize: '0.82rem', color: T.pale, fontWeight: 600 }}>
-                {h.ticker ?? h.name.slice(0, 10)}
-              </span>
-              <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ ...MONO, fontSize: '0.78rem', color: T.mid }}>
-                  {h.pnl !== undefined ? (h.pnl >= 0 ? '+' : '') + sym + fmt(Math.abs(h.pnl)) : ''}
-                </span>
-                <span style={{ ...MONO, fontSize: '0.82rem', fontWeight: 600, color }}>{fmtPct(pct)}</span>
-              </span>
-            </div>
-            <div style={{ height: 5, background: T.inset, borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${barW}%`, background: color, borderRadius: 3 }} />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Tab: Thesis ───────────────────────────────────────────────────────────────
-function ThesisTab({ holdings }: { holdings: Holding[] }) {
-  const T = useTheme()
-  function lb(col: string): React.CSSProperties {
-    return {
-      borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
-    }
-  }
-  const cardBase: React.CSSProperties = { background: T.card, borderRadius: 10, marginBottom: 8 }
-
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const tickersWithThesis = holdings.filter(h => h.ticker && THESIS[h.ticker])
-
-  function toggle(t: string) {
-    setExpanded(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
-  }
-
-  return (
-    <div style={{ padding: '0 12px' }}>
-      {tickersWithThesis.length === 0 && (
-        <div style={{ ...cardBase, padding: '24px', textAlign: 'center', color: T.mid, fontSize: '0.85rem' }}>
-          No thesis notes for current holdings
-        </div>
-      )}
-      {tickersWithThesis.map(h => {
-        const ticker = h.ticker!
-        const th = THESIS[ticker]
-        const isOpen = expanded.has(ticker)
-        const sc = sectorColor(holdingSector(h))
-        return (
-          <div key={ticker} style={{ ...cardBase, ...lb(sc), marginBottom: 8, cursor: 'pointer', overflow: 'hidden' }}
-            onClick={() => toggle(ticker)}>
-            <div style={{ padding: '10px 14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ ...MONO, fontWeight: 700, color: T.pale }}>{ticker}</span>
-                <span style={{ fontSize: '0.75rem', color: T.mid }}>{isOpen ? '▲' : '▼'}</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: T.mid, marginTop: 2 }}>{th.entry}</div>
-            </div>
-            {isOpen && (
-              <div style={{ borderTop: `1px solid ${T.border}`, padding: '12px 14px', background: T.inset }}>
-                <div style={{ fontSize: '0.78rem', color: T.pale, lineHeight: 1.6, marginBottom: 10 }}>{th.thesis}</div>
-                <div style={{ fontSize: '0.7rem', color: C.green, marginBottom: 6 }}>✓ {th.status}</div>
-                <div style={{ fontSize: '0.7rem', color: C.red }}>⚠ AT RISK IF: {th.risk}</div>
-              </div>
-            )}
-          </div>
-        )
-      })}
-      {holdings.filter(h => h.ticker && !THESIS[h.ticker]).map(h => (
-        <div key={h.ticker ?? h.name} style={{ ...cardBase, ...lb(sectorColor(holdingSector(h))), padding: '10px 14px', marginBottom: 8, opacity: 0.5 }}>
-          <div style={{ ...MONO, fontSize: '0.82rem', color: T.mid }}>
-            {h.ticker ?? h.name.slice(0, 12)} — no thesis notes
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
 export function PortfolioClient() {
   const { showToast } = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [snapshot, setSnapshot] = useState<SnapResponse | null | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [tab, setTab] = useState<Tab>('holdings')
-  const [dark, setDark] = useState(() =>
-    typeof document === 'undefined' ? true : document.documentElement.dataset.theme !== 'light'
+  const [tab, setTab] = useState<TabId>('holdings')
+  const [themeKey, setThemeKey] = useState<ThemeKey>(() =>
+    typeof document === 'undefined' ? 'dark'
+      : document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
   )
 
   useEffect(() => {
     const obs = new MutationObserver(() => {
-      setDark(document.documentElement.dataset.theme !== 'light')
+      setThemeKey(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
     })
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     return () => obs.disconnect()
   }, [])
 
-  const theme = dark ? DARK : LIGHT
+  const t = TOKENS[themeKey]
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/portfolio')
-      const snap = await res.json()
-      setSnapshot(snap)
+      const data = await res.json()
+      setSnapshot(data)
     } catch { showToast('Failed to load portfolio', 'error') }
     finally { setLoading(false) }
   }, [showToast])
@@ -842,153 +786,180 @@ export function PortfolioClient() {
   async function handleFile(file: File) {
     setUploading(true)
     try {
-      const html = await file.text()
+      const text = await file.text()
+      const isJson = file.name.endsWith('.json')
+      let body: object
+      if (isJson) {
+        try { body = JSON.parse(text) }
+        catch { showToast('Invalid JSON file', 'error'); return }
+      } else {
+        body = { html: text, snapshot_date: new Date().toISOString() }
+      }
       const res = await fetch('/api/portfolio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, snapshot_date: new Date().toISOString() }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) { showToast(data.error || 'Parse failed', 'error'); return }
+      if (!res.ok) { showToast(data.error || 'Import failed', 'error'); return }
       showToast(`Imported ${data.holdings_count} holdings`, 'success')
       await load()
     } catch { showToast('Upload failed', 'error') }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
-  const BTN_SEC: React.CSSProperties = {
-    padding: '0.35rem 0.85rem', borderRadius: 6, cursor: 'pointer',
-    fontSize: '0.8rem', fontWeight: 600, background: theme.inset, color: theme.pale,
-    border: `1px solid ${theme.border}`,
-  }
-
   const themeToggle = (
-    <button
-      aria-label="toggle theme"
-      onClick={() => setDark(d => !d)}
-      style={{
-        background: 'none', border: `1px solid ${theme.border}`, borderRadius: 6,
-        cursor: 'pointer', fontSize: '1rem', padding: '4px 8px', color: theme.pale,
-      }}
-    >
-      {dark ? '🌙' : '☀️'}
+    <button aria-label="toggle theme"
+      onClick={() => setThemeKey(k => k === 'dark' ? 'light' : 'dark')}
+      style={{ background: 'none', border: `1px solid ${t.border}`, borderRadius: 6,
+        cursor: 'pointer', fontSize: '1rem', padding: '4px 8px', color: t.pale, minHeight: 44 }}>
+      {themeKey === 'dark' ? '🌙' : '☀️'}
     </button>
   )
 
-  if (loading) {
-    return (
-      <ThemeCtx.Provider value={theme}>
-        <div style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}>
-          <div style={{ ...WRAP }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
-            <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
-          </div>
-        </div>
-      </ThemeCtx.Provider>
-    )
-  }
+  const wrap: React.CSSProperties = { maxWidth: 430, margin: '0 auto', minHeight: '100vh', background: t.bg }
 
-  if (!snapshot) {
-    return (
-      <ThemeCtx.Provider value={theme}>
-        <div style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}>
-          <div style={WRAP}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
-            <UploadPanel onUploaded={load} />
-          </div>
+  if (loading) return (
+    <ThemeCtx.Provider value={t}>
+      <div style={{ minHeight: '100vh', background: t.bg, fontFamily: 'Sora, sans-serif' }}>
+        <div style={wrap}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
+          <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: t.mid }}>Loading…</div>
         </div>
-      </ThemeCtx.Provider>
-    )
-  }
+      </div>
+    </ThemeCtx.Provider>
+  )
 
-  const { holdings, total_value, total_pnl, snapshot_date } = snapshot
-  const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
-  const totalPnlPct = total_pnl !== null && total_value > 0
-    ? (total_pnl / (total_value - total_pnl)) * 100 : null
+  if (!snapshot) return (
+    <ThemeCtx.Provider value={t}>
+      <div style={{ minHeight: '100vh', background: t.bg, fontFamily: 'Sora, sans-serif' }}>
+        <div style={wrap}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
+          <UploadPanel onUploaded={load} />
+        </div>
+      </div>
+    </ThemeCtx.Provider>
+  )
+
+  const { holdings, orders = [], realised_trades = [], growth = [], milestones = [] } = snapshot
+  const deltaValue = snapshot.prior_value != null ? snapshot.total_value - snapshot.prior_value : null
 
   return (
-    <ThemeCtx.Provider value={theme}>
-      <div
-        data-theme={dark ? 'dark' : 'light'}
-        style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}
-      >
-        <div style={WRAP}>
+    <ThemeCtx.Provider value={t}>
+      <div data-theme={themeKey}
+        style={{ background: t.bg, minHeight: '100vh', color: t.pale, fontFamily: 'Sora, sans-serif' }}>
+        <div style={wrap}>
 
-          {/* Topbar */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '14px 16px 10px', borderBottom: `1px solid ${theme.border}`,
-          }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: theme.pale }}>Portfolio</div>
-              <div style={{ fontSize: '0.7rem', color: theme.mid, marginTop: 1 }}>
-                {snapshot_date.slice(0, 10)} · {holdings.length} holdings
+          {/* ── Sticky header ── */}
+          <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${t.border}`,
+            position: 'sticky', top: 0, background: t.bg, zIndex: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+              <div>
+                <div style={{ fontSize: 10, color: COL.orange, letterSpacing: 2, fontWeight: 600 }}>
+                  SYFE PORTFOLIO
+                </div>
+                <div style={{ fontSize: 22, fontWeight: 700, ...MONO, color: t.title, marginTop: 2 }}>
+                  ${snapshot.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 11, color: t.mid, ...MONO }}>
+                  {snapshot.snap_label ?? snapshot.snapshot_date.slice(0, 10)}
+                  {snapshot.snap_time ? ` · ${snapshot.snap_time}` : ''}
+                </div>
+                {deltaValue !== null && (
+                  <div style={{ display: 'flex', gap: 10, fontSize: 10, ...MONO, marginTop: 4 }}>
+                    <span style={{ color: deltaValue >= 0 ? COL.green : COL.red }}>
+                      {deltaValue >= 0 ? '+' : ''}${Math.abs(deltaValue).toFixed(2)}
+                    </span>
+                    <span style={{ color: t.mid }}>vs prior</span>
+                    <span style={{ color: deltaValue >= 0 ? COL.green : COL.red }}>
+                      {deltaValue >= 0 ? '+' : ''}{((deltaValue / snapshot.prior_value!) * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input ref={fileRef} type="file" accept=".html,.htm,.json" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+                <button style={{ padding: '0.35rem 0.85rem', borderRadius: 6, cursor: 'pointer',
+                  fontSize: '0.75rem', fontWeight: 600, background: t.inset, color: t.pale,
+                  border: `1px solid ${t.border}`, minHeight: 44 }}
+                  onClick={() => fileRef.current?.click()} disabled={uploading}>
+                  {uploading ? 'Importing…' : 'Update Snapshot'}
+                </button>
+                {themeToggle}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-              <button style={BTN_SEC} onClick={() => fileRef.current?.click()} disabled={uploading}>
-                {uploading ? 'Importing…' : 'Update Snapshot'}
-              </button>
-              {themeToggle}
-            </div>
-          </div>
 
-          {/* KPI row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 12px' }}>
-            {[
-              {
-                label: 'Value',
-                primary: `S$${fmt(total_value)}`,
-                secondary: Math.abs(totalUSD - total_value) > 10 ? `~$${fmt(totalUSD)}` : null,
-                color: theme.pale,
-              },
-              {
-                label: 'Unreal P&L',
-                primary: total_pnl !== null ? `${total_pnl >= 0 ? '+' : ''}$${fmt(Math.abs(total_pnl))}` : '—',
-                secondary: totalPnlPct !== null && total_pnl !== null ? `${fmtPct(totalPnlPct)}` : null,
-                color: total_pnl !== null ? pnlColor(total_pnl) : theme.mid,
-              },
-              { label: 'Holdings', primary: String(holdings.length), secondary: null, color: theme.pale },
-            ].map(k => (
-              <div key={k.label} style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ fontSize: '0.63rem', color: theme.mid, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{k.label}</div>
-                <div style={{ ...MONO, fontSize: '0.92rem', fontWeight: 700, color: k.color }}>{k.primary}</div>
-                {k.secondary && <div style={{ ...MONO, fontSize: '0.65rem', color: k.color, opacity: 0.75 }}>{k.secondary}</div>}
+            {/* Mini KPI chips */}
+            {(snapshot.cash != null || snapshot.pending != null ||
+              snapshot.total_pnl != null || snapshot.realised_pnl != null) && (
+              <div style={{ display: 'flex', gap: 4, marginTop: 10, fontSize: 10, ...MONO }}>
+                {snapshot.cash != null && (
+                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: 9 }}>CASH</div>
+                    <div style={{ color: t.pale }}>${snapshot.cash.toFixed(0)}</div>
+                  </div>
+                )}
+                {snapshot.pending != null && (
+                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: 9 }}>PEND</div>
+                    <div style={{ color: COL.yellow }}>${snapshot.pending.toFixed(0)}</div>
+                  </div>
+                )}
+                {snapshot.total_pnl != null && (
+                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: 9 }}>URZ</div>
+                    <div style={{ color: COL.green }}>+${snapshot.total_pnl.toFixed(0)}</div>
+                  </div>
+                )}
+                {snapshot.realised_pnl != null && (
+                  <div style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: t.inset, borderRadius: 4 }}>
+                    <div style={{ color: t.mid, fontSize: 9 }}>RLZ</div>
+                    <div style={{ color: COL.green }}>+${snapshot.realised_pnl.toFixed(0)}</div>
+                  </div>
+                )}
               </div>
-            ))}
+            )}
           </div>
 
-          {/* Tab bar */}
-          <div style={{
-            display: 'flex', overflowX: 'auto', padding: '4px 12px 0',
-            borderBottom: `1px solid ${theme.border}`,
-            scrollbarWidth: 'none',
-          }}>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px',
-                fontSize: '0.78rem', fontWeight: tab === t.id ? 700 : 400, whiteSpace: 'nowrap',
-                color: tab === t.id ? theme.orange : theme.mid,
-                borderBottom: tab === t.id ? `2px solid ${theme.orange}` : '2px solid transparent',
-                transition: 'color 0.15s',
+          {/* ── Tab bar ── */}
+          <div style={{ display: 'flex', borderBottom: `1px solid ${t.border}`, overflowX: 'auto',
+            background: t.bg, position: 'sticky', top: 115, zIndex: 9, scrollbarWidth: 'none' }}>
+            {TABS.map(tb => (
+              <button key={tb.id} onClick={() => setTab(tb.id)} style={{
+                flex: '1 0 auto', padding: '10px 12px', fontSize: 11, fontWeight: 600,
+                background: 'transparent',
+                color: tab === tb.id ? COL.orange : t.mid,
+                borderTop: 'none', borderRight: 'none', borderLeft: 'none',
+                borderBottom: tab === tb.id ? `2px solid ${COL.orange}` : '2px solid transparent',
+                cursor: 'pointer', fontFamily: 'Sora, sans-serif', whiteSpace: 'nowrap',
               }}>
-                {t.label}
+                {tb.label}
               </button>
             ))}
           </div>
 
-          {/* Tab content */}
-          <div style={{ paddingTop: 12 }}>
-            {tab === 'holdings'  && <HoldingsTab  holdings={holdings} />}
-            {tab === 'orders'    && <OrdersTab    holdings={holdings} />}
-            {tab === 'geo'       && <GeoTab       holdings={holdings} />}
-            {tab === 'sector'    && <SectorTab    holdings={holdings} />}
-            {tab === 'dividends' && <DividendsTab holdings={holdings} />}
-            {tab === 'pnl'       && <PnlTab       holdings={holdings} totalPnl={total_pnl} />}
-            {tab === 'thesis'    && <ThesisTab    holdings={holdings} />}
+          {/* ── Tab content ── */}
+          <div style={{ padding: '8px 16px 32px' }}>
+            {tab === 'holdings' && <HoldingsTab holdings={holdings} orders={orders} />}
+            {tab === 'orders'   && <OrdersTab   orders={orders} />}
+            {tab === 'geo'      && <GeoTab       holdings={holdings} />}
+            {tab === 'sector'   && <SectorTab    holdings={holdings} />}
+            {tab === 'pnl'      && <PnlTab
+              holdings={holdings}
+              totalPnl={snapshot.total_pnl ?? undefined}
+              realisedPnl={snapshot.realised_pnl ?? undefined}
+              realisedTrades={realised_trades}
+              priorUnrealised={snapshot.prior_unrealised ?? undefined}
+              priorRealised={snapshot.prior_realised ?? undefined}
+            />}
+            {tab === 'whatif'   && <WhatIfTab    holdings={holdings} />}
+            {tab === 'growth'   && <GrowthTab    growth={growth} milestones={milestones} />}
           </div>
 
+          <div style={{ padding: '16px 16px 24px', borderTop: `1px solid ${t.border}`,
+            fontSize: 9, color: t.mid, textAlign: 'center', ...MONO }}>
+            INDICATIVE · NON-USD APPROXIMATED (SGD 0.74 · GBP 1.29) · NOT FINANCIAL ADVICE
+          </div>
         </div>
       </div>
     </ThemeCtx.Provider>
