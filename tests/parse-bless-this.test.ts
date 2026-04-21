@@ -111,6 +111,31 @@ describe('date normalisation', () => {
   it('pads single-digit day and month', () => {
     expect(parseBlessThis('Date: 5/4/2026').date).toBe('2026-04-05')
   })
+
+  // BUG-030: formats seen on real receipts that previously fell through as raw strings
+  it('converts DD.MM.YYYY (dot separator)', () => {
+    expect(parseBlessThis('Date: 18.04.2026').date).toBe('2026-04-18')
+  })
+
+  it('converts "D Mon YYYY" text-month format (e.g. 21 Apr 2026)', () => {
+    expect(parseBlessThis('Date: 21 Apr 2026').date).toBe('2026-04-21')
+  })
+
+  it('converts "D Month YYYY" full-month format (e.g. 21 April 2026)', () => {
+    expect(parseBlessThis('Date: 21 April 2026').date).toBe('2026-04-21')
+  })
+
+  it('converts "Mon D, YYYY" US text format (e.g. Apr 21, 2026)', () => {
+    expect(parseBlessThis('Date: Apr 21, 2026').date).toBe('2026-04-21')
+  })
+
+  it('converts "Month D, YYYY" full US text format (e.g. April 21, 2026)', () => {
+    expect(parseBlessThis('Date: April 21, 2026').date).toBe('2026-04-21')
+  })
+
+  it('converts DD/MM/YY short-year (e.g. 21/04/26)', () => {
+    expect(parseBlessThis('Date: 21/04/26').date).toBe('2026-04-21')
+  })
 })
 
 // ── Time normalisation ────────────────────────────────────────────────────────

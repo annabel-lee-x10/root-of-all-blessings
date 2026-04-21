@@ -13,7 +13,7 @@ Output EXACTLY in this format (omit lines you cannot determine):
 Amount: [total amount, numbers only]
 Currency: [3-letter code, default SGD]
 Merchant/Payee: [store or vendor name]
-Date: [YYYY-MM-DD]
+Date: [YYYY-MM-DD — convert whatever date format appears on the receipt]
 Time: [HH:MM 24h]
 Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
 Tags: [3-5 lowercase comma-separated contextual tags]
@@ -22,6 +22,7 @@ Payment Method: [cash/credit card/debit card/e-wallet]
 
 Rules:
 - Amount is the grand total (GST-inclusive if shown)
+- Date: virtually all receipts print a transaction date — look for it even if formatted as "21 Apr 2026", "21/04/2026", "Apr 21, 2026" etc. and convert to YYYY-MM-DD. Only omit if no date whatsoever is visible.
 - Category inferred from merchant type and line items
 - Tags: use item types, time of day, merchant type, spend amount as signals
 - If a field cannot be determined, omit that line entirely`
@@ -139,7 +140,8 @@ export async function POST(request: NextRequest) {
     const timePart = parsed.time ?? '00:00'
     // Parse as SGT (UTC+8), then store as UTC ISO string for consistent string-sort
     const sgtDate = new Date(`${parsed.date}T${timePart}:00+08:00`)
-    datetime = sgtDate.toISOString()
+    if (!isNaN(sgtDate.getTime())) datetime = sgtDate.toISOString()
+    // else: normaliseDate returned an unrecognised format — fall back to current time
   }
 
   const draft = await insertDraftTransaction({
