@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { TransactionRow, Account, Category, Tag, TxType, AccountType } from '@/lib/types'
+import { ACCOUNT_TYPE_LABELS } from '@/lib/account-types'
 import { useToast } from './toast'
+import { PaymentTypePicker } from './payment-type-picker'
+import { CategoryPicker } from './category-picker'
+import { TagSelector } from './tag-selector'
 
 interface EditForm {
   type: TxType
@@ -17,10 +21,6 @@ interface EditForm {
 }
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
-const ACCOUNT_TYPE_ORDER: AccountType[] = ['bank', 'wallet', 'cash', 'fund', 'credit_card']
-const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund', credit_card: 'Credit Card',
-}
 
 const BTN: React.CSSProperties = {
   border: 'none', borderRadius: '6px', cursor: 'pointer',
@@ -36,6 +36,7 @@ const INPUT: React.CSSProperties = {
   color: 'var(--text)', fontSize: '13px', padding: '6px 10px', outline: 'none', width: '100%',
 }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
+const LABEL: React.CSSProperties = { color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }
 
 const EPOCH_ISO = '1970-01-01T00:00:00.000Z'
 
@@ -53,20 +54,6 @@ function toInputDt(iso: string) {
 function fromInputDt(val: string) {
   if (!val) return EPOCH_ISO
   return `${val}:00.000+08:00`
-}
-
-function paymentPillBtn(active: boolean): React.CSSProperties {
-  return {
-    padding: '5px 12px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-    background: active ? 'var(--accent-faint)' : 'transparent',
-    color: active ? 'var(--accent)' : 'var(--text-muted)',
-    transition: 'all 0.15s',
-  }
 }
 
 function txToForm(tx: TransactionRow): EditForm {
@@ -133,24 +120,6 @@ export function DraftsCard() {
 
   function ef(key: keyof EditForm, value: string | string[]) {
     setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev))
-  }
-
-  function handleEditPaymentTypeChange(type: AccountType) {
-    const newFilter = editTypeFilter === type ? '' : type
-    setEditTypeFilter(newFilter)
-    if (newFilter && editForm) {
-      const inFilter = activeAccounts.filter((a) => a.type === newFilter)
-      if (!inFilter.some((a) => a.id === editForm.account_id)) {
-        ef('account_id', inFilter.length === 1 ? inFilter[0].id : '')
-      }
-    }
-  }
-
-  function handleEditParentChange(pid: string) {
-    setEditParentCategoryId(pid)
-    if (!pid) { ef('category_id', ''); return }
-    const children = categories.filter((c) => c.parent_id === pid)
-    ef('category_id', children.length === 0 ? pid : '')
   }
 
   async function saveEdit(id: string) {
@@ -257,8 +226,6 @@ export function DraftsCard() {
   }
 
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
-  const categoryNameSet = new Set(categories.map((c) => c.name.toLowerCase()))
-  const visibleTags = tags.filter((t) => !categoryNameSet.has(t.name.toLowerCase()))
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -351,15 +318,9 @@ export function DraftsCard() {
 
             {/* Draft list */}
             {drafts.map((tx, i) => {
-              const editFilteredAccounts = editTypeFilter
-                ? activeAccounts.filter((a) => a.type === editTypeFilter)
-                : activeAccounts
-              const editFilteredCategories = categories.filter(
-                (c) => c.type === (editForm?.type === 'transfer' ? 'expense' : editForm?.type ?? 'expense')
-              )
-              const editParentCategories = editFilteredCategories.filter((c) => c.parent_id === null)
-              const editSubCategories = editFilteredCategories.filter((c) => c.parent_id === editParentCategoryId)
-              const editSelectedAccount = editForm ? accounts.find((a) => a.id === editForm.account_id) : null
+              const editSelectedAccount = editForm
+                ? accounts.find((a) => a.id === editForm.account_id)
+                : null
 
               return (
                 <div key={tx.id}>
@@ -451,6 +412,7 @@ export function DraftsCard() {
                         borderBottom: i < drafts.length - 1 ? '1px solid var(--border)' : 'none',
                       }}
                     >
+                      {/* Type / Amount / Currency */}
                       <div
                         style={{
                           display: 'grid',
@@ -460,7 +422,7 @@ export function DraftsCard() {
                         }}
                       >
                         <div>
-                          <label htmlFor={`edit-type-${tx.id}`} style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Type</label>
+                          <label htmlFor={`edit-type-${tx.id}`} style={LABEL}>Type</label>
                           <select
                             id={`edit-type-${tx.id}`}
                             style={SELECT}
@@ -473,34 +435,32 @@ export function DraftsCard() {
                           </select>
                         </div>
                         <div>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Amount</label>
+                          <label style={LABEL}>Amount</label>
                           <input type="number" step="0.01" style={INPUT} value={editForm.amount} onChange={(e) => ef('amount', e.target.value)} />
                         </div>
                         <div>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Currency</label>
+                          <label style={LABEL}>Currency</label>
                           <select style={SELECT} value={editForm.currency} onChange={(e) => ef('currency', e.target.value)}>
                             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                       </div>
 
-                      {/* Payment type filter pills */}
+                      {/* Payment type pills + account select */}
                       <div style={{ marginBottom: '8px' }}>
-                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '6px' }}>Payment Type</label>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {ACCOUNT_TYPE_ORDER.filter((t) => activeAccounts.some((a) => a.type === t)).map((t) => (
-                            <button
-                              key={t}
-                              type="button"
-                              onClick={() => handleEditPaymentTypeChange(t)}
-                              style={paymentPillBtn(editTypeFilter === t)}
-                            >
-                              {ACCOUNT_TYPE_LABELS[t]}
-                            </button>
-                          ))}
-                        </div>
+                        <label style={LABEL}>Payment Type & Account</label>
+                        <PaymentTypePicker
+                          accounts={activeAccounts}
+                          filterValue={editTypeFilter}
+                          accountId={editForm.account_id}
+                          onFilterChange={setEditTypeFilter}
+                          onAccountChange={(id) => ef('account_id', id)}
+                          selectStyle={SELECT}
+                          pillsContainerStyle={{ marginBottom: '6px' }}
+                        />
                       </div>
 
+                      {/* Payment method (read-only, derived from account type) */}
                       <div
                         style={{
                           display: 'grid',
@@ -510,14 +470,7 @@ export function DraftsCard() {
                         }}
                       >
                         <div>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Account</label>
-                          <select style={SELECT} value={editForm.account_id} onChange={(e) => ef('account_id', e.target.value)}>
-                            <option value="">Select account</option>
-                            {editFilteredAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payment Method</label>
+                          <label style={LABEL}>Payment Method</label>
                           <div style={{ ...INPUT, color: 'var(--text-dim)', cursor: 'default', lineHeight: '1.4' }}>
                             {editSelectedAccount
                               ? ACCOUNT_TYPE_LABELS[editSelectedAccount.type as AccountType] ?? editSelectedAccount.type
@@ -525,11 +478,11 @@ export function DraftsCard() {
                           </div>
                         </div>
                         <div>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Payee</label>
+                          <label style={LABEL}>Payee</label>
                           <input style={INPUT} value={editForm.payee} onChange={(e) => ef('payee', e.target.value)} placeholder="Payee" />
                         </div>
                         <div>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>
+                          <label style={LABEL}>
                             Date / Time
                             {!editForm.datetime && (
                               <span style={{ color: '#f0b429', marginLeft: '6px' }}>— not found, please set</span>
@@ -542,32 +495,22 @@ export function DraftsCard() {
                       {/* Category two-step picker */}
                       {editForm.type !== 'transfer' && (
                         <div style={{ marginBottom: '8px' }}>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Category</label>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <select
-                              style={{ ...SELECT, flex: 1, minWidth: '140px' }}
-                              value={editParentCategoryId}
-                              onChange={(e) => handleEditParentChange(e.target.value)}
-                            >
-                              <option value="">None</option>
-                              {editParentCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            {editParentCategoryId && editSubCategories.length > 0 && (
-                              <select
-                                style={{ ...SELECT, flex: 1, minWidth: '140px' }}
-                                value={editForm.category_id}
-                                onChange={(e) => ef('category_id', e.target.value)}
-                              >
-                                <option value="">Subcategory</option>
-                                {editSubCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                              </select>
-                            )}
-                          </div>
+                          <label style={LABEL}>Category</label>
+                          <CategoryPicker
+                            categories={categories}
+                            txType={editForm.type}
+                            parentId={editParentCategoryId}
+                            categoryId={editForm.category_id}
+                            onParentChange={setEditParentCategoryId}
+                            onCategoryChange={(cid) => ef('category_id', cid)}
+                            selectStyle={SELECT}
+                          />
                         </div>
                       )}
 
+                      {/* Note */}
                       <div style={{ marginBottom: '8px' }}>
-                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }}>Note</label>
+                        <label style={LABEL}>Note</label>
                         <textarea
                           style={{ ...INPUT, resize: 'vertical', minHeight: '52px', fontFamily: 'inherit' }}
                           value={editForm.note}
@@ -576,36 +519,18 @@ export function DraftsCard() {
                         />
                       </div>
 
-                      {visibleTags.length > 0 && (
-                        <div style={{ marginBottom: '10px' }}>
-                          <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '6px' }}>Tags</label>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {visibleTags.map((tag) => {
-                              const selected = editForm.tag_ids.includes(tag.id)
-                              return (
-                                <button
-                                  key={tag.id}
-                                  type="button"
-                                  onClick={() =>
-                                    ef('tag_ids', selected
-                                      ? editForm.tag_ids.filter((id) => id !== tag.id)
-                                      : [...editForm.tag_ids, tag.id])
-                                  }
-                                  style={{
-                                    ...BTN, padding: '3px 10px', fontSize: '12px',
-                                    background: selected ? '#f0b42920' : 'var(--bg-dim)',
-                                    color: selected ? '#f0b429' : 'var(--text-muted)',
-                                    border: `1px solid ${selected ? '#f0b42960' : 'var(--border)'}`,
-                                  }}
-                                >
-                                  {tag.name}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      {/* Tags */}
+                      <div style={{ marginBottom: '10px' }}>
+                        <label style={{ ...LABEL, marginBottom: '6px' }}>Tags</label>
+                        <TagSelector
+                          tags={tags}
+                          categories={categories}
+                          selectedIds={editForm.tag_ids}
+                          onChange={(ids) => ef('tag_ids', ids)}
+                        />
+                      </div>
 
+                      {/* Action buttons */}
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                           type="button"

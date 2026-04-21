@@ -18,7 +18,6 @@ Date: [YYYY-MM-DD, default today: ${today}]
 Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description]
-Payment Method: [cash/credit card/debit card/e-wallet]
 
 User input: "${text}"`
 }
@@ -42,6 +41,12 @@ export async function POST(request: NextRequest) {
 
   const resolvedAccountId = await resolveAccount(accountId)
   if (!resolvedAccountId) return Response.json({ error: 'No active account found' }, { status: 400 })
+
+  const accountRow = await db.execute({
+    sql: 'SELECT type FROM accounts WHERE id = ?',
+    args: [resolvedAccountId],
+  })
+  const derivedPaymentMethod = (accountRow.rows[0]?.type as string) ?? null
 
   const anthropicRes = await fetch(ANTHROPIC_URL, {
     method: 'POST',
@@ -92,7 +97,7 @@ export async function POST(request: NextRequest) {
     categoryId,
     payee: parsed.payee ?? null,
     note: parsed.notes ?? null,
-    paymentMethod: parsed.payment_method ?? null,
+    paymentMethod: derivedPaymentMethod,
     amount: parsed.amount,
     currency: parsed.currency ?? 'SGD',
     datetime,

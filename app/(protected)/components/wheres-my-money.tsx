@@ -2,36 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useToast } from './toast'
-import type { Account, Category, Tag, TxType, AccountType } from '@/lib/types'
+import type { Account, Tag, TxType } from '@/lib/types'
+import { PAYMENT_METHOD_TO_ACCOUNT_TYPE } from '@/lib/account-types'
 import { parseBlessThis } from '@/lib/parse-bless-this'
+import { PaymentTypePicker } from './payment-type-picker'
+import { CategoryPicker } from './category-picker'
+import { filterVisibleTags } from './tag-selector'
 
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'MYR', 'IDR', 'THB', 'AUD', 'HKD']
-
-const ACCOUNT_TYPE_ORDER: AccountType[] = ['bank', 'wallet', 'cash', 'fund', 'credit_card']
-const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund', credit_card: 'Credit Card',
-}
-
-// Map Claude's old human-readable payment method guesses to account type filter
-const PAYMENT_METHOD_TO_ACCOUNT_TYPE: Record<string, AccountType> = {
-  'credit card': 'credit_card',
-  'debit card': 'bank',
-  'cash': 'cash',
-  'e-wallet': 'wallet',
-  // Also handle type strings directly (from backfilled data)
-  'credit_card': 'credit_card',
-  'bank': 'bank',
-  'wallet': 'wallet',
-  'fund': 'fund',
-}
-
-function AccountOptions({ accounts }: { accounts: Account[] }) {
-  return (
-    <>
-      {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-    </>
-  )
-}
 
 function sgtNow() {
   const sgt = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }))
@@ -69,7 +47,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   const [currency, setCurrency] = useState('SGD')
   const [fxRate, setFxRate] = useState('')
   const [fxDate, setFxDate] = useState('')
-  const [paymentTypeFilter, setPaymentTypeFilter] = useState<AccountType | ''>('')
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<import('@/lib/types').AccountType | ''>('')
   const [accountId, setAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -83,7 +61,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   const [parentCategoryId, setParentCategoryId] = useState('')
 
   const [accounts, setAccounts] = useState<Account[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
+  const [categories, setCategories] = useState<import('@/lib/types').Category[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [payees, setPayees] = useState<string[]>([])
 
@@ -132,47 +110,19 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   }, [])
 
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
-  const filteredAccounts = paymentTypeFilter
-    ? activeAccounts.filter((a) => a.type === paymentTypeFilter)
-    : activeAccounts
 
-  const filteredCategories = categories.filter(
-    (c) => c.type === (type === 'transfer' ? 'expense' : type)
-  )
-  // BUG-028: parent/child category derivations for two-step picker
-  const parentCategories = filteredCategories.filter((c) => c.parent_id === null)
-  const subCategories = filteredCategories.filter((c) => c.parent_id === parentCategoryId)
-  // BUG-029: exclude tags whose names match any category name (avoids surfacing category-named DB entries)
-  const categoryNameSet = new Set(categories.map((c) => c.name.toLowerCase()))
-  const filteredTagSuggestions = tags.filter(
+  // BUG-029: exclude tags whose names match any category name
+  const visibleTagsList = filterVisibleTags(tags, categories)
+  const filteredTagSuggestions = visibleTagsList.filter(
     (t) =>
       t.name.toLowerCase().includes(tagSearch.toLowerCase()) &&
-      !selectedTagIds.includes(t.id) &&
-      !categoryNameSet.has(t.name.toLowerCase())
+      !selectedTagIds.includes(t.id)
   )
-
-  function handlePaymentTypeChange(type: AccountType) {
-    const newFilter = paymentTypeFilter === type ? '' : type
-    setPaymentTypeFilter(newFilter)
-    if (newFilter) {
-      const inFilter = activeAccounts.filter((a) => a.type === newFilter)
-      if (!inFilter.some((a) => a.id === accountId)) {
-        setAccountId(inFilter.length === 1 ? inFilter[0].id : '')
-      }
-    }
-  }
 
   function toggleTag(id: string) {
     setSelectedTagIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     )
-  }
-
-  function handleParentChange(pid: string) {
-    setParentCategoryId(pid)
-    if (!pid) { setCategoryId(''); return }
-    const children = filteredCategories.filter((c) => c.parent_id === pid)
-    setCategoryId(children.length === 0 ? pid : '')
   }
 
   async function createAndAddTag(name: string) {
@@ -206,7 +156,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     if (data.payee) setPayee(data.payee)
     if (data.notes) { setNote(data.notes); setShowNoteField(true) }
 
-    // Datetime: combine date + time if present
     if (data.date || data.time) {
       const currentDt = sgtNow()
       const datePart = data.date ?? currentDt.split('T')[0]
@@ -214,7 +163,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       setDatetime(`${datePart}T${timePart}`)
     }
 
-    // Category: match by name (case-insensitive); set both parent and child for two-step picker
+    // Category: match by name; set both parent and child for two-step picker
     if (data.category) {
       const match = categories.find(
         (c) => c.name.toLowerCase() === data.category!.toLowerCase()
@@ -243,7 +192,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
         accountMatched = true
       }
     }
-    // No account match: try to infer payment type filter from Claude's payment_method guess
+    // No account match: infer payment type filter from Claude's payment_method guess
     if (!accountMatched && data.payment_method) {
       const typeFilter = PAYMENT_METHOD_TO_ACCOUNT_TYPE[data.payment_method.toLowerCase()]
       if (typeFilter) setPaymentTypeFilter(typeFilter)
@@ -421,20 +370,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     }
   }
 
-  function paymentPillBtn(active: boolean): React.CSSProperties {
-    return {
-      padding: '5px 12px',
-      borderRadius: '20px',
-      fontSize: '12px',
-      fontWeight: 500,
-      cursor: 'pointer',
-      border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
-      background: active ? 'var(--accent-faint)' : 'transparent',
-      color: active ? 'var(--accent)' : 'var(--text-muted)',
-      transition: 'all 0.15s',
-    }
-  }
-
   const canSubmit = !saving && !!amount && !!accountId && (type !== 'transfer' || !!toAccountId)
 
   return (
@@ -588,38 +523,31 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
             ))}
           </div>
 
-          {/* Payment type filter pills */}
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-            {ACCOUNT_TYPE_ORDER.filter(t => activeAccounts.some(a => a.type === t)).map((t) => (
-              <button
-                key={t}
-                type="button"
-                data-testid={`payment-type-${t}`}
-                onClick={() => handlePaymentTypeChange(t)}
-                style={paymentPillBtn(paymentTypeFilter === t)}
-              >
-                {ACCOUNT_TYPE_LABELS[t]}
-              </button>
-            ))}
+          {/* Payment type filter pills + account select */}
+          <div style={{ marginBottom: '12px' }}>
+            <PaymentTypePicker
+              accounts={activeAccounts}
+              filterValue={paymentTypeFilter}
+              accountId={accountId}
+              onFilterChange={setPaymentTypeFilter}
+              onAccountChange={setAccountId}
+              selectStyle={selectStyle}
+              accountSelectRequired
+              pillsContainerStyle={{ marginBottom: '10px' }}
+            />
           </div>
 
-          {/* Account / To Account */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <div style={{ flex: 1 }}>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required style={selectStyle} data-testid="account-select">
-                <option value="">Account</option>
-                <AccountOptions accounts={filteredAccounts} />
+          {/* To Account (transfer only) */}
+          {type === 'transfer' && (
+            <div style={{ marginBottom: '12px' }}>
+              <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
+                <option value="">To Account</option>
+                {activeAccounts.filter((a) => a.id !== accountId).map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
               </select>
             </div>
-            {type === 'transfer' && (
-              <div style={{ flex: 1 }}>
-                <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required style={selectStyle}>
-                  <option value="">To Account</option>
-                  <AccountOptions accounts={activeAccounts.filter((a) => a.id !== accountId)} />
-              </select>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Amount + Currency */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
@@ -687,30 +615,15 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
           {/* Category — BUG-028: two-step parent → subcategory picker */}
           {type !== 'transfer' && (
             <div style={{ marginBottom: '12px' }}>
-              <select
-                value={parentCategoryId}
-                onChange={(e) => handleParentChange(e.target.value)}
-                style={selectStyle}
-                data-testid="parent-category-select"
-              >
-                <option value="">Category (optional)</option>
-                {parentCategories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {parentCategoryId && subCategories.length > 0 && (
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  style={{ ...selectStyle, marginTop: '6px' }}
-                  data-testid="subcategory-select"
-                >
-                  <option value="">— Subcategory</option>
-                  {subCategories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              )}
+              <CategoryPicker
+                categories={categories}
+                txType={type}
+                parentId={parentCategoryId}
+                categoryId={categoryId}
+                onParentChange={setParentCategoryId}
+                onCategoryChange={setCategoryId}
+                selectStyle={selectStyle}
+              />
             </div>
           )}
 
