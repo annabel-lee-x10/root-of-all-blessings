@@ -473,3 +473,23 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** Added `aspectRatio: '200 / 120'` to the SVG element — this forces the browser to maintain the correct height relative to the SVG width, preventing collapse. Changed `overflow: 'visible'` → `overflow: 'hidden'` to prevent residual overflow. Reverted wrapper back to `textAlign: 'center'` with `overflow: 'hidden'` defense-in-depth. Arc geometry (viewBox, cy, cx, radius) unchanged.
 
 **Regression test:** `tests/regression/gauge-overflow.test.tsx`
+
+---
+
+## BUG-032 · Portfolio: HTML upload silently invisible after PR #63 refactor
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** Uploading a Syfe HTML export on the Portfolio page showed "Upload failed" toast (or succeeded silently) but the dashboard never reflected the uploaded data — the UploadPanel reappeared immediately after upload.
+
+**Root cause:** PR #63 refactored `portfolio-client.tsx` to use `GET /api/portfolio/snapshots` (v2 route) for display, which filters `WHERE snap_label IS NOT NULL`. However, `POST /api/portfolio` (the v1 upload route) continued inserting snapshots with `snap_label = null` and did not insert into the `portfolio_holdings` child table. Result: every HTML upload was structurally invisible to the v2 read path. Additionally, on fresh production deployments where `/api/migrate` had not been run, columns like `snap_label` might not exist, causing the INSERT to throw → 500 HTML response → `res.json()` throws SyntaxError → outer `catch` fires "Upload failed" toast.
+
+**Fix (`app/api/portfolio/route.ts` POST):**
+1. Auto-generate `snap_label` from the snapshot date (e.g. "22 Apr 2026 (HTML import)") so it is never null.
+2. After inserting into `portfolio_snapshots`, also insert each parsed holding into the `portfolio_holdings` table so the v2 GET can read them.
+3. Keep `holdings_json` populated for backward compatibility with the v1 GET route.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts`
+
