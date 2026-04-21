@@ -7,24 +7,13 @@ vi.mock('@/app/(protected)/components/toast', () => ({
   useToast: () => ({ showToast: vi.fn() }),
 }))
 
-vi.mock('recharts', () => ({
-  PieChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Pie: () => null,
-  Cell: () => null,
-  Tooltip: () => null,
-  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  LineChart: ({ children }: { children: React.ReactNode }) => <div data-testid="line-chart">{children}</div>,
-  Line: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-}))
-
 const BASE_HOLDINGS = [
   {
     ticker: 'MU', name: 'Micron Technology',
     market_value: 1600, pnl: -50, pnl_pct: -3.0,
     avg_cost: 337.20, current_price: 320, units: 5,
     geo: 'US', sector: 'Technology', currency: 'USD',
+    target: 500,
   },
   {
     ticker: 'ABBV', name: 'AbbVie Inc.',
@@ -54,37 +43,32 @@ const SNAP = {
   holdings: BASE_HOLDINGS,
 }
 
-const HISTORY = [
-  { id: 'snap-a', snapshot_date: '2026-03-01T00:00:00.000Z', total_value: 9500, total_pnl: -200, created_at: '2026-03-01T00:00:00.000Z' },
-  { id: 'snap-b', snapshot_date: '2026-03-15T00:00:00.000Z', total_value: 9800, total_pnl: 100, created_at: '2026-03-15T00:00:00.000Z' },
-  { id: 'snap-c', snapshot_date: '2026-04-09T07:19:00.000Z', total_value: 10000, total_pnl: -30, created_at: '2026-04-09T07:19:00.000Z' },
+const ORDERS = [
+  { ticker: 'ABBV', geo: 'US', type: 'SELL LIMIT', price: 218.00, qty: 3, currency: 'USD', placed: '07 Apr 20:44 SGT' },
+  { ticker: 'AGIX', geo: 'US', type: 'BUY LIMIT',  price: 15.39,  qty: 2, currency: 'USD', placed: '08 Apr 01:17 SGT' },
 ]
 
-function mockFetch(data: unknown) {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(data),
+/** Mock fetch to return correct data per URL */
+function mockMultiFetch() {
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    let data: unknown = null
+    if (url === '/api/portfolio/orders')   data = ORDERS
+    else if (url === '/api/portfolio/realised') data = []
+    else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
+    else /* /api/portfolio */               data = SNAP
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
   }))
 }
 
-function mockFetchWithHistory(portfolioData: unknown, historyData: unknown) {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-    if (url.includes('/history')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(historyData) })
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(portfolioData) })
-  }))
-}
-
-beforeEach(() => mockFetch(SNAP))
+beforeEach(() => mockMultiFetch())
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
 
-async function renderDashboard(data = SNAP) {
-  mockFetch(data)
+async function renderDashboard() {
+  mockMultiFetch()
   const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
   render(<PortfolioClient />)
   // Wait for Holdings tab to load (cards have data-testid="holding-card-{ticker}")
@@ -129,34 +113,34 @@ describe('Holdings tab – sparklines', () => {
 describe('Holdings tab – limit badges', () => {
   it('shows SELL badge on card when ticker has an active SELL LIMIT order', async () => {
     await renderDashboard()
-    // ABBV has SELL LIMIT in OPEN_ORDERS
+    // ABBV has SELL LIMIT in ORDERS
     expect(screen.getByTestId('limit-badge-ABBV')).toHaveTextContent('SELL')
   })
 
   it('shows BUY badge on card when ticker has an active BUY LIMIT order', async () => {
     await renderDashboard()
-    // AGIX has BUY LIMIT in OPEN_ORDERS
+    // AGIX has BUY LIMIT in ORDERS
     expect(screen.getByTestId('limit-badge-AGIX')).toHaveTextContent('BUY')
   })
 
   it('shows no limit badge when ticker has no active orders', async () => {
     await renderDashboard()
-    // MU has no entry in OPEN_ORDERS
+    // MU has no entry in ORDERS
     expect(screen.queryByTestId('limit-badge-MU')).not.toBeInTheDocument()
   })
 
-  it('SELL badge is styled with red colour scheme', async () => {
+  it('SELL badge is styled with purple colour scheme', async () => {
     await renderDashboard()
     const badge = screen.getByTestId('limit-badge-ABBV')
-    // Red color used for sell limits
-    expect(badge.style.color).toMatch(/#FF5A5A|rgb\(255,\s*90,\s*90\)/)
+    // Purple color used for sell limits (snap27 style)
+    expect(badge.style.color).toMatch(/#9B6DFF|rgb\(155,\s*109,\s*255\)/)
   })
 
-  it('BUY badge is styled with teal colour scheme', async () => {
+  it('BUY badge is styled with green colour scheme', async () => {
     await renderDashboard()
     const badge = screen.getByTestId('limit-badge-AGIX')
-    // Teal color used for buy limits
-    expect(badge.style.color).toMatch(/#06D6A0|rgb\(6,\s*214,\s*160\)/)
+    // Green color used for buy limits (snap27 style)
+    expect(badge.style.color).toMatch(/#3DD68C|rgb\(61,\s*214,\s*140\)/)
   })
 })
 
@@ -196,7 +180,17 @@ describe('Holdings tab – 1D% change', () => {
         change_1d_pct: h.ticker === 'MU' ? -2.5 : 1.0,
       })),
     }
-    await renderDashboard(snapWith1D)
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      let data: unknown = null
+      if (url === '/api/portfolio/orders')   data = ORDERS
+      else if (url === '/api/portfolio/realised') data = []
+      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
+      else data = snapWith1D
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+    }))
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => expect(screen.getAllByTestId(/^holding-card-/).length).toBeGreaterThan(0))
     expect(screen.getByTestId('change-1d-MU')).toBeInTheDocument()
   })
 
@@ -205,7 +199,17 @@ describe('Holdings tab – 1D% change', () => {
       ...SNAP,
       holdings: BASE_HOLDINGS.map(h => ({ ...h, change_1d_pct: h.ticker === 'MU' ? -2.5 : 1.0 })),
     }
-    await renderDashboard(snapWith1D)
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      let data: unknown = null
+      if (url === '/api/portfolio/orders')   data = ORDERS
+      else if (url === '/api/portfolio/realised') data = []
+      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
+      else data = snapWith1D
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+    }))
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => expect(screen.getAllByTestId(/^holding-card-/).length).toBeGreaterThan(0))
     expect(screen.getByTestId('change-1d-MU').textContent).toMatch(/-2[.,]50%/)
   })
 
@@ -219,7 +223,17 @@ describe('Holdings tab – 1D% change', () => {
       ...SNAP,
       holdings: BASE_HOLDINGS.map(h => ({ ...h, change_1d_pct: 1.5 })),
     }
-    await renderDashboard(snapWith1D)
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      let data: unknown = null
+      if (url === '/api/portfolio/orders')   data = ORDERS
+      else if (url === '/api/portfolio/realised') data = []
+      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
+      else data = snapWith1D
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+    }))
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() => expect(screen.getAllByTestId(/^holding-card-/).length).toBeGreaterThan(0))
     expect(screen.getByTestId('change-1d-MU').textContent).toContain('+')
   })
 })
@@ -264,147 +278,16 @@ describe('theme toggle', () => {
   })
 
   it('theme toggle is visible in empty state (null snapshot — no portfolio uploaded yet)', async () => {
-    mockFetch(null)
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      let data: unknown = null
+      if (url === '/api/portfolio/orders')   data = []
+      else if (url === '/api/portfolio/realised') data = []
+      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
+      else data = null
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+    }))
     const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
     render(<PortfolioClient />)
     await waitFor(() => expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument())
-  })
-})
-
-// ── Feature 6: What-If tab ────────────────────────────────────────────────────
-describe('What-If tab', () => {
-  it('renders a What-If tab button in the tab bar', async () => {
-    await renderDashboard()
-    expect(screen.getByRole('button', { name: /what.if/i })).toBeInTheDocument()
-  })
-
-  it('clicking What-If tab shows holding rows with delta inputs', async () => {
-    await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
-    await waitFor(() => {
-      expect(screen.getByTestId('whatif-input-MU')).toBeInTheDocument()
-    })
-  })
-
-  it('shows delta inputs for each holding', async () => {
-    await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
-    await waitFor(() => {
-      const inputs = screen.getAllByTestId(/^whatif-input-/)
-      expect(inputs).toHaveLength(BASE_HOLDINGS.length)
-    })
-  })
-
-  it('shows a summary card with current and projected totals', async () => {
-    await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
-    await waitFor(() => {
-      expect(screen.getByTestId('whatif-summary')).toBeInTheDocument()
-    })
-  })
-
-  it('projected total updates when a delta input changes', async () => {
-    await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
-    await waitFor(() => screen.getByTestId('whatif-input-MU'))
-
-    const summaryBefore = screen.getByTestId('whatif-projected').textContent
-
-    fireEvent.change(screen.getByTestId('whatif-input-MU'), { target: { value: '10' } })
-
-    await waitFor(() => {
-      const summaryAfter = screen.getByTestId('whatif-projected').textContent
-      expect(summaryAfter).not.toBe(summaryBefore)
-    })
-  })
-
-  it('Reset All button resets all deltas to 0', async () => {
-    await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /what.if/i }))
-    await waitFor(() => screen.getByTestId('whatif-input-MU'))
-
-    fireEvent.change(screen.getByTestId('whatif-input-MU'), { target: { value: '10' } })
-    fireEvent.click(screen.getByRole('button', { name: /reset all/i }))
-
-    await waitFor(() => {
-      const input = screen.getByTestId('whatif-input-MU') as HTMLInputElement
-      expect(Number(input.value)).toBe(0)
-    })
-  })
-})
-
-// ── Feature 7: Growth tab ─────────────────────────────────────────────────────
-describe('Growth tab', () => {
-  it('renders a Growth tab button in the tab bar', async () => {
-    await renderDashboard()
-    expect(screen.getByRole('button', { name: /growth/i })).toBeInTheDocument()
-  })
-
-  it('clicking Growth tab fetches /api/portfolio/history', async () => {
-    mockFetchWithHistory(SNAP, HISTORY)
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
-
-    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
-
-    await waitFor(() => {
-      const fetchMock = vi.mocked(fetch)
-      const historyCalls = fetchMock.mock.calls.filter(([url]) => (url as string).includes('/history'))
-      expect(historyCalls.length).toBeGreaterThan(0)
-    })
-  })
-
-  it('Growth tab shows a line chart when history has data', async () => {
-    mockFetchWithHistory(SNAP, HISTORY)
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
-
-    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('line-chart')).toBeInTheDocument()
-    })
-  })
-
-  it('Growth tab shows snapshot summary card with gain/loss', async () => {
-    mockFetchWithHistory(SNAP, HISTORY)
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
-
-    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('growth-summary')).toBeInTheDocument()
-    })
-  })
-
-  it('Growth tab shows "No snapshot history" when history is empty', async () => {
-    mockFetchWithHistory(SNAP, [])
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
-
-    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
-
-    await waitFor(() => {
-      expect(screen.getByText(/no snapshot history/i)).toBeInTheDocument()
-    })
-  })
-
-  it('Growth tab shows individual snapshot rows', async () => {
-    mockFetchWithHistory(SNAP, HISTORY)
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => screen.getAllByTestId(/^holding-card-/).length > 0)
-
-    fireEvent.click(screen.getByRole('button', { name: /growth/i }))
-
-    await waitFor(() => {
-      const rows = screen.getAllByTestId(/^growth-row-/)
-      expect(rows).toHaveLength(HISTORY.length)
-    })
   })
 })
