@@ -1155,17 +1155,17 @@ export function PortfolioClient() {
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
               </div>
             </div>
-            {/* 4-cell KPI mini-bar */}
-            <div style={{ display: 'flex', gap: 4, marginTop: 10, marginBottom: 10, fontSize: '0.72rem', ...MONO }}>
+            {/* 4-cell KPI grid (2×2) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 10, marginBottom: 10, ...MONO }}>
               {[
                 { label: 'CASH', value: `$${cash.toFixed(0)}`,    color: theme.pale },
                 { label: 'PEND', value: `$${pending.toFixed(0)}`, color: theme.yellow },
                 { label: 'URZ',  value: `${urz >= 0 ? '+' : ''}$${Math.abs(urz).toFixed(0)}`, color: urz >= 0 ? theme.green : theme.red },
                 { label: 'RLZ',  value: `${rlz >= 0 ? '+' : ''}$${Math.abs(rlz).toFixed(0)}`, color: rlz >= 0 ? theme.green : theme.red },
               ].map(k => (
-                <div key={k.label} style={{ flex: 1, textAlign: 'center', padding: '4px 0', background: theme.inset, borderRadius: 4 }}>
-                  <div style={{ color: theme.mid, fontSize: '0.6rem' }}>{k.label}</div>
-                  <div style={{ color: k.color, fontSize: '0.72rem' }}>{k.value}</div>
+                <div key={k.label} style={{ textAlign: 'center', padding: '6px 0', background: theme.inset, borderRadius: 4 }}>
+                  <div style={{ color: theme.mid, fontSize: '0.7rem' }}>{k.label}</div>
+                  <div style={{ color: k.color, fontSize: '0.88rem' }}>{k.value}</div>
                 </div>
               ))}
             </div>
