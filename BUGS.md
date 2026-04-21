@@ -302,3 +302,35 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** `parseArr()` now tries `JSON.parse` directly first (fast path for clean responses). On failure, it scans for the last `[` that opens a JSON array of objects or an empty array (pattern `[\s*[{` or `[\s*]`), then parses from there. Moved to `lib/news-utils.ts` for testability.
 
 **Regression test:** `tests/regression/news-property-parse.test.ts`
+
+---
+
+## BUG-024 · News: upload does not auto-generate portfolio news after upload
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Uploading a portfolio HTML snapshot extracted tickers correctly and showed "N tickers found" toast, but the Portfolio section remained empty until the user manually clicked Refresh.
+
+**Root cause:** `handleUpload` called `setPortfolioTickers(tickers)` and showed the toast but did not trigger portfolio news generation.
+
+**Fix:** Extracted `refreshPortfolioNews(tickers)` helper. After a successful upload with at least one ticker, `handleUpload` calls `void refreshPortfolioNews(tickers)` immediately — portfolio news generates in the background while the upload UI is already dismissed.
+
+**Regression test:** `tests/components/news-upload-auto-refresh.test.tsx`
+
+---
+
+## BUG-025 · News: Singapore Property section does not auto-fetch when expanded
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Expanding the Singapore Property section (collapsed by default) only toggled the collapsed state — it never initiated a fetch. Users had to separately click Refresh to populate it.
+
+**Root cause:** `SectionBlock`'s toggle handler had no hook into the expand event and no `onOpen` callback mechanism.
+
+**Fix:** Added `onOpen?: () => void` prop to `SectionBlock`. The toggle function now calls `onOpen()` when transitioning to open with `items.length === 0 && !loading`. Added `handlePropOpen` in `NewsClient` (guarded by `propFetchedRef` to prevent re-fetching on subsequent collapses/re-expands). Property `SectionBlock` receives `onOpen={handlePropOpen}`.
+
+**Regression test:** `tests/components/news-property-auto-fetch.test.tsx`
