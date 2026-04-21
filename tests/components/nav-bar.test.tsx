@@ -260,9 +260,20 @@ describe('News view bottom nav', () => {
     expect(within(bottomNav).queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument()
   })
 
-  it('FAB points to /news', () => {
+  it('FAB is a button (not a link) on news view', () => {
     render(<NavBar />)
-    expect(within(getBottomNav()).getByRole('link', { name: 'Add news' })).toHaveAttribute('href', '/news')
+    expect(within(getBottomNav()).getByRole('button', { name: 'Add news' })).toBeInTheDocument()
+    expect(within(getBottomNav()).queryByRole('link', { name: 'Add news' })).not.toBeInTheDocument()
+  })
+
+  it('FAB dispatches news:open-upload custom event when clicked', () => {
+    render(<NavBar />)
+    const dispatched: Event[] = []
+    const handler = (e: Event) => dispatched.push(e)
+    window.addEventListener('news:open-upload', handler)
+    fireEvent.click(within(getBottomNav()).getByRole('button', { name: 'Add news' }))
+    window.removeEventListener('news:open-upload', handler)
+    expect(dispatched).toHaveLength(1)
   })
 
   it('does not show More button', () => {
