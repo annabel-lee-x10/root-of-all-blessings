@@ -326,7 +326,13 @@ const NAV_ITEMS = [
   { id: 'port', label: 'Portfolio' },
 ]
 
-export function NewsClient() {
+export function NewsClient({
+  sharedTickers,
+  onRequestUpload,
+}: {
+  sharedTickers?: string[]
+  onRequestUpload?: () => void
+} = {}) {
   const { showToast } = useToast()
   const [brief, setBrief] = useState<QsNewsBriefRow | null | undefined>(undefined)
   const [news, setNews] = useState<QsBriefSections>(EMPTY_SECTIONS)
@@ -338,6 +344,7 @@ export function NewsClient() {
   const [sentFilter, setSentFilter] = useState<'all' | Sentiment>('all')
   const fileRef = useRef<HTMLInputElement>(null)
   const propFetchedRef = useRef(false)
+  const sharedTickersPrevRef = useRef<string>('')
 
   // ── load brief from DB on mount ─────────────────────────────────────────────
   const loadBrief = useCallback(async () => {
@@ -361,6 +368,19 @@ export function NewsClient() {
   }, [])
 
   useEffect(() => { loadBrief() }, [loadBrief])
+
+  useEffect(() => {
+    if (sharedTickers === undefined) return
+    const key = sharedTickers.join(',')
+    if (key === sharedTickersPrevRef.current) return
+    sharedTickersPrevRef.current = key
+    setPortfolioTickers(sharedTickers)
+    if (sharedTickers.length > 0) {
+      void refreshPortfolioNews(sharedTickers)
+    }
+    // refreshPortfolioNews closes over stable state setters; intentionally omitted from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedTickers])
 
   useEffect(() => {
     function onOpenUpload() { fileRef.current?.click() }
@@ -596,7 +616,7 @@ export function NewsClient() {
 
           {/* Upload button */}
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={() => onRequestUpload ? onRequestUpload() : fileRef.current?.click()}
             disabled={uploading}
             style={{
               background: uploading ? 'var(--bg-dim)' : 'var(--bg-dim)',
