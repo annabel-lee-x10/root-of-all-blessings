@@ -81,27 +81,28 @@ afterEach(() => {
 })
 
 describe('ExpenseDashboard', () => {
-  it('renders time range selector with 4 options', async () => {
+  it('renders time range selector with 5 options', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
-    expect(screen.getByRole('button', { name: 'Daily' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '7-day' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Monthly' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1D' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '7D' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '1M' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '3M' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Custom' })).toBeInTheDocument()
   })
 
-  it('shows Monthly as default selected range', async () => {
+  it('shows 1M as default selected range', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
-    const monthly = screen.getByRole('button', { name: 'Monthly' })
+    const monthly = screen.getByRole('button', { name: '1M' })
     expect(monthly).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('fetches /api/dashboard on mount with range=monthly', async () => {
+  it('fetches /api/dashboard on mount with range=1m', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => {
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('/api/dashboard?range=monthly'))
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('/api/dashboard?range=1m'))
     })
   })
 
@@ -146,14 +147,14 @@ describe('ExpenseDashboard', () => {
     })
   })
 
-  it('refetches when Daily range button is clicked', async () => {
+  it('refetches when 1D range button is clicked', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
     vi.mocked(fetch).mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }))
+    fireEvent.click(screen.getByRole('button', { name: '1D' }))
     await waitFor(() => {
-      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('range=daily'))
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(expect.stringContaining('range=1d'))
     })
   })
 

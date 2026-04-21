@@ -9,7 +9,7 @@ async function migrate() {
     `CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
-      type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund')),
+      type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund','credit_card')),
       currency TEXT NOT NULL DEFAULT 'SGD',
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
@@ -17,9 +17,10 @@ async function migrate() {
     )`,
     `CREATE TABLE IF NOT EXISTS categories (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('expense','income')),
       sort_order INTEGER NOT NULL DEFAULT 0,
+      parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`,
@@ -96,9 +97,23 @@ async function migrate() {
 
   // Idempotent: add status column to transactions (drafts system)
   try {
-    await db.execute("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'")
+    await db.execute('ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT \'approved\' CHECK(status IN (\'draft\',\'approved\'))')
   } catch {
     // Column already exists — safe to ignore
+  }
+
+  // Idempotent: add parent_id column to categories (hierarchy support)
+  try {
+    await db.execute('ALTER TABLE categories ADD COLUMN parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL')
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  // Idempotent: create index for category hierarchy
+  try {
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id)')
+  } catch {
+    // Index already exists — safe to ignore
   }
 
   // ── Portfolio v2: extend portfolio_snapshots + add child tables ──────────────
@@ -155,7 +170,7 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_holdings_snap ON portfolio_holdings(snapshot_id)`,
     `CREATE TABLE IF NOT EXISTS portfolio_orders (
       id TEXT PRIMARY KEY,
-      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
       ticker TEXT NOT NULL,
       geo TEXT,
       type TEXT NOT NULL,
@@ -166,20 +181,23 @@ async function migrate() {
       current_price REAL,
       note TEXT,
       new_flag INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'open',
       created_at TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_orders_snap ON portfolio_orders(snapshot_id)`,
     `CREATE TABLE IF NOT EXISTS portfolio_realised (
       id TEXT PRIMARY KEY,
-      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
       key TEXT NOT NULL,
       value REAL NOT NULL,
+      note TEXT,
+      trade_date TEXT,
       created_at TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_realised_snap ON portfolio_realised(snapshot_id)`,
     `CREATE TABLE IF NOT EXISTS portfolio_growth (
       id TEXT PRIMARY KEY,
-      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
       dimension TEXT NOT NULL,
       score REAL NOT NULL,
       label TEXT,
@@ -191,7 +209,7 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_growth_snap ON portfolio_growth(snapshot_id)`,
     `CREATE TABLE IF NOT EXISTS portfolio_milestones (
       id TEXT PRIMARY KEY,
-      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
       date TEXT NOT NULL,
       tags_json TEXT NOT NULL DEFAULT '[]',
       text TEXT NOT NULL,
@@ -201,11 +219,18 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_milestones_snap ON portfolio_milestones(snapshot_id)`,
   ])
 
+  // Idempotent: add status column to portfolio_orders (standalone CRUD support)
+  try {
+    await db.execute("ALTER TABLE portfolio_orders ADD COLUMN status TEXT NOT NULL DEFAULT 'open'")
+  } catch {
+    // Already exists
+  }
+
+  // Idempotent: add note/trade_date columns to portfolio_realised
+  try { await db.execute('ALTER TABLE portfolio_realised ADD COLUMN note TEXT') } catch { /* exists */ }
+  try { await db.execute('ALTER TABLE portfolio_realised ADD COLUMN trade_date TEXT') } catch { /* exists */ }
+
   console.log('Migrations complete.')
-  process.exit(0)
 }
 
-migrate().catch((err) => {
-  console.error('Migration failed:', err)
-  process.exit(1)
-})
+migrate().catch(console.error)

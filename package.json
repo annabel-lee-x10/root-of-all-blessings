@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "migrate": "tsx scripts/migrate.ts",
+    "migrate:portfolio": "tsx scripts/migrate-portfolio.ts",
     "seed": "tsx scripts/seed.ts",
     "seed:snap27": "tsx scripts/seed-snap27.ts",
     "test": "vitest run",

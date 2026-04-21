@@ -72,7 +72,8 @@ describe('GET /api/portfolio/snapshots', () => {
 
   it('returns orders from portfolio_orders table', async () => {
     seedPortfolioSnapshotV2('s1')
-    seedPortfolioOrder('s1', {
+    seedPortfolioOrder('ord-1', {
+      snapshot_id: 's1',
       ticker: 'NVDA', type: 'SELL LIMIT', price: 220, qty: 2,
       currency: 'USD', geo: 'US', placed: '03:02 SGT', current_price: 202,
       note: '8.9% away', new_flag: 1,
@@ -89,8 +90,8 @@ describe('GET /api/portfolio/snapshots', () => {
 
   it('returns realised trades from portfolio_realised table', async () => {
     seedPortfolioSnapshotV2('s1')
-    seedPortfolioRealised('s1', 'QQQ', 20.50)
-    seedPortfolioRealised('s1', 'AAPL', -11.03)
+    seedPortfolioRealised('r1', 'QQQ', 20.50, 's1')
+    seedPortfolioRealised('r2', 'AAPL', -11.03, 's1')
     const { GET } = await import('@/app/api/portfolio/snapshots/route')
     const snap = await (await GET()).json()
     expect(snap.realised).toHaveLength(2)
@@ -100,10 +101,7 @@ describe('GET /api/portfolio/snapshots', () => {
 
   it('returns growth scores from portfolio_growth table', async () => {
     seedPortfolioSnapshotV2('s1')
-    seedPortfolioGrowth('s1', {
-      dimension: 'K', score: 4, label: 'Knowledge', level: 'Developing',
-      items: ['Item 1', 'Item 2'], next_text: 'Study more',
-    })
+    seedPortfolioGrowth('K', 4, 'Knowledge', 'Developing', ['Item 1', 'Item 2'], 'Study more', 's1')
     const { GET } = await import('@/app/api/portfolio/snapshots/route')
     const snap = await (await GET()).json()
     expect(snap.growth).toHaveLength(1)
@@ -117,8 +115,8 @@ describe('GET /api/portfolio/snapshots', () => {
 
   it('returns milestones from portfolio_milestones table ordered by sort_order', async () => {
     seedPortfolioSnapshotV2('s1')
-    seedPortfolioMilestone('s1', '02 Apr', 'QQQ take-profit +$20.50', ['S', 'E'], 1)
-    seedPortfolioMilestone('s1', '27 Mar', 'First position - MU entry', ['E'], 0)
+    seedPortfolioMilestone('m2', '02 Apr', ['S', 'E'], 'QQQ take-profit +$20.50', 1, 's1')
+    seedPortfolioMilestone('m1', '27 Mar', ['E'], 'First position - MU entry', 0, 's1')
     const { GET } = await import('@/app/api/portfolio/snapshots/route')
     const snap = await (await GET()).json()
     expect(snap.milestones).toHaveLength(2)

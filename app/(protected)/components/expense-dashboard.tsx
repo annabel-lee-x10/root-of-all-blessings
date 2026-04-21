@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-type Range = 'daily' | '7day' | 'monthly' | 'custom'
+type Range = '1d' | '7d' | '1m' | '3m' | 'custom'
 
 interface TagBreakdownEntry {
   tag_name: string
@@ -36,9 +36,10 @@ interface TrendPoint {
 }
 
 const RANGES: { id: Range; label: string }[] = [
-  { id: 'daily', label: 'Daily' },
-  { id: '7day', label: '7-day' },
-  { id: 'monthly', label: 'Monthly' },
+  { id: '1d', label: '1D' },
+  { id: '7d', label: '7D' },
+  { id: '1m', label: '1M' },
+  { id: '3m', label: '3M' },
   { id: 'custom', label: 'Custom' },
 ]
 
@@ -112,7 +113,7 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
 }
 
 export function ExpenseDashboard() {
-  const [range, setRange] = useState<Range>('monthly')
+  const [range, setRange] = useState<Range>('1m')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [data, setData] = useState<DashboardData | null>(null)

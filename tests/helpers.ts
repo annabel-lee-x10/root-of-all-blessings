@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS portfolio_holdings (
 );
 CREATE TABLE IF NOT EXISTS portfolio_orders (
   id TEXT PRIMARY KEY,
-  snapshot_id TEXT NOT NULL,
+  snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
   ticker TEXT NOT NULL,
   geo TEXT,
   type TEXT NOT NULL,
@@ -67,18 +67,21 @@ CREATE TABLE IF NOT EXISTS portfolio_orders (
   current_price REAL,
   note TEXT,
   new_flag INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'open',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS portfolio_realised (
   id TEXT PRIMARY KEY,
-  snapshot_id TEXT NOT NULL,
+  snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
   key TEXT NOT NULL,
   value REAL NOT NULL,
+  note TEXT,
+  trade_date TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS portfolio_growth (
   id TEXT PRIMARY KEY,
-  snapshot_id TEXT NOT NULL,
+  snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
   dimension TEXT NOT NULL,
   score REAL NOT NULL,
   label TEXT,
@@ -89,7 +92,7 @@ CREATE TABLE IF NOT EXISTS portfolio_growth (
 );
 CREATE TABLE IF NOT EXISTS portfolio_milestones (
   id TEXT PRIMARY KEY,
-  snapshot_id TEXT NOT NULL,
+  snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   tags_json TEXT NOT NULL DEFAULT '[]',
   text TEXT NOT NULL,
@@ -106,7 +109,7 @@ CREATE TABLE IF NOT EXISTS news_briefs (
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
-  type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund')),
+  type TEXT NOT NULL CHECK(type IN ('bank','wallet','cash','fund','credit_card')),
   currency TEXT NOT NULL DEFAULT 'SGD',
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
@@ -114,10 +117,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   type TEXT NOT NULL CHECK(type IN ('expense','income')),
   sort_order INTEGER NOT NULL DEFAULT 0,
-  parent_id TEXT REFERENCES categories(id),
+  parent_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -278,19 +281,186 @@ export function seedNewsBrief(
     .run(id, date, JSON.stringify(briefJson), n, tickers ? JSON.stringify(tickers) : null)
 }
 
+// Legacy snapshot seeder — stores holdings in holdings_json (used by old /api/portfolio route tests)
 export function seedPortfolioSnapshot(
   id: string,
   holdings: object[],
-  opts: { total_value?: number; total_pnl?: number | null; snapshot_date?: string } = {}
+  opts: {
+    total_value?: number; total_pnl?: number | null; snapshot_date?: string
+    cash?: number; pending?: number; realised_pnl?: number
+    net_invested?: number; net_deposited?: number; dividends?: number
+    prior_value?: number; prior_unrealised?: number; prior_realised?: number
+    prior_cash?: number; snap_label?: string; prior_holdings?: number
+    snap_time?: string; unrealised_pnl?: number
+  } = {}
 ) {
   const n = new Date().toISOString()
-  const { total_value = 10000, total_pnl = null, snapshot_date = n } = opts
+  const { total_value = 10000, total_pnl = null, snapshot_date = n,
+          cash = null, pending = null, realised_pnl = null, net_invested = null,
+          net_deposited = null, dividends = null, prior_value = null,
+          prior_unrealised = null, prior_realised = null, prior_cash = null,
+          snap_label = null, prior_holdings = null, snap_time = null, unrealised_pnl = null } = opts
   testDb
     .prepare(
-      `INSERT INTO portfolio_snapshots (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at)
-       VALUES (?, ?, ?, ?, ?, NULL, ?)`
+      `INSERT INTO portfolio_snapshots
+         (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
+          snap_label, snap_time, cash, pending, net_invested, unrealised_pnl, realised_pnl,
+          net_deposited, dividends,
+          prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings)
+       VALUES (?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
-    .run(id, snapshot_date, total_value, total_pnl, JSON.stringify(holdings), n)
+    .run(id, snapshot_date, total_value, total_pnl, JSON.stringify(holdings), n,
+         snap_label, snap_time, cash, pending, net_invested, unrealised_pnl, realised_pnl,
+         net_deposited, dividends,
+         prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings)
+}
+
+// V2 snapshot seeder — uses snap_label to mark as v2, child data in separate tables
+export function seedPortfolioSnapshotV2(
+  id: string,
+  opts: {
+    total_value?: number
+    snap_label?: string
+    snap_time?: string
+    unrealised_pnl?: number | null
+    realised_pnl?: number | null
+    cash?: number | null
+    net_invested?: number | null
+    net_deposited?: number | null
+    snapshot_date?: string
+  } = {}
+) {
+  const n = new Date().toISOString()
+  const {
+    total_value = 10000, snap_label = 'Test Snap', snap_time = '12:00 SGT',
+    unrealised_pnl = null, realised_pnl = null, cash = null,
+    net_invested = null, net_deposited = null,
+    snapshot_date = n,
+  } = opts
+  testDb.prepare(
+    `INSERT INTO portfolio_snapshots
+      (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
+       snap_label, snap_time, unrealised_pnl, realised_pnl, cash, net_invested, net_deposited)
+     VALUES (?, ?, ?, NULL, '[]', NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, snapshot_date, total_value, n, snap_label, snap_time, unrealised_pnl, realised_pnl, cash, net_invested, net_deposited)
+}
+
+export function seedPortfolioHolding(
+  snapId: string,
+  opts: {
+    id?: string
+    ticker?: string
+    name?: string
+    value?: number
+    pnl?: number | null
+    qty?: number | null
+    price?: number | null
+    geo?: string
+    sector?: string
+    currency?: string
+    sell_limit?: number | null
+    buy_limit?: number | null
+    target?: number | null
+    change_1d?: number | null
+    value_usd?: number | null
+    is_new?: boolean
+    approx?: boolean
+    note?: string | null
+    dividend_amount?: number | null
+    dividend_date?: string | null
+  } = {}
+) {
+  const n = new Date().toISOString()
+  const {
+    id = crypto.randomUUID(), ticker = null, name = 'Test Holding',
+    value = 1000, pnl = null, qty = null, price = null,
+    geo = 'US', sector = 'Technology', currency = 'USD',
+    sell_limit = null, buy_limit = null, target = null,
+    change_1d = null, value_usd = null, is_new = false, approx = false,
+    note = null, dividend_amount = null, dividend_date = null,
+  } = opts
+  testDb.prepare(
+    `INSERT INTO portfolio_holdings
+      (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
+       value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
+       is_new, approx, note, dividend_amount, dividend_date, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, snapId, ticker, name, geo, sector, currency, price, change_1d,
+    value, pnl, qty, value_usd, target, sell_limit, buy_limit,
+    is_new ? 1 : 0, approx ? 1 : 0, note, dividend_amount, dividend_date, n)
+}
+
+// Unified order seeder. Use snapshot_id in opts for snapshot-linked orders;
+// omit snapshot_id for standalone orders (visible to /api/portfolio/orders).
+export function seedPortfolioOrder(
+  id: string,
+  opts: {
+    snapshot_id?: string | null
+    ticker?: string
+    geo?: string
+    type?: string
+    price?: number
+    qty?: number
+    currency?: string
+    placed?: string
+    current_price?: number | null
+    note?: string | null
+    new_flag?: boolean | number
+    status?: string
+  } = {}
+) {
+  const n = new Date().toISOString()
+  const {
+    snapshot_id = null, ticker = 'MU', geo = 'US', type = 'SELL LIMIT',
+    price = 100, qty = 1, currency = 'USD', placed = n,
+    current_price = null, note = null, new_flag = false, status = 'open',
+  } = opts
+  const nf = typeof new_flag === 'boolean' ? (new_flag ? 1 : 0) : new_flag
+  testDb.prepare(
+    `INSERT INTO portfolio_orders
+      (id, snapshot_id, ticker, geo, type, price, qty, currency, placed, current_price, note, new_flag, status, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(id, snapshot_id, ticker, geo, type, price, qty, currency, placed, current_price, note, nf, status, n)
+}
+
+// Unified realised seeder. Pass snapshot_id for snapshot-linked records;
+// omit for standalone records (visible to /api/portfolio/realised).
+export function seedPortfolioRealised(
+  id: string, key: string, value: number, snapshot_id?: string | null
+) {
+  const n = new Date().toISOString()
+  testDb.prepare(
+    `INSERT INTO portfolio_realised (id, snapshot_id, key, value, note, trade_date, created_at) VALUES (?,?,?,?,NULL,NULL,?)`
+  ).run(id, snapshot_id ?? null, key, value, n)
+}
+
+// Unified growth seeder. Pass snapshot_id for snapshot-linked records;
+// omit for standalone records (visible to /api/portfolio/growth).
+export function seedPortfolioGrowth(
+  dimension: string, score: number, label: string, level: string,
+  items: string[] = [], next_text: string | null = null,
+  snapshot_id?: string | null
+) {
+  const n = new Date().toISOString()
+  testDb.prepare(
+    `INSERT INTO portfolio_growth
+      (id, snapshot_id, dimension, score, label, level, items_json, next_text, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`
+  ).run(crypto.randomUUID(), snapshot_id ?? null, dimension, score, label, level, JSON.stringify(items), next_text, n)
+}
+
+// Unified milestone seeder. Pass snapshot_id for snapshot-linked records;
+// omit for standalone records (visible to /api/portfolio/growth milestones).
+export function seedPortfolioMilestone(
+  id: string, date: string, tags: string[], text: string, order = 0,
+  snapshot_id?: string | null
+) {
+  const n = new Date().toISOString()
+  testDb.prepare(
+    `INSERT INTO portfolio_milestones
+      (id, snapshot_id, date, tags_json, text, sort_order, created_at)
+     VALUES (?,?,?,?,?,?,?)`
+  ).run(id, snapshot_id ?? null, date, JSON.stringify(tags), text, order, n)
 }
 
 export function seedTransaction(
@@ -328,134 +498,4 @@ export function seedTransaction(
        account_id, to_account_id, category_id, payee, note, payment_method, status, datetime, created_at, updated_at)
      VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, status, datetime, n, n)
-}
-
-export function seedPortfolioSnapshotV2(
-  id: string,
-  opts: {
-    total_value?: number
-    snap_label?: string
-    snap_time?: string
-    unrealised_pnl?: number
-    realised_pnl?: number
-    cash?: number
-    net_invested?: number
-    net_deposited?: number
-    snapshot_date?: string
-  } = {}
-) {
-  const n = new Date().toISOString()
-  const {
-    total_value = 10000, snap_label = 'Test Snap', snap_time = '12:00 SGT',
-    unrealised_pnl = null, realised_pnl = null, cash = null,
-    net_invested = null, net_deposited = null,
-    snapshot_date = n,
-  } = opts
-  testDb.prepare(
-    `INSERT INTO portfolio_snapshots
-      (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
-       snap_label, snap_time, unrealised_pnl, realised_pnl, cash, net_invested, net_deposited)
-     VALUES (?, ?, ?, NULL, '[]', NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, snapshot_date, total_value, n, snap_label, snap_time, unrealised_pnl, realised_pnl, cash, net_invested, net_deposited)
-}
-
-export function seedPortfolioHolding(
-  snapId: string,
-  opts: {
-    id?: string
-    ticker?: string
-    name?: string
-    value?: number
-    pnl?: number
-    qty?: number
-    price?: number
-    geo?: string
-    sector?: string
-    currency?: string
-    sell_limit?: number | null
-    buy_limit?: number | null
-    target?: number | null
-    change_1d?: number | null
-    value_usd?: number | null
-    is_new?: boolean
-    approx?: boolean
-    note?: string | null
-    dividend_amount?: number | null
-    dividend_date?: string | null
-  } = {}
-) {
-  const n = new Date().toISOString()
-  const {
-    id = crypto.randomUUID(), ticker = null, name = 'Test Holding',
-    value = 1000, pnl = null, qty = null, price = null,
-    geo = 'US', sector = 'Technology', currency = 'USD',
-    sell_limit = null, buy_limit = null, target = null,
-    change_1d = null, value_usd = null, is_new = false, approx = false,
-    note = null, dividend_amount = null, dividend_date = null,
-  } = opts
-  testDb.prepare(
-    `INSERT INTO portfolio_holdings
-      (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
-       value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
-       is_new, approx, note, dividend_amount, dividend_date, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, snapId, ticker, name, geo, sector, currency, price, change_1d,
-    value, pnl, qty, value_usd, target, sell_limit, buy_limit,
-    is_new ? 1 : 0, approx ? 1 : 0, note, dividend_amount, dividend_date, n)
-}
-
-export function seedPortfolioOrder(
-  snapId: string,
-  opts: {
-    id?: string
-    ticker?: string
-    type?: string
-    price?: number
-    qty?: number
-    currency?: string
-    geo?: string
-    placed?: string
-    current_price?: number
-    note?: string
-    new_flag?: number
-  } = {}
-) {
-  const n = new Date().toISOString()
-  const {
-    id = crypto.randomUUID(), ticker = 'TEST', type = 'SELL LIMIT',
-    price = 100, qty = 1, currency = 'USD', geo = 'US',
-    placed = n, current_price = null, note = null, new_flag = 0,
-  } = opts
-  testDb.prepare(
-    `INSERT INTO portfolio_orders
-      (id, snapshot_id, ticker, geo, type, price, qty, currency, placed, current_price, note, new_flag, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, snapId, ticker, geo, type, price, qty, currency, placed, current_price, note, new_flag, n)
-}
-
-export function seedPortfolioRealised(snapId: string, key: string, value: number) {
-  const n = new Date().toISOString()
-  testDb.prepare(
-    'INSERT INTO portfolio_realised (id, snapshot_id, key, value, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(crypto.randomUUID(), snapId, key, value, n)
-}
-
-export function seedPortfolioGrowth(
-  snapId: string,
-  opts: { dimension?: string; score?: number; label?: string; level?: string; items?: string[]; next_text?: string }
-) {
-  const n = new Date().toISOString()
-  const { dimension = 'K', score = 3, label = 'Knowledge', level = 'Developing', items = [], next_text = null } = opts
-  testDb.prepare(
-    `INSERT INTO portfolio_growth (id, snapshot_id, dimension, score, label, level, items_json, next_text, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(crypto.randomUUID(), snapId, dimension, score, label, level, JSON.stringify(items), next_text, n)
-}
-
-export function seedPortfolioMilestone(snapId: string, date: string, text: string, tags: string[] = [], order = 0) {
-  const n = new Date().toISOString()
-  testDb.prepare(
-    `INSERT INTO portfolio_milestones (id, snapshot_id, date, tags_json, text, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(crypto.randomUUID(), snapId, date, JSON.stringify(tags), text, order, n)
 }

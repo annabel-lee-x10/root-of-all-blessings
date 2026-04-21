@@ -178,76 +178,70 @@ describe('parseDateTime', () => {
 
 describe('mapCategory', () => {
   it('maps food categories', () => {
-    expect(mapCategory('Food', '', 'expense')).toEqual({ category: 'Food', type: 'expense' })
-    expect(mapCategory('Food & Dining', '', 'expense')).toEqual({ category: 'Food', type: 'expense' })
-    expect(mapCategory('Groceries', '', 'expense')).toEqual({ category: 'Food', type: 'expense' })
+    expect(mapCategory('Food', 'Breakfast', 'expense')).toEqual({ category: 'Food', subcategory: 'Meals', type: 'expense' })
+    expect(mapCategory('Food', 'Grocery', 'expense')).toEqual({ category: 'Food', subcategory: 'Groceries', type: 'expense' })
+    expect(mapCategory('Food', 'Coffee Matcha', 'expense')).toEqual({ category: 'Food', subcategory: 'Coffee', type: 'expense' })
   })
 
   it('maps transport categories', () => {
-    expect(mapCategory('Transportation', '', 'expense')).toEqual({ category: 'Transport', type: 'expense' })
-    expect(mapCategory('Grab', '', 'expense')).toEqual({ category: 'Transport', type: 'expense' })
-    expect(mapCategory('Petrol', '', 'expense')).toEqual({ category: 'Transport', type: 'expense' })
+    expect(mapCategory('Transportation', 'Taxi', 'expense')).toEqual({ category: 'Transportation', subcategory: 'Taxi', type: 'expense' })
+    expect(mapCategory('Transportation', 'Bus / Train / Subway', 'expense')).toEqual({ category: 'Transportation', subcategory: 'Bus and Train', type: 'expense' })
+    expect(mapCategory('buffer', 'Cab', 'expense')).toEqual({ category: 'Transportation', subcategory: 'Taxi', type: 'expense' })
   })
 
   it('maps bills categories', () => {
-    expect(mapCategory('Utilities', '', 'expense')).toEqual({ category: 'Bills', type: 'expense' })
-    expect(mapCategory('Phone', '', 'expense')).toEqual({ category: 'Bills', type: 'expense' })
-    expect(mapCategory('Insurance', '', 'expense')).toEqual({ category: 'Bills', type: 'expense' })
+    expect(mapCategory('Bills', 'Electricity', 'expense')).toEqual({ category: 'Bills', subcategory: 'Electricity', type: 'expense' })
+    expect(mapCategory('Bills', 'Broadband', 'expense')).toEqual({ category: 'Bills', subcategory: 'Broadband', type: 'expense' })
+    expect(mapCategory('Bills', 'Mobile phones', 'expense')).toEqual({ category: 'Bills', subcategory: 'Mobile', type: 'expense' })
   })
 
   it('maps health categories', () => {
-    expect(mapCategory('Health & Fitness', '', 'expense')).toEqual({ category: 'Health', type: 'expense' })
-    expect(mapCategory('Medical', '', 'expense')).toEqual({ category: 'Health', type: 'expense' })
+    expect(mapCategory('Health and Wellness', 'Dental', 'expense')).toEqual({ category: 'Health and Wellness', subcategory: 'Dental', type: 'expense' })
+    expect(mapCategory('Health and Wellness', 'Medicine', 'expense')).toEqual({ category: 'Health and Wellness', subcategory: 'Medical', type: 'expense' })
   })
 
   it('maps entertainment categories', () => {
-    expect(mapCategory('Entertainment', '', 'expense')).toEqual({ category: 'Entertainment', type: 'expense' })
-    expect(mapCategory('Gaming', '', 'expense')).toEqual({ category: 'Entertainment', type: 'expense' })
+    expect(mapCategory('Entertainment', 'Gaming', 'expense')).toEqual({ category: 'Entertainment', subcategory: 'Gaming', type: 'expense' })
+    expect(mapCategory('Entertainment', 'Movie', 'expense')).toEqual({ category: 'Entertainment', subcategory: 'Shows and Movies', type: 'expense' })
   })
 
   it('maps subscription categories', () => {
-    expect(mapCategory('Subscription', '', 'expense')).toEqual({ category: 'Subscriptions', type: 'expense' })
-    expect(mapCategory('Streaming', '', 'expense')).toEqual({ category: 'Subscriptions', type: 'expense' })
+    expect(mapCategory('Subscriptions', 'Entertainment', 'expense')).toEqual({ category: 'Subscriptions', subcategory: 'Entertainment', type: 'expense' })
+    expect(mapCategory('Subscriptions', 'Internet', 'expense')).toEqual({ category: 'Subscriptions', subcategory: 'Internet', type: 'expense' })
   })
 
   it('maps pet categories', () => {
-    expect(mapCategory('Pet', '', 'expense')).toEqual({ category: 'Pet', type: 'expense' })
-    expect(mapCategory('Pet & Animal', '', 'expense')).toEqual({ category: 'Pet', type: 'expense' })
+    expect(mapCategory('Pet', 'Food', 'expense')).toEqual({ category: 'Pet', subcategory: 'Pet Food', type: 'expense' })
+    expect(mapCategory('Pet', 'Grooming', 'expense')).toEqual({ category: 'Pet', subcategory: 'Grooming', type: 'expense' })
   })
 
   it('maps income categories', () => {
-    expect(mapCategory('Salary', '', 'income')).toEqual({ category: 'Salary', type: 'income' })
-    expect(mapCategory('Refund', '', 'income')).toEqual({ category: 'Refund', type: 'income' })
-    expect(mapCategory('Repayment', '', 'income')).toEqual({ category: 'Repayment', type: 'income' })
-    expect(mapCategory('Angpow', '', 'income')).toEqual({ category: 'Angpow', type: 'income' })
-    expect(mapCategory('Interest', '', 'income')).toEqual({ category: 'Other Income', type: 'income' })
-    expect(mapCategory('Freelance', '', 'income')).toEqual({ category: 'Sales', type: 'income' })
+    expect(mapCategory('Income', 'Salary', 'income')).toEqual({ category: 'Income', subcategory: 'Salary', type: 'income' })
+    expect(mapCategory('Income', 'Refund', 'income')).toEqual({ category: 'Income', subcategory: 'Refund', type: 'income' })
+    expect(mapCategory('Income', 'Repayment', 'income')).toEqual({ category: 'Income', subcategory: 'Repayment', type: 'income' })
+    expect(mapCategory('Income', 'Angpow', 'income')).toEqual({ category: 'Income', subcategory: 'Angpow', type: 'income' })
   })
 
-  it('prefers sub-category match over category match', () => {
-    // Sub-category "Coffee" should resolve to Food
-    expect(mapCategory('Other', 'Coffee', 'expense')).toEqual({ category: 'Food', type: 'expense' })
+  it('maps redistributed "buffer" categories', () => {
+    expect(mapCategory('buffer', 'Coffee', 'expense')).toEqual({ category: 'Food', subcategory: 'Coffee', type: 'expense' })
+    expect(mapCategory('buffer', 'Cab', 'expense')).toEqual({ category: 'Transportation', subcategory: 'Taxi', type: 'expense' })
   })
 
-  it('is case-insensitive', () => {
-    expect(mapCategory('FOOD', '', 'expense')).toEqual({ category: 'Food', type: 'expense' })
-    expect(mapCategory('SALARY', '', 'income')).toEqual({ category: 'Salary', type: 'income' })
+  it('returns category info for mapped transfer rows', () => {
+    expect(mapCategory('Transfer', 'General Transfer', 'transfer')).toEqual({ category: 'Transfer', subcategory: 'General Transfer', type: 'expense' })
   })
 
-  it('returns null for transfer rows', () => {
-    expect(mapCategory('Food', '', 'transfer')).toBeNull()
+  it('returns null for unmapped transfer rows', () => {
+    expect(mapCategory('Transfer', 'Unknown', 'transfer')).toBeNull()
   })
 
   it('returns null for init_balance rows', () => {
     expect(mapCategory('SYSTEM', 'INIT_AMOUNT', 'init_balance')).toBeNull()
   })
 
-  it('falls back to Other Income for unknown income category', () => {
-    expect(mapCategory('XYZ Unknown', '', 'income')).toEqual({ category: 'Other Income', type: 'income' })
-  })
-
-  it('returns null for unknown expense category (no fallback)', () => {
-    expect(mapCategory('XYZ Unknown', '', 'expense')).toBeNull()
+  it('returns null for unknown category combinations', () => {
+    expect(mapCategory('XYZ Unknown', 'foo', 'expense')).toBeNull()
+    expect(mapCategory('XYZ Unknown', 'bar', 'income')).toBeNull()
   })
 })
 

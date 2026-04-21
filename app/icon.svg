@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="#2a2f37"></rect>
+  <rect x="10" y="50" width="44" height="3" rx="1.5" fill="#0f1217"></rect>
+  <rect x="12" y="34" width="10" height="16" rx="2" fill="#e6edf3"></rect>
+  <rect x="24" y="26" width="10" height="24" rx="2" fill="#e6edf3"></rect>
+  <rect x="36" y="18" width="10" height="32" rx="2" fill="#e6edf3"></rect>
+  <circle cx="48" cy="16" r="11" fill="#2a2f37"></circle>
+  <circle cx="48" cy="16" r="9" fill="#CC5500"></circle>
+  <circle cx="48" cy="16" r="9" fill="none" stroke="#F4A542" stroke-width="1.17" opacity="0.6"></circle>
+  <line x1="48" y1="11" x2="48" y2="21" stroke="#fff" stroke-width="0.9" stroke-linecap="round"></line>
+  <text x="48" y="16" text-anchor="middle" dominant-baseline="central" fill="#fff" font-family="Inter, system-ui, sans-serif" font-size="12.6" font-weight="500" letter-spacing="-0.04em">R</text>
+</svg>

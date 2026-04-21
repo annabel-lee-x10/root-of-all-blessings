@@ -172,7 +172,9 @@ function enrichHolding(h: Holding): Holding {
 
 export async function GET() {
   const result = await db.execute(
-    `SELECT id, snapshot_date, total_value, total_pnl, holdings_json, created_at
+    `SELECT id, snapshot_date, total_value, total_pnl, holdings_json, created_at,
+            cash, pending, realised_pnl, net_invested, net_deposited, dividends,
+            prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings
      FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1`
   )
   if (result.rows.length === 0) {
@@ -195,7 +197,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { html, snapshot_date } = body
+  const { html, snapshot_date, cash, pending, realised_pnl, net_invested, net_deposited,
+          dividends, prior_value, prior_unrealised, prior_realised, prior_cash,
+          snap_label, prior_holdings } = body
 
   if (!html || typeof html !== 'string') {
     return Response.json({ error: 'html is required' }, { status: 400 })
@@ -215,9 +219,15 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString()
 
   await db.execute({
-    sql: `INSERT INTO portfolio_snapshots (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now],
+    sql: `INSERT INTO portfolio_snapshots
+            (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
+             cash, pending, realised_pnl, net_invested, net_deposited, dividends,
+             prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
+           cash ?? 0, pending ?? 0, realised_pnl ?? 0, net_invested ?? null, net_deposited ?? null,
+           dividends ?? 0, prior_value ?? null, prior_unrealised ?? null,
+           prior_realised ?? null, prior_cash ?? null, snap_label ?? null, prior_holdings ?? null],
   })
 
   return Response.json({ id, total_value, total_pnl, holdings_count: holdings.length }, { status: 201 })
