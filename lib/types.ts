@@ -1,4 +1,4 @@
-export type AccountType = 'bank' | 'wallet' | 'cash' | 'fund'
+export type AccountType = 'bank' | 'wallet' | 'cash' | 'fund' | 'credit_card'
 export type CategoryType = 'expense' | 'income'
 export type TxType = 'expense' | 'income' | 'transfer'
 
