@@ -132,3 +132,35 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** Added Voice button with `webkitSpeechRecognition` fallback (Safari/iOS, Android Chrome), pulsing listening state, "Listening…" label, tap-to-stop, and error banners for unsupported browser / permission denied / no speech. Transcript fed into `applyPasteData()`. Changed `Permissions-Policy` from `microphone=()` to `microphone=(self)`.
 
 **Regression test:** `tests/regression/voice-input.test.tsx`
+
+---
+
+## BUG-011 · News: upload FAB does not auto-generate portfolio news after upload
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Clicking "Upload Portfolio" and selecting a portfolio HTML snapshot extracted tickers correctly and showed "N tickers found" toast, but the Portfolio section remained empty ("No stories yet — hit Refresh to generate"). Users had to manually click Refresh to get portfolio news, making the upload appear to do nothing.
+
+**Root cause:** `handleUpload` called `setPortfolioTickers(tickers)` and showed the toast but did not trigger portfolio news generation. The only path to generating portfolio news was the full `handleRefresh` button which the user had to discover and click separately.
+
+**Fix:** Extracted `refreshPortfolioNews(tickers)` from `handleRefresh`. After a successful upload with at least one ticker, `handleUpload` calls `void refreshPortfolioNews(tickers)` immediately — the portfolio loading state activates and news is generated in the background while the upload UI is already dismissed.
+
+**Regression test:** `tests/components/news-upload-auto-refresh.test.tsx`
+
+---
+
+## BUG-012 · News: Singapore Property section shows empty state instead of fetching on expand
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The Singapore Property section (collapsed by default) shows "No stories yet — hit Refresh to generate." when expanded. Tapping the section header only toggled the collapsed state; it never initiated a fetch. Users had to separately click the global Refresh button to populate it.
+
+**Root cause:** `SectionBlock`'s toggle handler called `setOpen(v => !v)` only — no hook into the section's expand event. The component had no `onOpen` callback mechanism and no fetch was ever scheduled on section expand.
+
+**Fix:** Added `onOpen?: () => void` prop to `SectionBlock`. The toggle function now calls `onOpen()` when transitioning to open and `items.length === 0 && !loading`. Added `handlePropOpen` in `NewsClient` that fetches property news on first call (guarded by `propFetchedRef` to prevent re-fetching on subsequent collapses/re-expands). Property `SectionBlock` receives `onOpen={handlePropOpen}`.
+
+**Regression test:** `tests/components/news-property-auto-fetch.test.tsx`
