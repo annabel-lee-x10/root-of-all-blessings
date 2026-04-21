@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { TransactionRow, Account, Category, Tag, TxType, AccountType } from '@/lib/types'
-import { ACCOUNT_TYPE_LABELS } from '@/lib/account-types'
 import { useToast } from './toast'
 import { PaymentTypePicker } from './payment-type-picker'
 import { CategoryPicker } from './category-picker'
@@ -318,10 +317,6 @@ export function DraftsCard() {
 
             {/* Draft list */}
             {drafts.map((tx, i) => {
-              const editSelectedAccount = editForm
-                ? accounts.find((a) => a.id === editForm.account_id)
-                : null
-
               return (
                 <div key={tx.id}>
                   {/* Row */}
@@ -368,10 +363,13 @@ export function DraftsCard() {
                         onClick={() => {
                           if (editingId === tx.id) { setEditingId(null); setEditForm(null) }
                           else {
+                            const baseForm = txToForm(tx)
+                            const defaultAccountId = tx.type === 'expense'
+                              ? (activeAccounts.find((a) => a.id === '9773') ?? activeAccounts.find((a) => a.type === 'credit_card'))?.id ?? baseForm.account_id
+                              : baseForm.account_id
                             setEditingId(tx.id)
-                            setEditForm(txToForm(tx))
-                            const acct = accounts.find((a) => a.id === tx.account_id)
-                            setEditTypeFilter(acct?.type ?? '')
+                            setEditForm({ ...baseForm, account_id: defaultAccountId })
+                            setEditTypeFilter(tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''))
                             if (tx.category_id) {
                               const cat = categories.find((c) => c.id === tx.category_id)
                               setEditParentCategoryId(cat?.parent_id ?? cat?.id ?? '')
@@ -460,7 +458,7 @@ export function DraftsCard() {
                         />
                       </div>
 
-                      {/* Payment method (read-only, derived from account type) */}
+                      {/* Payee + Date/Time */}
                       <div
                         style={{
                           display: 'grid',
@@ -469,14 +467,6 @@ export function DraftsCard() {
                           marginBottom: '8px',
                         }}
                       >
-                        <div>
-                          <label style={LABEL}>Payment Method</label>
-                          <div style={{ ...INPUT, color: 'var(--text-dim)', cursor: 'default', lineHeight: '1.4' }}>
-                            {editSelectedAccount
-                              ? ACCOUNT_TYPE_LABELS[editSelectedAccount.type as AccountType] ?? editSelectedAccount.type
-                              : '—'}
-                          </div>
-                        </div>
                         <div>
                           <label style={LABEL}>Payee</label>
                           <input style={INPUT} value={editForm.payee} onChange={(e) => ef('payee', e.target.value)} placeholder="Payee" />

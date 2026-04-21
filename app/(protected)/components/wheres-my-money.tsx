@@ -47,7 +47,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   const [currency, setCurrency] = useState('SGD')
   const [fxRate, setFxRate] = useState('')
   const [fxDate, setFxDate] = useState('')
-  const [paymentTypeFilter, setPaymentTypeFilter] = useState<import('@/lib/types').AccountType | ''>('')
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<import('@/lib/types').AccountType | ''>('credit_card')
   const [accountId, setAccountId] = useState('')
   const [toAccountId, setToAccountId] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -89,13 +89,11 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       setCategories(cats)
       setTags(tgs)
       setPayees(pvs)
-      const saved = localStorage.getItem('wmm_last_account')
       const activeAccts = (accts as Account[]).filter((a) => a.is_active === 1)
-      if (saved && activeAccts.find((a) => a.id === saved)) {
-        setAccountId(saved)
-      } else if (activeAccts.length > 0) {
-        setAccountId(activeAccts[0].id)
-      }
+      const defaultAcct = activeAccts.find((a) => a.id === '9773')
+        ?? activeAccts.find((a) => a.type === 'credit_card')
+        ?? activeAccts[0]
+      if (defaultAcct) setAccountId(defaultAcct.id)
     })
   }, [])
 
@@ -226,7 +224,7 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     setPasteApplied(true)
     setPasteOpen(false)
     setPasteText('')
-    showToast('Form pre-filled from receipt - review and save', 'success')
+    showToast('Form pre-filled — review and save', 'success')
     setTimeout(() => amountRef.current?.focus(), 100)
     setTimeout(() => setPasteApplied(false), 4000)
   }, [accounts, categories, tags, showToast])
@@ -267,9 +265,24 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (e: any) => {
+    recognition.onresult = async (e: any) => {
       const transcript = e.results[0][0].transcript
-      applyPasteData(transcript)
+      try {
+        const res = await fetch('/api/receipts/voice/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: transcript }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          setVoiceError(err.error || 'Voice processing failed')
+          return
+        }
+        const { raw } = await res.json()
+        await applyPasteData(raw)
+      } catch {
+        setVoiceError('Voice processing failed')
+      }
     }
 
     recognition.start()
