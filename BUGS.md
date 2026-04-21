@@ -245,6 +245,24 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
+## BUG-021 · ReceiptDropzone: "No active account found" when localStorage has stale account ID
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/api/receipts/_lib.ts`, `app/(protected)/components/receipt-dropzone.tsx`
+
+**Symptom:** Uploading a receipt image and clicking "Process" showed "No active account found" in red, with the "Process 0 Receipts" button grayed out. Appeared after PR #42 made OCR the primary (top, expanded) entry method on /add.
+
+**Root cause:** `resolveAccount()` in `_lib.ts` returned `null` — triggering a 400 error — when the client sent a non-empty but stale `accountId` (e.g. an old account that was deleted or from a different DB session). The server-side fallback to the first active account only ran when `accountId` was falsy (empty string or undefined). After PR #42 placed OCR at the top of the /add page, users whose `wmm_last_account` localStorage key pointed to a stale account would hit this path immediately on first use.
+
+**Fix (server):** Removed the early `return null` in `resolveAccount()` so a stale/invalid `accountId` falls through to the same first-active-account fallback as a missing one.
+
+**Fix (client):** `ReceiptDropzone.processFiles()` now writes `data.draft.account_id` back to `wmm_last_account` after each successful receipt, so stale IDs self-heal on the first successful OCR.
+
+**Regression test:** `tests/api/receipts.test.ts` — "BUG-021: falls back to first active account when accountId is stale/not found"
+
+---
+
 ## BUG-020 · Duplicate voice input buttons on /add page
 
 **Status:** Fixed  

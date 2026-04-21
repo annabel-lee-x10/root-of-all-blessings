@@ -77,6 +77,7 @@ export function ReceiptDropzone({ collapsed = false, onToggle }: { collapsed?: b
         }
         if (res.ok && data?.draft) {
           setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'done' } : f)))
+          if (data.draft.account_id) localStorage.setItem('wmm_last_account', data.draft.account_id)
           window.dispatchEvent(new CustomEvent('drafts-updated'))
         } else {
           setFiles((prev) =>
