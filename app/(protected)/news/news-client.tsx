@@ -291,10 +291,11 @@ function SecHdr({
 }
 
 function SectionBlock({
-  secId, title, color, items, loading, showTicker = false, defaultOpen = true,
+  secId, title, color, items, loading, showTicker = false, defaultOpen = true, emptyState,
 }: {
   secId: string; title: string; color: string; items: QsNewsCard[]
   loading?: boolean; showTicker?: boolean; defaultOpen?: boolean
+  emptyState?: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -305,9 +306,11 @@ function SectionBlock({
           ? [1, 2, 3].map(i => <Skeleton key={i} />)
           : items.length > 0
             ? items.map(item => <NewsCard key={item.id} item={item} showTicker={showTicker} />)
-            : <p style={{ color: MUTED, fontSize: '0.82rem', fontStyle: 'italic', fontFamily: 'system-ui, sans-serif' }}>
-                No stories yet — hit Refresh to generate.
-              </p>
+            : (emptyState ?? (
+                <p style={{ color: MUTED, fontSize: '0.82rem', fontStyle: 'italic', fontFamily: 'system-ui, sans-serif' }}>
+                  No stories yet — hit Refresh to generate.
+                </p>
+              ))
       )}
     </div>
   )
@@ -656,7 +659,7 @@ export function NewsClient() {
           color={SEC_COLOR.prop}
           items={filt(news.prop)}
           loading={loadingSections.prop}
-          defaultOpen={false}
+          defaultOpen
         />
 
         {/* Jobs: two subsections under one scroll anchor */}
@@ -679,18 +682,37 @@ export function NewsClient() {
           />
         </div>
 
-        {/* Portfolio: only shown when tickers are loaded or port section has data */}
-        {(portfolioTickers.length > 0 || news.port.length > 0) && (
-          <SectionBlock
-            secId="sec-port"
-            title="Portfolio News"
-            color={SEC_COLOR.port}
-            items={filt(news.port)}
-            loading={loadingSections.port}
-            showTicker
-            defaultOpen
-          />
-        )}
+        {/* Portfolio: always rendered so the nav link works */}
+        <SectionBlock
+          secId="sec-port"
+          title="Portfolio News"
+          color={SEC_COLOR.port}
+          items={filt(news.port)}
+          loading={loadingSections.port}
+          showTicker
+          defaultOpen
+          emptyState={
+            portfolioTickers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                <p style={{ color: MUTED, fontSize: '0.82rem', marginBottom: 10, fontFamily: 'system-ui, sans-serif' }}>
+                  Upload your Syfe portfolio snapshot (Ctrl+S → HTML) to generate personalised stock news.
+                </p>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  style={{
+                    background: SEC_COLOR.port + '22',
+                    border: `1px solid ${SEC_COLOR.port}55`,
+                    color: SEC_COLOR.port,
+                    borderRadius: 6, padding: '5px 14px',
+                    fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'system-ui, sans-serif',
+                  }}
+                >
+                  + Upload Portfolio
+                </button>
+              </div>
+            ) : undefined
+          }
+        />
       </div>
     </div>
   )

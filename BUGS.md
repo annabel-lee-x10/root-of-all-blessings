@@ -117,6 +117,54 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
+## BUG-011 · News: Upload button extracts 0 tickers from real Syfe portfolio HTML
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/api/news/upload/route.ts`
+
+**Symptom:** Clicking "Upload Portfolio" on the News page, selecting a Ctrl+S-saved Syfe portfolio HTML, and getting a toast of "Portfolio loaded — 0 tickers found" (or a very small count). The portfolio news section then showed "No stories yet" after Refresh because no tickers were recognised.
+
+**Root cause:** `extractTickers()` matched cell text against `/^([A-Z][A-Z0-9.]{0,5})$/` — requiring the entire cell to be a single ticker symbol. Syfe's saved HTML annotates tickers with their exchange geo-code in the same cell: `"MU US"`, `"Z74 SG"`, `"ABBV US DIV 15 May"`. None of these match the strict full-cell regex, so every Syfe-format cell was silently dropped and the returned tickers array was empty.
+
+**Fix:** After failing the strict full-cell match, the extractor now also tries the first whitespace-separated token (`cleaned.split(/\s+/)[0]`). `"MU US"` → first token `"MU"` → matches → added. The logic mirrors what `enrichHolding()` already does in `/api/portfolio/route.ts`.
+
+**Regression test:** `tests/regression/news-upload-syfe-format.test.ts`
+
+---
+
+## BUG-012 · News: Portfolio section hidden — nav "Portfolio" link non-functional
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The sticky sub-nav shows a "Portfolio" jump-link alongside World / Singapore / Property / Jobs. Clicking it did nothing — the page did not scroll and no Portfolio section was visible — even when there were stories in other sections. Uploading a portfolio file showed a toast but still left no Portfolio section visible until Refresh had also been clicked.
+
+**Root cause:** The Portfolio `SectionBlock` was wrapped in a conditional: `{(portfolioTickers.length > 0 || news.port.length > 0) && ...}`. On first load (no tickers in DB, no port news in brief), the block was not mounted, so `document.getElementById('sec-port')` returned `null` and the sub-nav scroll failed silently. The section was also entirely absent, giving users no affordance to understand how to populate it.
+
+**Fix:** Portfolio `SectionBlock` is now always rendered. When `portfolioTickers.length === 0` and the section would otherwise show "No stories yet", it instead shows a dedicated upload prompt with a `+ Upload Portfolio` button that triggers the hidden file input — making the upload feature discoverable from within the section itself.
+
+**Regression test:** `tests/regression/news-client-portfolio-property.test.tsx` — "BUG-012: Portfolio section visibility" describe block
+
+---
+
+## BUG-013 · News: Singapore Property section stories hidden on load
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After loading the News page with a brief that contained Singapore Property stories, the Property section showed no content. Clicking the "Property" jump-link in the sub-nav scrolled to the section but still showed nothing. Users had to discover and click the section header to expand it before any stories appeared.
+
+**Root cause:** `SectionBlock` for the Property section was rendered with `defaultOpen={false}`, collapsing it on mount. The `go('prop')` nav handler only called `scrollIntoView()` — it did not also expand the section. So users would be scrolled to a collapsed header with no visible content, giving the impression that Property had no stories.
+
+**Fix:** Changed the Property section to `defaultOpen` (true), consistent with World Headlines and Singapore Headlines. Stories are now immediately visible on page load when the brief contains property news.
+
+**Regression test:** `tests/regression/news-client-portfolio-property.test.tsx` — "BUG-013: Property section defaultOpen" describe block
+
+---
+
 ## BUG-007 · Where's My Money: mic button does nothing on mobile
 
 **Status:** Fixed  

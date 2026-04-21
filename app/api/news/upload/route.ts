@@ -68,8 +68,11 @@ function extractTickers(html: string): string[] {
     // Remove order labels like SELL, DIV, AMENDED
     const cleaned = raw.replace(ORDER_LABELS, '').trim()
 
-    // Accept 1-6 uppercase letters, optional digits, optional dot (e.g. D05, Z74)
-    const ticker = cleaned.match(/^([A-Z][A-Z0-9.]{0,5})$/)?.[1]
+    // Try full value first, then the first whitespace-separated token.
+    // Syfe HTML includes geo labels in the same cell: "MU US", "Z74 SG", "ABBV US DIV 15 May".
+    const TICKER_RE = /^([A-Z][A-Z0-9.]{0,5})$/
+    const ticker = TICKER_RE.exec(cleaned)?.[1]
+      ?? TICKER_RE.exec(cleaned.split(/\s+/)[0])?.[1]
     if (ticker) found.add(ticker)
   }
 
