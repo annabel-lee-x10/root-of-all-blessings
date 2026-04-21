@@ -457,3 +457,19 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix (`app/api/receipts/process/route.ts`):** Added `isNaN(sgtDate.getTime())` guard so an unrecognised date format falls back to current time gracefully instead of throwing. Strengthened `RECEIPT_PROMPT` to explicitly tell Claude that dates appear on virtually all receipts and to output them in any format (converter handles the normalisation).
 
 **Regression tests:** `tests/parse-bless-this.test.ts` — six new date format cases; `tests/api/receipts.test.ts` — BUG-030 datetime extraction, fallback, and no-crash cases
+
+---
+
+## BUG-031 · Dashboard: savings gauge SVG overflows card on mobile (3rd report)
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/expense-dashboard.tsx`
+
+**Symptom:** On mobile (375px), the savings-rate semicircle arc extended well beyond the card boundaries — the arc top appeared above the "EXPENSE DASHBOARD" title and time-period pills (1D, 7D, 1M, 3M, Custom), the sides overflowed past the card edges, and the 3M pill was hidden behind the gauge. Reported three times; PR #61 was supposed to fix it but didn't.
+
+**Root cause:** The `<svg>` element had `overflow: 'visible'`, which allows SVG content to paint outside the element's CSS bounding box. In mobile browsers (especially Safari/iOS), SVG elements inside flex containers can have their layout height collapse to 0 when the intrinsic aspect-ratio calculation creates a circular flex-sizing dependency. With height=0, the SVG's coordinate system centers the 200×120 viewBox around the element's center point (y=0), placing the arc top at y≈−40 CSS px (above the element). With `overflow: visible`, that content painted over the pills and title above it in the DOM. PR #61 fixed centering and the pills layout but left `overflow: visible` on the SVG.
+
+**Fix:** Changed `overflow: 'visible'` → `overflow: 'hidden'` on the SVG element (the arc geometry already fits within the 0 0 200 120 viewBox, so nothing is clipped). Added `height: 'auto'` to reinforce correct intrinsic-ratio height derivation. Added `overflow: 'hidden'` to the flex wrapper div as defense-in-depth.
+
+**Regression test:** `tests/regression/gauge-overflow.test.tsx`
