@@ -256,3 +256,33 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Root cause:** Both components independently implemented voice input. WheresMyMoney's voice button fills the form via `applyPasteData()`. ReceiptDropzone had a second voice button that sent audio to `/api/receipts/voice`.
 
 **Fix:** Removed the voice button from ReceiptDropzone. Voice input is handled exclusively by WheresMyMoney; ReceiptDropzone focuses on image OCR.
+
+---
+
+## BUG-021 · News: FAB (+) button does nothing on /news page
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/nav-bar.tsx`, `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Tapping the (+) FAB button in the bottom nav while on the News page had no effect — it was a `<Link href="/news">` which navigates to the page the user is already on.
+
+**Root cause:** The news-view FAB was rendered as `<Link href="/news">` (same pattern as portfolio, which navigates to `/portfolio`). Since the user is already on `/news`, the navigation was a no-op. No file upload was triggered.
+
+**Fix:** The news-view FAB is now a `<button>` that dispatches `window.CustomEvent('news:open-upload')`. `NewsClient` listens for this event and calls `fileRef.current?.click()` to open the browser's file picker.
+
+**Regression test:** `tests/components/news-client-fab.test.tsx`
+
+---
+
+## BUG-022 · News: Portfolio tab never shows content
+
+**Status:** Fixed (secondary to BUG-021)
+**Reported:** 2026-04-21
+**Fixed in:** See BUG-021 fix
+
+**Symptom:** The Portfolio News section was never visible, even after generating a news brief.
+
+**Root cause:** The Portfolio section only renders when `portfolioTickers.length > 0 || news.port.length > 0`. Tickers were never populated because the FAB upload never triggered (BUG-021). With no tickers, Refresh skips the portfolio section, so `news.port` stays empty too.
+
+**Fix:** Fixed by BUG-021. Once the FAB correctly triggers the portfolio HTML upload, tickers populate and the Portfolio section becomes visible after Refresh.

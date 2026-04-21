@@ -361,6 +361,12 @@ export function NewsClient() {
 
   useEffect(() => { loadBrief() }, [loadBrief])
 
+  useEffect(() => {
+    function onOpenUpload() { fileRef.current?.click() }
+    window.addEventListener('news:open-upload', onOpenUpload)
+    return () => window.removeEventListener('news:open-upload', onOpenUpload)
+  }, [])
+
   // ── upload portfolio HTML ────────────────────────────────────────────────────
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
