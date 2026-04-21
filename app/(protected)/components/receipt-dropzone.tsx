@@ -69,7 +69,7 @@ export function ReceiptDropzone({ collapsed = false, onToggle }: { collapsed?: b
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64, mediaType: item.file.type, merchantLookup, accountId }),
         })
-        let data: { draft?: unknown; error?: string } | null = null
+        let data: { draft?: { account_id?: string } | null; error?: string } | null = null
         try {
           data = await res.json()
         } catch {
