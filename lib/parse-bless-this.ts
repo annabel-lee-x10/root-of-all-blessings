@@ -62,7 +62,11 @@ export function parseBlessThis(text: string): BlessThisData {
         result.payee = value
         break
       case 'date':
-        // Accept YYYY-MM-DD or DD/MM/YYYY or MM/DD/YYYY
+      case 'order date':
+      case 'transaction date':
+      case 'purchase date':
+      case 'order placed':
+      case 'date/time':
         result.date = normaliseDate(value)
         break
       case 'time':
@@ -128,48 +132,58 @@ function inferType(data: BlessThisData): 'expense' | 'income' | undefined {
 const MONTH_NAMES = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
 
 function normaliseDate(raw: string): string {
+  // Strip trailing time component, parenthetical annotations, and whitespace
+  // e.g. "21/04/2026, 15:32" → "21/04/2026"
+  //      "2026-04-21T14:30" → "2026-04-21"
+  //      "21 Apr 2026 (Order Date)" → "21 Apr 2026"
+  let s = raw
+    .replace(/[T,]\s*\d{1,2}:\d{2}(:\d{2})?(\s*(am|pm))?/i, '')  // trailing time
+    .replace(/\s+at\s+\d{1,2}:\d{2}.*/i, '')                       // "at HH:MM..."
+    .replace(/\s*\(.*\)/, '')                                        // parenthetical
+    .trim()
+
   // Already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
 
   // DD/MM/YYYY or D/M/YYYY
-  const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
 
   // DD/MM/YY short year (e.g. 21/04/26)
-  const dmyShort = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
+  const dmyShort = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
   if (dmyShort) {
     const yr = 2000 + parseInt(dmyShort[3])
     return `${yr}-${dmyShort[2].padStart(2, '0')}-${dmyShort[1].padStart(2, '0')}`
   }
 
   // DD.MM.YYYY (dot separator)
-  const dot = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  const dot = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
   if (dot) return `${dot[3]}-${dot[2].padStart(2, '0')}-${dot[1].padStart(2, '0')}`
 
   // DD-MM-YYYY (dash with 4-digit year, treat as day-first to match SG locale)
-  const dash = raw.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+  const dash = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
   if (dash) return `${dash[3]}-${dash[2].padStart(2, '0')}-${dash[1].padStart(2, '0')}`
 
   // "D Mon YYYY" or "D Month YYYY" (e.g. "21 Apr 2026", "21 April 2026")
-  const dMonY = raw.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})$/)
+  const dMonY = s.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})$/)
   if (dMonY) {
     const m = MONTH_NAMES.indexOf(dMonY[2].toLowerCase().slice(0, 3)) + 1
     if (m > 0) return `${dMonY[3]}-${String(m).padStart(2, '0')}-${dMonY[1].padStart(2, '0')}`
   }
 
   // "Mon D, YYYY" or "Month D, YYYY" (e.g. "Apr 21, 2026", "April 21, 2026")
-  const monDY = raw.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})$/)
+  const monDY = s.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})$/)
   if (monDY) {
     const m = MONTH_NAMES.indexOf(monDY[1].toLowerCase().slice(0, 3)) + 1
     if (m > 0) return `${monDY[3]}-${String(m).padStart(2, '0')}-${monDY[2].padStart(2, '0')}`
   }
 
   // YYYYMMDD
-  if (/^\d{8}$/.test(raw)) {
-    return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+  if (/^\d{8}$/.test(s)) {
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
   }
 
-  return raw
+  return s
 }
 
 function normaliseTime(raw: string): string {

@@ -136,6 +136,31 @@ describe('date normalisation', () => {
   it('converts DD/MM/YY short-year (e.g. 21/04/26)', () => {
     expect(parseBlessThis('Date: 21/04/26').date).toBe('2026-04-21')
   })
+
+  // BUG-030: strip trailing time component so date parses correctly
+  it('strips trailing ", HH:MM" from date value (e.g. "21/04/2026, 15:32")', () => {
+    expect(parseBlessThis('Date: 21/04/2026, 15:32').date).toBe('2026-04-21')
+  })
+
+  it('strips trailing "THH:MM" from date value (e.g. "2026-04-21T14:30")', () => {
+    expect(parseBlessThis('Date: 2026-04-21T14:30').date).toBe('2026-04-21')
+  })
+
+  it('strips parenthetical annotation from date (e.g. "21 Apr 2026 (Order Date)")', () => {
+    expect(parseBlessThis('Date: 21 Apr 2026 (Order Date)').date).toBe('2026-04-21')
+  })
+
+  it('parses "Order Date" key alias', () => {
+    expect(parseBlessThis('Order Date: 2026-04-21').date).toBe('2026-04-21')
+  })
+
+  it('parses "Transaction Date" key alias', () => {
+    expect(parseBlessThis('Transaction Date: 21/04/2026').date).toBe('2026-04-21')
+  })
+
+  it('parses "Date/Time" key alias', () => {
+    expect(parseBlessThis('Date/Time: 2026-04-21').date).toBe('2026-04-21')
+  })
 })
 
 // ── Time normalisation ────────────────────────────────────────────────────────

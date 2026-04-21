@@ -111,7 +111,7 @@ describe('POST /api/receipts/process', () => {
     expect(data.draft.amount).toBe(23.5)
     expect(data.draft.payee).toBe('NTUC FairPrice')
     expect(data.draft.category_name).toBe('Food')
-    expect(data.draft.payment_method).toBe('credit card')
+    expect(data.draft.payment_method).toBe('bank') // derived from account type, not Claude's guess
     expect(data.draft.account_id).toBe('acc1')
   })
 
@@ -200,7 +200,7 @@ describe('POST /api/receipts/process', () => {
     expect(res.status).toBe(422)
   })
 
-  it('BUG-030: uses Claude-extracted date when Date line is present', async () => {
+  it('BUG-030: uses Claude-extracted date and returns date_extracted: true', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -217,28 +217,46 @@ describe('POST /api/receipts/process', () => {
     const data = await res.json()
     // Stored datetime should be 2026-03-15T09:30 SGT → 2026-03-15T01:30:00.000Z
     expect(data.draft.datetime).toBe('2026-03-15T01:30:00.000Z')
+    expect(data.date_extracted).toBe(true)
   })
 
-  it('BUG-030: falls back to current time when Claude omits the Date line', async () => {
+  it('BUG-030: falls back to epoch sentinel and returns date_extracted: false when Claude omits Date', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         content: [{ type: 'text', text: 'Amount: 12.00\nMerchant/Payee: Cafe' }],
       }),
     } as Response))
-    const before = Date.now()
     const { POST } = await import('@/app/api/receipts/process/route')
     const res = await POST(req('/api/receipts/process', 'POST', {
       imageBase64: VALID_IMAGE_BASE64,
       mediaType: 'image/png',
       accountId: 'acc1',
     }))
-    const after = Date.now()
     expect(res.status).toBe(201)
     const data = await res.json()
-    const draftMs = new Date(data.draft.datetime).getTime()
-    expect(draftMs).toBeGreaterThanOrEqual(before)
-    expect(draftMs).toBeLessThanOrEqual(after + 1000)
+    expect(data.draft.datetime).toBe('1970-01-01T00:00:00.000Z')
+    expect(data.date_extracted).toBe(false)
+  })
+
+  it('BUG-030: strips trailing time from date and extracts correctly (e.g. "21/04/2026, 15:32")', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 12.00\nDate: 21/04/2026, 15:32' }],
+      }),
+    } as Response))
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    // Date extracted and stored as 2026-04-21T00:00 SGT → 2026-04-20T16:00:00.000Z
+    expect(data.date_extracted).toBe(true)
+    expect(data.draft.datetime).toBe('2026-04-20T16:00:00.000Z')
   })
 
   it('BUG-030: does not crash when Claude returns an unrecognised date format', async () => {
@@ -254,8 +272,10 @@ describe('POST /api/receipts/process', () => {
       mediaType: 'image/png',
       accountId: 'acc1',
     }))
-    // Must not 500 — should fall back to current time gracefully
+    // Must not 500 — should fall back to epoch sentinel gracefully
     expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.date_extracted).toBe(false)
   })
 
   it('returns 500 when Anthropic API call fails', async () => {

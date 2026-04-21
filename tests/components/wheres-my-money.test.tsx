@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Regression tests for WheresMyMoney form bugs:
-// BUG-026: credit_card account should lock payment method to "credit card" (read-only)
+// BUG-026: payment type pills filter the account list; no separate payment method dropdown
 // BUG-027: category dropdown must show no duplicate category names
 // BUG-028: category picker must be two-step: parent → subcategory filtered by parent_id
 // BUG-029: tag suggestions must not surface entries whose names match a category name
@@ -61,39 +61,56 @@ async function renderWMM() {
 }
 
 // ---------------------------------------------------------------------------
-// BUG-026 · credit_card account locks payment method to "credit card"
+// BUG-026 · Payment type filter pills narrow the account list
 // ---------------------------------------------------------------------------
-describe('BUG-026: credit card account locks payment method', () => {
-  it('auto-sets and disables payment method when a credit_card account is selected', async () => {
+describe('BUG-026: payment type filter pills narrow account list', () => {
+  it('shows all accounts when no filter is selected', async () => {
     mockFetch()
     await renderWMM()
 
-    const accountSelect = screen.getByTestId('account-select')
-    fireEvent.change(accountSelect, { target: { value: 'acc2' } })
+    expect(screen.getByRole('option', { name: 'DBS Savings' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument()
+  })
+
+  it('shows only bank accounts when Bank filter is selected', async () => {
+    mockFetch()
+    await renderWMM()
+
+    fireEvent.click(screen.getByTestId('payment-type-bank'))
 
     await waitFor(() => {
-      const pmSelect = screen.getByTestId('payment-method-select') as HTMLSelectElement
-      expect(pmSelect.value).toBe('credit card')
-      expect(pmSelect).toBeDisabled()
+      expect(screen.getByRole('option', { name: 'DBS Savings' })).toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: 'Citi 9773' })).not.toBeInTheDocument()
     })
   })
 
-  it('unlocks payment method when switching away from a credit_card account', async () => {
+  it('shows only credit card accounts when Credit Card filter is selected', async () => {
     mockFetch()
     await renderWMM()
 
-    const accountSelect = screen.getByTestId('account-select')
-    fireEvent.change(accountSelect, { target: { value: 'acc2' } })
-    await waitFor(() => expect(screen.getByTestId('payment-method-select')).toBeDisabled())
+    fireEvent.click(screen.getByTestId('payment-type-credit_card'))
 
-    fireEvent.change(accountSelect, { target: { value: 'acc1' } })
-    await waitFor(() => expect(screen.getByTestId('payment-method-select')).not.toBeDisabled())
+    await waitFor(() => {
+      expect(screen.queryByRole('option', { name: 'DBS Savings' })).not.toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument()
+    })
   })
 
-  it('credit_card accounts appear in the account dropdown', async () => {
+  it('deselects filter when same pill is clicked again (shows all accounts)', async () => {
     mockFetch()
     await renderWMM()
-    expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('payment-type-bank'))
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'Citi 9773' })).not.toBeInTheDocument())
+
+    fireEvent.click(screen.getByTestId('payment-type-bank'))
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument())
+  })
+
+  it('does not render a separate payment method dropdown', async () => {
+    mockFetch()
+    await renderWMM()
+    expect(screen.queryByTestId('payment-method-select')).not.toBeInTheDocument()
   })
 })
 
