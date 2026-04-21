@@ -255,11 +255,11 @@ export function ExpenseDashboard() {
         }}
       >
         {/* Header + range selector */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '1rem' }}>
           <h2 style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>
             Expense Dashboard
           </h2>
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
             {RANGES.map((r) => (
               <button
                 key={r.id}
@@ -335,7 +335,7 @@ export function ExpenseDashboard() {
             />
 
             {/* Stat boxes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', margin: '0.75rem 0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px', margin: '0.75rem 0' }}>
               {/* Spend — clickable → /transactions?type=expense */}
               <div
                 data-testid="spend-box"
@@ -393,6 +393,7 @@ export function ExpenseDashboard() {
                   background: 'none', border: '1px solid var(--border)', borderRadius: '6px',
                   color: 'var(--text-muted)', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
                   padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 <span style={{ display: 'inline-block', transition: 'transform 0.2s', transform: showTrend ? 'rotate(180deg)' : 'rotate(0deg)', fontSize: '10px' }}>▾</span>
