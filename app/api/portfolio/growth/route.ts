@@ -3,8 +3,8 @@ import { db } from '@/lib/db'
 
 export async function GET() {
   const [scoresRes, milestonesRes] = await Promise.all([
-    db.execute('SELECT dimension, score, label, level, items_json, next_action, updated_at FROM portfolio_growth ORDER BY dimension'),
-    db.execute('SELECT id, date, tags_json, text, sort_order, created_at FROM portfolio_milestones ORDER BY sort_order ASC'),
+    db.execute('SELECT id, dimension, score, label, level, items_json, next_text, created_at FROM portfolio_growth WHERE snapshot_id IS NULL ORDER BY dimension'),
+    db.execute('SELECT id, date, tags_json, text, sort_order, created_at FROM portfolio_milestones WHERE snapshot_id IS NULL ORDER BY sort_order ASC'),
   ])
 
   const scores = scoresRes.rows.map(r => ({
@@ -24,7 +24,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   const body = await request.json()
-  const { dimension, score, label, level, items = [], next_action } = body
+  const { dimension, score, label, level, items = [], next_text } = body
 
   if (!dimension) {
     return Response.json({ error: 'dimension is required' }, { status: 400 })
@@ -32,14 +32,24 @@ export async function PUT(request: NextRequest) {
 
   const now = new Date().toISOString()
 
-  await db.execute({
-    sql: `INSERT INTO portfolio_growth (dimension, score, label, level, items_json, next_action, updated_at)
-          VALUES (?,?,?,?,?,?,?)
-          ON CONFLICT(dimension) DO UPDATE SET
-            score = excluded.score, label = excluded.label, level = excluded.level,
-            items_json = excluded.items_json, next_action = excluded.next_action, updated_at = excluded.updated_at`,
-    args: [dimension, score ?? 0, label ?? '', level ?? '', JSON.stringify(items), next_action ?? null, now],
+  const existing = await db.execute({
+    sql: 'SELECT id FROM portfolio_growth WHERE dimension = ? AND snapshot_id IS NULL LIMIT 1',
+    args: [dimension],
   })
 
-  return Response.json({ dimension, score, label, level, items, next_action })
+  if (existing.rows.length > 0) {
+    await db.execute({
+      sql: `UPDATE portfolio_growth SET score = ?, label = ?, level = ?, items_json = ?, next_text = ?, created_at = ?
+            WHERE dimension = ? AND snapshot_id IS NULL`,
+      args: [score ?? 0, label ?? '', level ?? '', JSON.stringify(items), next_text ?? null, now, dimension],
+    })
+  } else {
+    await db.execute({
+      sql: `INSERT INTO portfolio_growth (id, snapshot_id, dimension, score, label, level, items_json, next_text, created_at)
+            VALUES (?,NULL,?,?,?,?,?,?,?)`,
+      args: [crypto.randomUUID(), dimension, score ?? 0, label ?? '', level ?? '', JSON.stringify(items), next_text ?? null, now],
+    })
+  }
+
+  return Response.json({ dimension, score, label, level, items, next_text })
 }

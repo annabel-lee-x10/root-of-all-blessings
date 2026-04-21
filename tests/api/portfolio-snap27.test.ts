@@ -20,7 +20,7 @@ describe('GET /api/portfolio — snap27 snapshot', () => {
       cash: 87.45, pending: 508.07, realised_pnl: 430.88,
       snap_label: 'Snap 27',
       prior_value: 12013.65, prior_unrealised: 521.11, prior_realised: 357.36,
-      prior_cash: 889.14, prior_holdings_count: 20,
+      prior_cash: 889.14, prior_holdings: 20,
     })
     const { GET } = await import('@/app/api/portfolio/route')
     const res = await GET()
@@ -28,7 +28,7 @@ describe('GET /api/portfolio — snap27 snapshot', () => {
     expect(body.snap_label).toBe('Snap 27')
     expect(body.cash).toBe(87.45)
     expect(body.prior_value).toBe(12013.65)
-    expect(body.prior_holdings_count).toBe(20)
+    expect(body.prior_holdings).toBe(20)
   })
 
   it('returns the most recent snapshot when multiple exist', async () => {
