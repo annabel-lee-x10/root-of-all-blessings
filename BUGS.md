@@ -416,3 +416,44 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix:** Added a `categoryNameSet` (case-insensitive Set of all category names) to `filteredTagSuggestions`. Tag suggestions whose names appear in `categoryNameSet` are excluded. Genuine user tags are unaffected; the "Create" option still appears if a user explicitly types a name that happens to match a category.
 
 **Regression test:** `tests/components/wheres-my-money.test.tsx` — BUG-029 describe block
+
+---
+
+## BUG-029 regression · DraftsCard tag picker still shows category-named tags
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/drafts-card.tsx`
+
+**Symptom:** After BUG-029 was fixed in `wheres-my-money.tsx`, tags with category-like names (e.g. "APIs", "Accessories", "Dining Out") still appeared in the DraftsCard inline edit form's tag picker.
+
+**Root cause:** The `categoryNameSet` exclusion was applied only to `WheresMyMoney`. `DraftsCard` has its own independent tag picker (toggle-button list) that loads tags from `/api/tags` and renders all of them with no filtering. Both components already load `/api/categories`, but `DraftsCard` never used that data to filter tags.
+
+**Fix:** Derived `visibleTags` in `DraftsCard` using the same `categoryNameSet` pattern. The tag picker now renders `visibleTags` instead of `tags`, excluding any tag whose name (case-insensitive) matches a loaded category name.
+
+**Regression test:** `tests/components/drafts-card.test.tsx` — "BUG-029 regression" describe block
+
+---
+
+## BUG-030 · OCR receipt: Date/Time field defaults to current timestamp instead of receipt date
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `lib/parse-bless-this.ts`, `app/api/receipts/process/route.ts`
+
+**Symptom:** After processing a receipt via OCR, the Date/Time field on the resulting draft showed the current timestamp (e.g. "21/04/2026, 14:05") instead of the date printed on the receipt.
+
+**Root cause (primary):** `normaliseDate` in `parse-bless-this.ts` only handled four numeric date formats (YYYY-MM-DD, DD/MM/YYYY, MM-DD-YYYY, YYYYMMDD). Receipts commonly print dates as "21 Apr 2026", "Apr 21, 2026", "21.04.2026", or "21/04/26". When Claude outputs the date in one of these formats (which it often does, particularly for text-month formats), `normaliseDate` fell through and returned the raw string. `new Date("21 Apr 2026T00:00:00+08:00")` is an Invalid Date; calling `.toISOString()` on it throws `RangeError: Invalid time value`, causing the route to 500. Claude learned to omit the `Date:` line to avoid this, triggering the `new Date().toISOString()` fallback.
+
+**Root cause (secondary):** The `RECEIPT_PROMPT` said "If a field cannot be determined, omit that line entirely" without distinguishing Date as a field that's almost always present. Combined with the 500 risk, Claude would skip Date for any receipt with a non-ISO date format.
+
+**Fix (`lib/parse-bless-this.ts`):** Extended `normaliseDate` to handle six additional formats:
+- `DD.MM.YYYY` (dot separator)
+- `DD/MM/YY` (short year, century assumed 2000+)
+- `DD-MM-YYYY` (dash, day-first for SG locale)
+- `D Mon YYYY` / `D Month YYYY` (e.g. "21 Apr 2026", "21 April 2026")
+- `Mon D, YYYY` / `Month D, YYYY` (e.g. "Apr 21, 2026", "April 21, 2026")
+
+**Fix (`app/api/receipts/process/route.ts`):** Added `isNaN(sgtDate.getTime())` guard so an unrecognised date format falls back to current time gracefully instead of throwing. Strengthened `RECEIPT_PROMPT` to explicitly tell Claude that dates appear on virtually all receipts and to output them in any format (converter handles the normalisation).
+
+**Regression tests:** `tests/parse-bless-this.test.ts` — six new date format cases; `tests/api/receipts.test.ts` — BUG-030 datetime extraction, fallback, and no-crash cases

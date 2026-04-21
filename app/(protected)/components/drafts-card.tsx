@@ -212,6 +212,9 @@ export function DraftsCard() {
   }
 
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
+  // BUG-029: exclude tags whose names match any category name (same guard as WheresMyMoney)
+  const categoryNameSet = new Set(categories.map((c) => c.name.toLowerCase()))
+  const visibleTags = tags.filter((t) => !categoryNameSet.has(t.name.toLowerCase()))
 
   return (
     <section style={{ marginBottom: '2rem' }}>
@@ -454,11 +457,11 @@ export function DraftsCard() {
                       />
                     </div>
 
-                    {tags.length > 0 && (
+                    {visibleTags.length > 0 && (
                       <div style={{ marginBottom: '10px' }}>
                         <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '6px' }}>Tags</label>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                          {tags.map((tag) => {
+                          {visibleTags.map((tag) => {
                             const selected = editForm.tag_ids.includes(tag.id)
                             return (
                               <button

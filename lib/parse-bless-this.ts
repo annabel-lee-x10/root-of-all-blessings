@@ -125,17 +125,44 @@ function inferType(data: BlessThisData): 'expense' | 'income' | undefined {
   return undefined
 }
 
+const MONTH_NAMES = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+
 function normaliseDate(raw: string): string {
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
 
-  // DD/MM/YYYY
+  // DD/MM/YYYY or D/M/YYYY
   const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
 
-  // MM/DD/YYYY - ambiguous but common in US locale; we accept it the same way
-  const mdy = raw.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
-  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`
+  // DD/MM/YY short year (e.g. 21/04/26)
+  const dmyShort = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/)
+  if (dmyShort) {
+    const yr = 2000 + parseInt(dmyShort[3])
+    return `${yr}-${dmyShort[2].padStart(2, '0')}-${dmyShort[1].padStart(2, '0')}`
+  }
+
+  // DD.MM.YYYY (dot separator)
+  const dot = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  if (dot) return `${dot[3]}-${dot[2].padStart(2, '0')}-${dot[1].padStart(2, '0')}`
+
+  // DD-MM-YYYY (dash with 4-digit year, treat as day-first to match SG locale)
+  const dash = raw.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+  if (dash) return `${dash[3]}-${dash[2].padStart(2, '0')}-${dash[1].padStart(2, '0')}`
+
+  // "D Mon YYYY" or "D Month YYYY" (e.g. "21 Apr 2026", "21 April 2026")
+  const dMonY = raw.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})$/)
+  if (dMonY) {
+    const m = MONTH_NAMES.indexOf(dMonY[2].toLowerCase().slice(0, 3)) + 1
+    if (m > 0) return `${dMonY[3]}-${String(m).padStart(2, '0')}-${dMonY[1].padStart(2, '0')}`
+  }
+
+  // "Mon D, YYYY" or "Month D, YYYY" (e.g. "Apr 21, 2026", "April 21, 2026")
+  const monDY = raw.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{4})$/)
+  if (monDY) {
+    const m = MONTH_NAMES.indexOf(monDY[1].toLowerCase().slice(0, 3)) + 1
+    if (m > 0) return `${monDY[3]}-${String(m).padStart(2, '0')}-${monDY[2].padStart(2, '0')}`
+  }
 
   // YYYYMMDD
   if (/^\d{8}$/.test(raw)) {

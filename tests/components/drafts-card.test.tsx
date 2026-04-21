@@ -29,7 +29,12 @@ const DRAFT: Record<string, unknown> = {
   tags: [],
 }
 
-function makeFetch(drafts = [DRAFT]) {
+const CATEGORY_DINING = { id: 'cat-dining', name: 'Dining Out', type: 'expense', sort_order: 1, parent_id: null, created_at: '2024-01-01', updated_at: '2024-01-01' }
+// "Dining Out" tag shares a name with the category — BUG-029 regression
+const TAG_DINING = { id: 'tag-dining', name: 'Dining Out', created_at: '2024-01-01' }
+const TAG_WEEKEND = { id: 'tag-weekend', name: 'weekend', created_at: '2024-01-01' }
+
+function makeFetch(drafts = [DRAFT], { categories = [] as object[], tags = [] as object[] } = {}) {
   return vi.fn((url: string, opts?: RequestInit) => {
     if (typeof url === 'string' && url.includes('status=draft')) {
       return Promise.resolve({ ok: true, json: async () => ({ data: drafts, total: drafts.length }) })
@@ -38,10 +43,10 @@ function makeFetch(drafts = [DRAFT]) {
       return Promise.resolve({ ok: true, json: async () => [] })
     }
     if (typeof url === 'string' && url.includes('/api/categories')) {
-      return Promise.resolve({ ok: true, json: async () => [] })
+      return Promise.resolve({ ok: true, json: async () => categories })
     }
     if (typeof url === 'string' && url.includes('/api/tags')) {
-      return Promise.resolve({ ok: true, json: async () => [] })
+      return Promise.resolve({ ok: true, json: async () => tags })
     }
     // PATCH to approve
     if (opts?.method === 'PATCH') {
@@ -58,6 +63,51 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.resetModules()
+})
+
+// ---------------------------------------------------------------------------
+// BUG-029 regression: DraftsCard tag picker must not show category-named tags
+// ---------------------------------------------------------------------------
+describe('DraftsCard — BUG-029 regression: tag picker excludes category-named tags', () => {
+  it('does not show a tag whose name matches a category name', async () => {
+    vi.stubGlobal('fetch', makeFetch([DRAFT], {
+      categories: [CATEGORY_DINING],
+      tags: [TAG_DINING, TAG_WEEKEND],
+    }))
+
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('NTUC')).toBeInTheDocument())
+
+    // Open edit form
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    // "Dining Out" matches a category name — must NOT appear as a tag toggle button
+    const tagButtons = screen.queryAllByRole('button', { name: /dining out/i })
+    expect(tagButtons).toHaveLength(0)
+  })
+
+  it('still shows tags whose names do not match any category', async () => {
+    vi.stubGlobal('fetch', makeFetch([DRAFT], {
+      categories: [CATEGORY_DINING],
+      tags: [TAG_DINING, TAG_WEEKEND],
+    }))
+
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('NTUC')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    // "weekend" has no matching category — must appear as a tag button
+    expect(screen.getByRole('button', { name: /^weekend$/i })).toBeInTheDocument()
+  })
 })
 
 describe('DraftsCard — approve dispatches transaction-saved (BUG)', () => {

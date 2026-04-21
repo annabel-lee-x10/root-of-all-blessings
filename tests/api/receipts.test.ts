@@ -200,6 +200,64 @@ describe('POST /api/receipts/process', () => {
     expect(res.status).toBe(422)
   })
 
+  it('BUG-030: uses Claude-extracted date when Date line is present', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 12.00\nDate: 2026-03-15\nTime: 09:30' }],
+      }),
+    } as Response))
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    // Stored datetime should be 2026-03-15T09:30 SGT → 2026-03-15T01:30:00.000Z
+    expect(data.draft.datetime).toBe('2026-03-15T01:30:00.000Z')
+  })
+
+  it('BUG-030: falls back to current time when Claude omits the Date line', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 12.00\nMerchant/Payee: Cafe' }],
+      }),
+    } as Response))
+    const before = Date.now()
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    const after = Date.now()
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    const draftMs = new Date(data.draft.datetime).getTime()
+    expect(draftMs).toBeGreaterThanOrEqual(before)
+    expect(draftMs).toBeLessThanOrEqual(after + 1000)
+  })
+
+  it('BUG-030: does not crash when Claude returns an unrecognised date format', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 12.00\nDate: not-a-date' }],
+      }),
+    } as Response))
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    // Must not 500 — should fall back to current time gracefully
+    expect(res.status).toBe(201)
+  })
+
   it('returns 500 when Anthropic API call fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
