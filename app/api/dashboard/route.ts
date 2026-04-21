@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 
-const VALID_RANGES = ['daily', '7day', 'monthly', 'custom'] as const
+const VALID_RANGES = ['1d', '7d', '1m', '3m', 'custom', 'daily', '7day', 'monthly'] as const
 type Range = (typeof VALID_RANGES)[number]
 
 function getRangeDates(range: Range, start?: string | null, end?: string | null): [string, string, number] {
@@ -9,18 +9,25 @@ function getRangeDates(range: Range, start?: string | null, end?: string | null)
   const pad = (n: number) => String(n).padStart(2, '0')
   const todayDate = `${sgt.getFullYear()}-${pad(sgt.getMonth() + 1)}-${pad(sgt.getDate())}`
 
-  if (range === 'daily') {
+  if (range === '1d' || range === 'daily') {
     return [`${todayDate}T00:00:00+08:00`, `${todayDate}T23:59:59+08:00`, 1]
   }
-  if (range === '7day') {
+  if (range === '7d' || range === '7day') {
     const d = new Date(sgt)
     d.setDate(d.getDate() - 6)
     const s = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
     return [`${s}T00:00:00+08:00`, `${todayDate}T23:59:59+08:00`, 7]
   }
-  if (range === 'monthly') {
+  if (range === '1m' || range === 'monthly') {
     const s = `${sgt.getFullYear()}-${pad(sgt.getMonth() + 1)}-01`
     const days = sgt.getDate()
+    return [`${s}T00:00:00+08:00`, `${todayDate}T23:59:59+08:00`, days]
+  }
+  if (range === '3m') {
+    const d = new Date(sgt)
+    d.setMonth(d.getMonth() - 3)
+    const s = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    const days = Math.round((sgt.getTime() - d.getTime()) / 86400000) + 1
     return [`${s}T00:00:00+08:00`, `${todayDate}T23:59:59+08:00`, days]
   }
   // custom
@@ -55,7 +62,7 @@ export async function GET(request: NextRequest) {
     let startStr: string
     let labelFn: (periodKey: string) => string
 
-    if (range === 'daily') {
+    if (range === '1d' || range === 'daily') {
       // Last 6 hours (each bar = 1 hour in SGT)
       const startH = new Date(sgt)
       startH.setHours(startH.getHours() - 5)
@@ -67,7 +74,7 @@ export async function GET(request: NextRequest) {
         const h12 = hour % 12 || 12
         return `${h12}${hour < 12 ? 'AM' : 'PM'}`
       }
-    } else if (range === '7day') {
+    } else if (range === '7d' || range === '7day') {
       // Last 6 days (each bar = 1 day in SGT)
       const d = new Date(sgt)
       d.setDate(d.getDate() - 5)
@@ -77,7 +84,7 @@ export async function GET(request: NextRequest) {
         const [, m, day] = key.split('-').map(Number)
         return `${MONTHS[m - 1]} ${day}`
       }
-    } else if (range === 'monthly') {
+    } else if (range === '1m' || range === 'monthly') {
       // Last 6 weeks (each bar = 1 week); 2024-01-01 is a Monday, buckets align to Monday starts
       const d = new Date(sgt)
       d.setDate(d.getDate() - 5 * 7)
@@ -88,6 +95,17 @@ export async function GET(request: NextRequest) {
         const weekStart = new Date(epoch)
         weekStart.setUTCDate(epoch.getUTCDate() + parseInt(key, 10) * 7)
         return `${MONTHS[weekStart.getUTCMonth()]} ${weekStart.getUTCDate()}`
+      }
+    } else if (range === '3m') {
+      // Last 6 months (each bar = 1 month)
+      const d = new Date(sgt)
+      d.setMonth(d.getMonth() - 5)
+      d.setDate(1)
+      startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01T00:00:00+08:00`
+      groupExpr = `strftime('%Y-%m', datetime, '+8 hours')`
+      labelFn = (key) => {
+        const [, m] = key.split('-').map(Number)
+        return MONTHS[m - 1]
       }
     } else {
       // Custom → last 6 months (each bar = 1 month)
@@ -191,13 +209,14 @@ export async function GET(request: NextRequest) {
          AND c.parent_id = ?
        GROUP BY t.category_id, c.name
        ORDER BY total DESC`
-    : `SELECT t.category_id,
-              c.name as category_name,
+    : `SELECT COALESCE(p.id, c.id) as category_id,
+              COALESCE(p.name, c.name) as category_name,
               COALESCE(SUM(CASE WHEN t.currency = 'SGD' THEN t.amount ELSE COALESCE(t.sgd_equivalent, t.amount) END), 0) as total
        FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id
+       LEFT JOIN categories p ON c.parent_id = p.id
        WHERE t.type = 'expense' AND t.datetime >= ? AND t.datetime <= ?
-       GROUP BY t.category_id, c.name
+       GROUP BY COALESCE(p.id, c.id), COALESCE(p.name, c.name)
        ORDER BY total DESC`
 
   const catQueryArgs = parentCategoryId
@@ -226,27 +245,33 @@ export async function GET(request: NextRequest) {
         args: catQueryArgs,
       }),
       db.execute({
-        sql: `SELECT c.name as category_name, tg.name as tag_name,
+        sql: `SELECT COALESCE(p.id, c.id) as category_id,
+                     COALESCE(p.name, c.name) as category_name,
+                     tg.name as tag_name,
                      COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
               FROM transactions tx
               LEFT JOIN categories c ON tx.category_id = c.id
+              LEFT JOIN categories p ON c.parent_id = p.id
               JOIN transaction_tags tt ON tx.id = tt.transaction_id
               JOIN tags tg ON tt.tag_id = tg.id
               WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
                 AND (tx.status IS NULL OR tx.status = 'approved')
-              GROUP BY tx.category_id, c.name, tg.id, tg.name
+              GROUP BY COALESCE(p.id, c.id), COALESCE(p.name, c.name), tg.id, tg.name
               ORDER BY total DESC`,
         args: [startDate, endDate],
       }),
       db.execute({
-        sql: `SELECT c.name as category_name, 'Untagged' as tag_name,
+        sql: `SELECT COALESCE(p.id, c.id) as category_id,
+                     COALESCE(p.name, c.name) as category_name,
+                     'Untagged' as tag_name,
                      COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
               FROM transactions tx
               LEFT JOIN categories c ON tx.category_id = c.id
+              LEFT JOIN categories p ON c.parent_id = p.id
               WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
                 AND (tx.status IS NULL OR tx.status = 'approved')
                 AND NOT EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = tx.id)
-              GROUP BY tx.category_id, c.name
+              GROUP BY COALESCE(p.id, c.id), COALESCE(p.name, c.name)
               HAVING total > 0`,
         args: [startDate, endDate],
       }),
@@ -271,25 +296,31 @@ export async function GET(request: NextRequest) {
         args: catQueryArgs,
       }),
       db.execute({
-        sql: `SELECT c.name as category_name, tg.name as tag_name,
+        sql: `SELECT COALESCE(p.id, c.id) as category_id,
+                     COALESCE(p.name, c.name) as category_name,
+                     tg.name as tag_name,
                      COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
               FROM transactions tx
               LEFT JOIN categories c ON tx.category_id = c.id
+              LEFT JOIN categories p ON c.parent_id = p.id
               JOIN transaction_tags tt ON tx.id = tt.transaction_id
               JOIN tags tg ON tt.tag_id = tg.id
               WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
-              GROUP BY tx.category_id, c.name, tg.id, tg.name
+              GROUP BY COALESCE(p.id, c.id), COALESCE(p.name, c.name), tg.id, tg.name
               ORDER BY total DESC`,
         args: [startDate, endDate],
       }),
       db.execute({
-        sql: `SELECT c.name as category_name, 'Untagged' as tag_name,
+        sql: `SELECT COALESCE(p.id, c.id) as category_id,
+                     COALESCE(p.name, c.name) as category_name,
+                     'Untagged' as tag_name,
                      COALESCE(SUM(CASE WHEN tx.currency = 'SGD' THEN tx.amount ELSE COALESCE(tx.sgd_equivalent, tx.amount) END), 0) as total
               FROM transactions tx
               LEFT JOIN categories c ON tx.category_id = c.id
+              LEFT JOIN categories p ON c.parent_id = p.id
               WHERE tx.type = 'expense' AND tx.datetime >= ? AND tx.datetime <= ?
                 AND NOT EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transaction_id = tx.id)
-              GROUP BY tx.category_id, c.name
+              GROUP BY COALESCE(p.id, c.id), COALESCE(p.name, c.name)
               HAVING total > 0`,
         args: [startDate, endDate],
       }),
@@ -301,10 +332,10 @@ export async function GET(request: NextRequest) {
 
   const tagMap = new Map<string, { tag_name: string; total: number }[]>()
   for (const r of [...taggedResult.rows, ...untaggedResult.rows]) {
-    const catName = (r.category_name as string | null) ?? 'Uncategorised'
-    const arr = tagMap.get(catName) ?? []
+    const catId = (r.category_id as string | null) ?? '__uncategorised__'
+    const arr = tagMap.get(catId) ?? []
     arr.push({ tag_name: r.tag_name as string, total: Number(r.total) })
-    tagMap.set(catName, arr)
+    tagMap.set(catId, arr)
   }
   for (const arr of tagMap.values()) {
     arr.sort((a, b) => b.total - a.total)
@@ -316,8 +347,8 @@ export async function GET(request: NextRequest) {
     total: Number(r.total),
     pct: totalSpend > 0 ? Math.round((Number(r.total) / totalSpend) * 1000) / 10 : 0,
     tag_breakdown: (() => {
-      const catName = (r.category_name as string | null) ?? 'Uncategorised'
-      return tagMap.get(catName) ?? []
+      const catId = (r.category_id as string | null) ?? '__uncategorised__'
+      return tagMap.get(catId) ?? []
     })(),
   }))
 

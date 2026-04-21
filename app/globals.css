@@ -94,3 +94,10 @@ body {
 .logo-light { display: none;  }
 [data-theme="light"] .logo-dark  { display: none;  }
 [data-theme="light"] .logo-light { display: block; }
+
+/* Bottom tab bar clearance — mobile only */
+@media (max-width: 639px) {
+  body {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}

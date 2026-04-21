@@ -55,7 +55,7 @@ const selectStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-export function WheresMyMoney() {
+export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void } = {}) {
   const { showToast } = useToast()
 
   const [type, setType] = useState<TxType>('expense')
@@ -373,17 +373,24 @@ export function WheresMyMoney() {
           background: 'var(--bg-card)',
           border: '1px solid var(--border)',
           borderRadius: '12px',
-          padding: '1.5rem',
+          padding: collapsed ? '1rem 1.5rem' : '1.5rem',
+          cursor: onToggle ? 'pointer' : undefined,
         }}
+        onClick={collapsed ? onToggle : undefined}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pasteOpen ? '1rem' : voiceError ? '0.75rem' : '1.25rem' }}>
-          <h2 style={{ color: 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : pasteOpen ? '1rem' : voiceError ? '0.75rem' : '1.25rem' }}>
+          <h2 style={{ color: collapsed ? 'var(--text-muted)' : 'var(--text)', fontSize: '15px', fontWeight: 600, margin: 0 }}>
             Where's My Money
           </h2>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onToggle && (
+              <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginRight: '4px' }}>
+                {collapsed ? '▼' : '▲'}
+              </span>
+            )}
             <button
               type="button"
-              onClick={startVoice}
+              onClick={(e) => { e.stopPropagation(); startVoice() }}
               aria-label={listening ? 'Stop listening' : 'Tap mic to log an expense by voice'}
               style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
@@ -405,7 +412,7 @@ export function WheresMyMoney() {
             </button>
             <button
               type="button"
-              onClick={() => { setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
+              onClick={(e) => { e.stopPropagation(); setPasteOpen(v => !v); setPasteText(''); if (!pasteOpen) setTimeout(() => pasteRef.current?.focus(), 80) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '5px',
                 padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border)',
@@ -423,6 +430,8 @@ export function WheresMyMoney() {
             </button>
           </div>
         </div>
+
+        {!collapsed && <>
 
         {/* Voice error banner */}
         {voiceError && (
@@ -753,6 +762,7 @@ export function WheresMyMoney() {
             ) : 'Save transaction'}
           </button>
         </form>
+        </>}
       </div>
 
       <style>{`
