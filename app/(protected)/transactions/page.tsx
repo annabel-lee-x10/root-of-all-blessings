@@ -1,8 +1,11 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import type { TransactionRow, Account, Category, Tag, TxType } from '@/lib/types'
+import type { TransactionRow, Account, Category, Tag, TxType, AccountType } from '@/lib/types'
 import { useToast } from '../components/toast'
 import { ConfirmDialog } from '../components/confirm-dialog'
+import { PaymentTypePicker } from '../components/payment-type-picker'
+import { CategoryPicker } from '../components/category-picker'
+import { TagSelector } from '../components/tag-selector'
 
 
 const LIMIT = 50
@@ -84,9 +87,6 @@ const INPUT: React.CSSProperties = {
 }
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer', maxWidth: '100%' }
 
-const ACCOUNT_TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
-const ACCOUNT_TYPE_LABELS: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
-
 function useMobile(bp = 640) {
   const [mobile, setMobile] = useState(false)
   useEffect(() => {
@@ -98,23 +98,6 @@ function useMobile(bp = 640) {
     return () => mq.removeEventListener('change', update)
   }, [bp])
   return mobile
-}
-
-function AccountOptions({ accounts }: { accounts: Account[] }) {
-  const groups: Record<string, Account[]> = { bank: [], wallet: [], cash: [], fund: [] }
-  for (const a of accounts) {
-    if (groups[a.type]) groups[a.type].push(a)
-    else groups[a.type] = [a]
-  }
-  return (
-    <>
-      {ACCOUNT_TYPE_ORDER.filter(t => groups[t] && groups[t].length > 0).map(type => (
-        <optgroup key={type} label={ACCOUNT_TYPE_LABELS[type]}>
-          {groups[type].map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </optgroup>
-      ))}
-    </>
-  )
 }
 
 export default function TransactionsPage() {
@@ -166,6 +149,8 @@ export default function TransactionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<TransactionRow | null>(null)
   const [undoStack, setUndoStack] = useState<TransactionRow[]>([])
+  const [editTypeFilter, setEditTypeFilter] = useState<AccountType | ''>('')
+  const [editParentCategoryId, setEditParentCategoryId] = useState('')
 
   useEffect(() => {
     // Read URL search params on mount
@@ -243,11 +228,21 @@ export default function TransactionsPage() {
   function startEdit(tx: TransactionRow) {
     setEditingId(tx.id)
     setEditForm(txToForm(tx))
+    const acct = accounts.find((a) => a.id === tx.account_id)
+    setEditTypeFilter(acct?.type ?? '')
+    if (tx.category_id) {
+      const cat = categories.find((c) => c.id === tx.category_id)
+      setEditParentCategoryId(cat?.parent_id ?? cat?.id ?? '')
+    } else {
+      setEditParentCategoryId('')
+    }
   }
 
   function cancelEdit() {
     setEditingId(null)
     setEditForm(null)
+    setEditTypeFilter('')
+    setEditParentCategoryId('')
   }
 
   async function saveEdit(id: string) {
@@ -268,6 +263,7 @@ export default function TransactionsPage() {
         category_id: editForm.category_id || null,
         payee: editForm.payee || null,
         note: editForm.note || null,
+        payment_method: accounts.find((a) => a.id === editForm.account_id)?.type ?? null,
         datetime: fromInputDt(editForm.datetime),
         tag_ids: editForm.tag_ids,
       }
@@ -431,8 +427,6 @@ export default function TransactionsPage() {
 
   const totalPages = Math.ceil(total / LIMIT)
   const activeAccounts = accounts.filter((a) => a.is_active)
-  const expenseCategories = categories.filter((c) => c.type === 'expense')
-  const incomeCategories = categories.filter((c) => c.type === 'income')
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '960px', margin: '0 auto', paddingBottom: selectMode && selected.size > 0 ? '80px' : undefined }}>
@@ -743,36 +737,45 @@ export default function TransactionsPage() {
                     </>
                   )}
                   <div>
-                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Account</label>
-                    <select style={{ ...SELECT, width: '100%' }} value={editForm.account_id} onChange={(e) => ef('account_id', e.target.value)}>
-                      <AccountOptions accounts={activeAccounts} />
-                    </select>
-                  </div>
-                  {editForm.type === 'transfer' && (
-                    <div>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>To Account</label>
-                      <select style={{ ...SELECT, width: '100%' }} value={editForm.to_account_id} onChange={(e) => ef('to_account_id', e.target.value)}>
-                        <option value="">Select...</option>
-                        <AccountOptions accounts={activeAccounts.filter((a) => a.id !== editForm.account_id)} />
-                      </select>
-                    </div>
-                  )}
-                  {editForm.type !== 'transfer' && (
-                    <div>
-                      <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Category</label>
-                      <select style={{ ...SELECT, width: '100%' }} value={editForm.category_id} onChange={(e) => ef('category_id', e.target.value)}>
-                        <option value="">None</option>
-                        {(editForm.type === 'expense' ? expenseCategories : incomeCategories).map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div>
                     <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Payee</label>
                     <input style={{ ...INPUT, width: '100%' }} value={editForm.payee} onChange={(e) => ef('payee', e.target.value)} />
                   </div>
                 </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <PaymentTypePicker
+                    accounts={activeAccounts}
+                    filterValue={editTypeFilter}
+                    accountId={editForm.account_id}
+                    onFilterChange={setEditTypeFilter}
+                    onAccountChange={(id) => ef('account_id', id)}
+                    selectStyle={{ ...SELECT, width: '100%' }}
+                    pillsContainerStyle={{ marginBottom: '6px' }}
+                  />
+                </div>
+                {editForm.type === 'transfer' && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>To Account</label>
+                    <select style={{ ...SELECT, width: '100%' }} value={editForm.to_account_id} onChange={(e) => ef('to_account_id', e.target.value)}>
+                      <option value="">Select...</option>
+                      {activeAccounts.filter((a) => a.id !== editForm.account_id).map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {editForm.type !== 'transfer' && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <CategoryPicker
+                      categories={categories}
+                      txType={editForm.type}
+                      parentId={editParentCategoryId}
+                      categoryId={editForm.category_id}
+                      onParentChange={setEditParentCategoryId}
+                      onCategoryChange={(id) => ef('category_id', id)}
+                      selectStyle={{ ...SELECT, width: '100%' }}
+                    />
+                  </div>
+                )}
 
                 <div style={{ marginBottom: '8px' }}>
                   <label style={{ color: 'var(--text-muted)', fontSize: '12px', display: 'block', marginBottom: '3px' }}>Note</label>
@@ -786,28 +789,12 @@ export default function TransactionsPage() {
                 {tags.length > 0 && (
                   <div style={{ marginBottom: '10px' }}>
                     <label style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '6px' }}>Tags</label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {tags.map((tag) => {
-                        const selected = editForm.tag_ids.includes(tag.id)
-                        return (
-                          <button
-                            key={tag.id}
-                            onClick={() => ef('tag_ids', selected
-                              ? editForm.tag_ids.filter((id) => id !== tag.id)
-                              : [...editForm.tag_ids, tag.id]
-                            )}
-                            style={{
-                              ...BTN, padding: '3px 10px', fontSize: '12px',
-                              background: selected ? 'var(--accent-faint)' : 'var(--bg-dim)',
-                              color: selected ? 'var(--accent)' : 'var(--text-muted)',
-                              border: `1px solid ${selected ? 'var(--accent-soft)' : 'var(--border)'}`,
-                            }}
-                          >
-                            {tag.name}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <TagSelector
+                      tags={tags}
+                      categories={categories}
+                      selectedIds={editForm.tag_ids}
+                      onChange={(ids) => ef('tag_ids', ids)}
+                    />
                   </div>
                 )}
 
@@ -858,7 +845,7 @@ export default function TransactionsPage() {
               onChange={e => setBulkAccountId(e.target.value)}
             >
               <option value="">Account...</option>
-              <AccountOptions accounts={activeAccounts} />
+              {activeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <button
               style={{ ...BTN_SEC, fontSize: '12px' }}
@@ -876,10 +863,10 @@ export default function TransactionsPage() {
             >
               <option value="">Category...</option>
               <optgroup label="Expense">
-                {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categories.filter((c) => c.type === 'expense').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </optgroup>
               <optgroup label="Income">
-                {incomeCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categories.filter((c) => c.type === 'income').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </optgroup>
             </select>
             <button

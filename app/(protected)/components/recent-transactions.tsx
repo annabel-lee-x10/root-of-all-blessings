@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import type { TransactionRow, Account, TxType } from '@/lib/types'
+import type { TransactionRow, Account, Category, Tag, TxType, AccountType } from '@/lib/types'
 import { useToast } from './toast'
+import { PaymentTypePicker } from './payment-type-picker'
+import { CategoryPicker } from './category-picker'
+import { TagSelector } from './tag-selector'
 
 function formatAmount(row: TransactionRow) {
   const prefix = row.type === 'expense' ? '-' : row.type === 'income' ? '+' : ''
@@ -40,24 +43,37 @@ const pillStyle = (active: boolean, color: string): React.CSSProperties => ({
   lineHeight: '18px',
 })
 
-const selectStyle: React.CSSProperties = {
+const compactSelect: React.CSSProperties = {
   background: '#0d1117',
   border: '1px solid #30363d',
   borderRadius: '6px',
   color: '#e6edf3',
-  padding: '2px 6px',
-  fontSize: '11px',
+  padding: '4px 8px',
+  fontSize: '12px',
   outline: 'none',
   cursor: 'pointer',
+  width: '100%',
+}
+
+interface EditRow {
+  typeFilter: AccountType | ''
+  accountId: string
+  parentCategoryId: string
+  categoryId: string
+  tagIds: string[]
 }
 
 export function RecentTransactions() {
   const { showToast } = useToast()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editRow, setEditRow] = useState<EditRow | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,12 +91,32 @@ export function RecentTransactions() {
   useEffect(() => {
     load()
     fetch('/api/accounts').then((r) => r.json()).then(setAccounts).catch(() => {})
+    fetch('/api/categories').then((r) => r.json()).then(setCategories).catch(() => {})
+    fetch('/api/tags').then((r) => r.json()).then(setTags).catch(() => {})
     const handler = () => load()
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)
   }, [load])
 
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
+
+  function startEdit(tx: TransactionRow) {
+    const acct = accounts.find((a) => a.id === tx.account_id)
+    const cat = tx.category_id ? categories.find((c) => c.id === tx.category_id) : null
+    setEditingId(tx.id)
+    setEditRow({
+      typeFilter: acct?.type ?? '',
+      accountId: tx.account_id,
+      parentCategoryId: cat ? (cat.parent_id ?? cat.id) : '',
+      categoryId: tx.category_id ?? '',
+      tagIds: tx.tags.map((t) => t.id),
+    })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditRow(null)
+  }
 
   async function patchTransaction(id: string, updates: Record<string, unknown>) {
     setSavingId(id)
@@ -108,9 +144,17 @@ export function RecentTransactions() {
     await patchTransaction(tx.id, { type: newType })
   }
 
-  async function changeAccount(tx: TransactionRow, newAccountId: string) {
-    if (newAccountId === tx.account_id) return
-    await patchTransaction(tx.id, { account_id: newAccountId })
+  async function saveEdit(tx: TransactionRow) {
+    if (!editRow) return
+    const selectedAccount = accounts.find((a) => a.id === editRow.accountId)
+    await patchTransaction(tx.id, {
+      account_id: editRow.accountId,
+      category_id: editRow.categoryId || null,
+      tag_ids: editRow.tagIds,
+      payment_method: selectedAccount?.type ?? null,
+    })
+    setEditingId(null)
+    setEditRow(null)
   }
 
   async function deleteTransaction(id: string) {
@@ -161,19 +205,19 @@ export function RecentTransactions() {
           <>
             {transactions.map((tx) => {
               const isSaving = savingId === tx.id
+              const isEditing = editingId === tx.id
               return (
                 <div
                   key={tx.id}
                   data-tx-row
                   style={{
-                    padding: '11px 16px',
                     borderBottom: '1px solid #21262d',
                     opacity: isSaving ? 0.6 : 1,
                     transition: 'opacity 0.15s',
                   }}
                 >
-                  {/* Top row: label + amount + delete */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Compact row */}
+                  <div style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div
                       style={{
                         width: '8px', height: '8px', borderRadius: '50%',
@@ -218,6 +262,21 @@ export function RecentTransactions() {
                       {formatAmount(tx)}
                     </span>
                     <button
+                      onClick={() => isEditing ? cancelEdit() : startEdit(tx)}
+                      disabled={isSaving}
+                      style={{
+                        background: 'none',
+                        border: isEditing ? '1px solid #30363d' : 'none',
+                        color: isEditing ? '#8b949e' : '#484f58',
+                        cursor: isSaving ? 'not-allowed' : 'pointer',
+                        padding: '3px 8px', fontSize: '12px', lineHeight: 1,
+                        flexShrink: 0, borderRadius: '4px',
+                        transition: 'color 0.1s',
+                      }}
+                    >
+                      {isEditing ? 'Cancel' : 'Edit'}
+                    </button>
+                    <button
                       onClick={() => deleteTransaction(tx.id)}
                       disabled={deletingId === tx.id}
                       title="Delete transaction"
@@ -236,12 +295,11 @@ export function RecentTransactions() {
                     </button>
                   </div>
 
-                  {/* Bottom row: type toggle + account selector */}
+                  {/* Type pills - always visible */}
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
-                    marginTop: '8px', paddingLeft: '20px', flexWrap: 'wrap',
+                    paddingBottom: '10px', paddingLeft: '36px', paddingRight: '16px', flexWrap: 'wrap',
                   }}>
-                    {/* Type pills */}
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {(['expense', 'income', 'transfer'] as TxType[]).map((t) => (
                         <button
@@ -255,19 +313,68 @@ export function RecentTransactions() {
                         </button>
                       ))}
                     </div>
-
-                    {/* Account selector */}
-                    <select
-                      value={tx.account_id}
-                      disabled={isSaving}
-                      onChange={(e) => changeAccount(tx, e.target.value)}
-                      style={selectStyle}
-                    >
-                      {activeAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
                   </div>
+
+                  {/* Expanded edit form */}
+                  {isEditing && editRow && (
+                    <div style={{
+                      padding: '12px 16px 12px 36px',
+                      borderTop: '1px solid #21262d',
+                      display: 'flex', flexDirection: 'column', gap: '8px',
+                    }}>
+                      <PaymentTypePicker
+                        accounts={activeAccounts}
+                        filterValue={editRow.typeFilter}
+                        accountId={editRow.accountId}
+                        onFilterChange={(f) => setEditRow((p) => p ? { ...p, typeFilter: f } : p)}
+                        onAccountChange={(id) => setEditRow((p) => p ? { ...p, accountId: id } : p)}
+                        selectStyle={compactSelect}
+                        pillsContainerStyle={{ marginBottom: '4px' }}
+                      />
+                      <CategoryPicker
+                        categories={categories}
+                        txType={tx.type}
+                        parentId={editRow.parentCategoryId}
+                        categoryId={editRow.categoryId}
+                        onParentChange={(pid) => setEditRow((p) => p ? { ...p, parentCategoryId: pid } : p)}
+                        onCategoryChange={(id) => setEditRow((p) => p ? { ...p, categoryId: id } : p)}
+                        selectStyle={compactSelect}
+                      />
+                      {tags.length > 0 && (
+                        <TagSelector
+                          tags={tags}
+                          categories={categories}
+                          selectedIds={editRow.tagIds}
+                          onChange={(ids) => setEditRow((p) => p ? { ...p, tagIds: ids } : p)}
+                        />
+                      )}
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                        <button
+                          onClick={() => saveEdit(tx)}
+                          disabled={isSaving}
+                          style={{
+                            border: 'none', borderRadius: '6px',
+                            cursor: isSaving ? 'not-allowed' : 'pointer',
+                            fontSize: '12px', fontWeight: 500, padding: '5px 12px',
+                            background: '#f0b429', color: '#0d1117',
+                            opacity: isSaving ? 0.6 : 1,
+                          }}
+                        >
+                          {isSaving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          style={{
+                            border: '1px solid #30363d', borderRadius: '6px', cursor: 'pointer',
+                            fontSize: '12px', fontWeight: 500, padding: '5px 12px',
+                            background: 'transparent', color: '#8b949e',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
