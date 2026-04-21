@@ -18,7 +18,6 @@ Time: [HH:MM 24h]
 Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description of the purchase context]
-Payment Method: [cash/credit card/debit card/e-wallet]
 
 Rules:
 - Amount is the grand total (GST-inclusive if shown)
