@@ -78,6 +78,12 @@ export interface Holding {
   geo?: 'US' | 'SG' | 'UK' | 'HK'
   sector?: string
   currency?: string
+  // Snap27 enrichments
+  target?: number
+  sell_limit?: number
+  buy_limit?: number
+  approx?: boolean
+  is_new?: boolean
 }
 
 export interface PortfolioSnapshot {
