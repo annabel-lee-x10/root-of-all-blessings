@@ -66,6 +66,47 @@ async function migrate() {
       created_at TEXT NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_portfolio_date ON portfolio_snapshots(snapshot_date DESC)`,
+    `CREATE TABLE IF NOT EXISTS portfolio_orders (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      ticker TEXT NOT NULL,
+      geo TEXT NOT NULL DEFAULT 'US',
+      type TEXT NOT NULL,
+      price REAL NOT NULL,
+      qty REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      placed TEXT,
+      current_price REAL,
+      note TEXT,
+      new_flag INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS portfolio_realised_trades (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      ticker TEXT NOT NULL,
+      amount REAL NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS portfolio_growth (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      dimension TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      level TEXT NOT NULL,
+      items_json TEXT NOT NULL,
+      next TEXT,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS portfolio_milestones (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      tags_json TEXT NOT NULL,
+      text TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS news_briefs (
       id TEXT PRIMARY KEY,
       brief_date TEXT NOT NULL,
@@ -99,6 +140,30 @@ async function migrate() {
     await db.execute("ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'")
   } catch {
     // Column already exists — safe to ignore
+  }
+
+  // Idempotent: add rich snapshot columns (Snap 27 dashboard)
+  const snapCols: Array<[string, string]> = [
+    ['cash',             'REAL'],
+    ['pending',          'REAL'],
+    ['net_invested',     'REAL'],
+    ['realised_pnl',     'REAL'],
+    ['net_deposited',    'REAL'],
+    ['dividends',        'REAL'],
+    ['snap_label',       'TEXT'],
+    ['snap_time',        'TEXT'],
+    ['prior_value',      'REAL'],
+    ['prior_unrealised', 'REAL'],
+    ['prior_realised',   'REAL'],
+    ['prior_cash',       'REAL'],
+    ['prior_holdings',   'INTEGER'],
+  ]
+  for (const [col, type] of snapCols) {
+    try {
+      await db.execute(`ALTER TABLE portfolio_snapshots ADD COLUMN ${col} ${type}`)
+    } catch {
+      // column already exists
+    }
   }
 
   console.log('Migrations complete.')
