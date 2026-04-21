@@ -199,6 +199,19 @@ export async function POST() {
       name: 'accounts.delete_vallow',
       sql: "DELETE FROM accounts WHERE LOWER(name) = 'vallow'",
     },
+    { name: 'portfolio_snapshots.cash',             sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN cash REAL' },
+    { name: 'portfolio_snapshots.pending',          sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN pending REAL' },
+    { name: 'portfolio_snapshots.net_invested',     sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN net_invested REAL' },
+    { name: 'portfolio_snapshots.realised_pnl',     sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN realised_pnl REAL' },
+    { name: 'portfolio_snapshots.net_deposited',    sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN net_deposited REAL' },
+    { name: 'portfolio_snapshots.dividends',        sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN dividends REAL' },
+    { name: 'portfolio_snapshots.snap_label',       sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN snap_label TEXT' },
+    { name: 'portfolio_snapshots.snap_time',        sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN snap_time TEXT' },
+    { name: 'portfolio_snapshots.prior_value',      sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_value REAL' },
+    { name: 'portfolio_snapshots.prior_unrealised', sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_unrealised REAL' },
+    { name: 'portfolio_snapshots.prior_realised',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_realised REAL' },
+    { name: 'portfolio_snapshots.prior_cash',       sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_cash REAL' },
+    { name: 'portfolio_snapshots.prior_holdings',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_holdings INTEGER' },
   ]
 
   for (const m of ddlMigrations) {
@@ -270,6 +283,34 @@ export async function POST() {
     }
 
     results['subcategories'] = `${subcatsCreated} created, ${subcatsLinked} linked`
+
+    // ── Portfolio related tables ──────────────────────────────────────────────
+    for (const sql of [
+      `CREATE TABLE IF NOT EXISTS portfolio_orders (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+        ticker TEXT NOT NULL, geo TEXT NOT NULL DEFAULT 'US', type TEXT NOT NULL,
+        price REAL NOT NULL, qty REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+        placed TEXT, current_price REAL, note TEXT,
+        new_flag INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS portfolio_realised_trades (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+        ticker TEXT NOT NULL, amount REAL NOT NULL, created_at TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS portfolio_growth (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+        dimension TEXT NOT NULL, score INTEGER NOT NULL, level TEXT NOT NULL,
+        items_json TEXT NOT NULL, next TEXT, created_at TEXT NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS portfolio_milestones (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+        date TEXT NOT NULL, tags_json TEXT NOT NULL, text TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`,
+    ]) {
+      await db.execute(sql)
+    }
+    results['portfolio_tables'] = 'ready'
 
     // ── Backup transactions currently pointing to parent categories ───────────
     // INSERT OR IGNORE ensures the backup row records the *original* category_id
