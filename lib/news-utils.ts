@@ -9,3 +9,33 @@
 export function stripCiteTags(s: string): string {
   return s.replace(/<cite[^>]*>([\s\S]*?)<\/cite>/g, '$1').replace(/<\/?cite[^>]*>/g, '')
 }
+
+export function parseArr(raw: string): Record<string, unknown>[] {
+  if (!raw) return []
+  const c = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
+
+  // Fast path: clean JSON (most responses)
+  try {
+    const d = JSON.parse(c)
+    if (Array.isArray(d)) return d
+  } catch { /* fall through to extraction */ }
+
+  // Find the last '[' that begins a JSON array (handles preamble like "Here are [5] stories: [{...}]")
+  // Scan for '[' followed immediately by '{' or '[' — i.e. an array of objects/arrays
+  let lastArrayStart = -1
+  const arrayOpenRe = /\[\s*[\[{]/g
+  let m: RegExpExecArray | null
+  while ((m = arrayOpenRe.exec(c)) !== null) lastArrayStart = m.index
+  // Also handle empty array case — only use if no object/array opener was found
+  if (lastArrayStart === -1) {
+    const emptyRe = /\[\s*\]/g
+    let em: RegExpExecArray | null
+    while ((em = emptyRe.exec(c)) !== null) lastArrayStart = em.index
+  }
+
+  if (lastArrayStart === -1) return []
+  try {
+    const d = JSON.parse(c.slice(lastArrayStart))
+    return Array.isArray(d) ? d : []
+  } catch { return [] }
+}

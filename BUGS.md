@@ -286,3 +286,19 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Root cause:** The Portfolio section only renders when `portfolioTickers.length > 0 || news.port.length > 0`. Tickers were never populated because the FAB upload never triggered (BUG-021). With no tickers, Refresh skips the portfolio section, so `news.port` stays empty too.
 
 **Fix:** Fixed by BUG-021. Once the FAB correctly triggers the portfolio HTML upload, tickers populate and the Portfolio section becomes visible after Refresh.
+
+---
+
+## BUG-023 · News: Singapore Property section always empty after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `lib/news-utils.ts`, `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The Singapore Property section consistently showed "No stories yet — hit Refresh to generate" even after hitting Refresh. World, Singapore, and Jobs sections populated correctly.
+
+**Root cause:** `parseArr()` used a greedy regex `/\[[\s\S]*\]/` to extract a JSON array from the model's raw text response. When the model included a preamble sentence containing `[N]` (e.g. "Here are [5] stories today:"), the greedy match found the first `[` (in `[5]`) and the last `]` (at the end of the JSON array), producing invalid JSON that `JSON.parse` could not handle. `catch { return [] }` silently swallowed the error and the section stayed empty. The Property search query ("HDB, condo, landed, commercial, launches, policy") triggers this preamble pattern more often than World or Singapore topics.
+
+**Fix:** `parseArr()` now tries `JSON.parse` directly first (fast path for clean responses). On failure, it scans for the last `[` that opens a JSON array of objects or an empty array (pattern `[\s*[{` or `[\s*]`), then parses from there. Moved to `lib/news-utils.ts` for testability.
+
+**Regression test:** `tests/regression/news-property-parse.test.ts`

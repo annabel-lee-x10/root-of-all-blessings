@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useToast } from '../components/toast'
 import type { QsNewsCard, QsBriefSections, QsNewsBriefRow, Sentiment } from '@/lib/types'
-import { stripCiteTags } from '@/lib/news-utils'
+import { stripCiteTags, parseArr } from '@/lib/news-utils'
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const BG = 'var(--bg)'
@@ -99,14 +99,6 @@ async function agenticLoop(system: string, userMsg: string): Promise<string> {
   return ''
 }
 
-function parseArr(raw: string): Record<string, unknown>[] {
-  if (!raw) return []
-  try {
-    const c = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
-    const m = c.match(/\[[\s\S]*\]/)
-    return m ? JSON.parse(m[0]) : []
-  } catch { return [] }
-}
 
 function nowSGT(): string {
   try {
