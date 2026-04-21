@@ -3,10 +3,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
+const mockPush = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}))
+
 const mockDrillData = {
   category_breakdown: [
     { category_id: null, category_name: 'Lunch', total: 500, pct: 62.5, tag_breakdown: [] },
     { category_id: null, category_name: 'Dinner', total: 300, pct: 37.5, tag_breakdown: [] },
+  ],
+}
+
+// Drill data with real sub-category IDs (for navigation tests)
+const mockDrillDataWithIds = {
+  category_breakdown: [
+    { category_id: 'cat-lunch', category_name: 'Lunch', total: 500, pct: 62.5, tag_breakdown: [] },
+    { category_id: 'cat-dinner', category_name: 'Dinner', total: 300, pct: 37.5, tag_breakdown: [] },
   ],
 }
 
@@ -49,6 +63,13 @@ function mockFetchSuccess() {
   }))
 }
 
+function mockFetchWithSubIds() {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+    const data = url.includes('parent_category_id') ? mockDrillDataWithIds : mockDashboardData
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+  }))
+}
+
 function mockFetchError() {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
 }
@@ -74,6 +95,7 @@ function mockFetchEmpty() {
 
 beforeEach(() => {
   mockFetchSuccess()
+  mockPush.mockClear()
 })
 
 afterEach(() => {
@@ -177,21 +199,21 @@ describe('ExpenseDashboard', () => {
     })
   })
 
-  it('category bar has aria-expanded=false by default', async () => {
+  // Drill-down expand/collapse now uses the toggle button (data-testid="category-toggle-{id}")
+  it('category toggle button has aria-expanded=false by default', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    const foodBtn = screen.getByRole('button', { name: /food/i })
-    expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('category-toggle-cat-food')).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('clicking a category bar expands its subcategory drilldown', async () => {
+  it('clicking the category toggle button expands its subcategory drilldown', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    fireEvent.click(screen.getByTestId('category-toggle-cat-food'))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByTestId('category-toggle-cat-food')).toHaveAttribute('aria-expanded', 'true')
     })
     await waitFor(() => {
       expect(screen.getByText('Lunch')).toBeInTheDocument()
@@ -199,33 +221,27 @@ describe('ExpenseDashboard', () => {
     })
   })
 
-  it('clicking expanded category bar collapses it', async () => {
+  it('clicking expanded toggle button collapses drilldown', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    const foodBtn = screen.getByRole('button', { name: /food/i })
-    fireEvent.click(foodBtn)
-    await waitFor(() => {
-      expect(foodBtn).toHaveAttribute('aria-expanded', 'true')
-    })
-    fireEvent.click(foodBtn)
-    await waitFor(() => {
-      expect(foodBtn).toHaveAttribute('aria-expanded', 'false')
-    })
+    const toggle = screen.getByTestId('category-toggle-cat-food')
+    fireEvent.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'))
+    fireEvent.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'))
   })
 
-  it('clicking a different category collapses the previous one', async () => {
+  it('clicking a different category toggle collapses the previous one', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     render(<ExpenseDashboard />)
     await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /food/i }))
+    fireEvent.click(screen.getByTestId('category-toggle-cat-food'))
+    await waitFor(() => expect(screen.getByTestId('category-toggle-cat-food')).toHaveAttribute('aria-expanded', 'true'))
+    fireEvent.click(screen.getByTestId('category-toggle-cat-transport'))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'true')
-    })
-    fireEvent.click(screen.getByRole('button', { name: /transport/i }))
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /food/i })).toHaveAttribute('aria-expanded', 'false')
-      expect(screen.getByRole('button', { name: /transport/i })).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByTestId('category-toggle-cat-food')).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByTestId('category-toggle-cat-transport')).toHaveAttribute('aria-expanded', 'true')
     })
   })
 })
@@ -250,5 +266,91 @@ describe('ExpenseDashboard - empty state (BUG-005)', () => {
     await waitFor(() => {
       expect(screen.queryByText(/failed to load/i)).not.toBeInTheDocument()
     })
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// Dashboard drill-down navigation
+// Clicking Spend/Income boxes and category/subcategory rows navigates to
+// /transactions with the current date range and appropriate type/category filters
+// ---------------------------------------------------------------------------
+describe('ExpenseDashboard - drill-down navigation', () => {
+  it('Spend box renders with data-testid="spend-box"', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByTestId('spend-box')).toBeInTheDocument())
+  })
+
+  it('clicking Spend box navigates to /transactions?type=expense with date range', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('1,234.56')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('spend-box'))
+    expect(mockPush).toHaveBeenCalledWith(
+      '/transactions?type=expense&start=2026-04-01&end=2026-04-19'
+    )
+  })
+
+  it('Income box renders with data-testid="income-box"', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByTestId('income-box')).toBeInTheDocument())
+  })
+
+  it('clicking Income box navigates to /transactions?type=income with date range', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('5,000.00')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('income-box'))
+    expect(mockPush).toHaveBeenCalledWith(
+      '/transactions?type=income&start=2026-04-01&end=2026-04-19'
+    )
+  })
+
+  it('category nav area renders with data-testid="category-nav-{id}"', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByTestId('category-nav-cat-food')).toBeInTheDocument())
+  })
+
+  it('clicking a category nav area navigates to /transactions with category_id and date range', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('category-nav-cat-food'))
+    expect(mockPush).toHaveBeenCalledWith(
+      '/transactions?type=expense&category_id=cat-food&start=2026-04-01&end=2026-04-19'
+    )
+  })
+
+  it('clicking a subcategory row with a category_id navigates to /transactions', async () => {
+    mockFetchWithSubIds()
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    // Expand Food drill-down
+    fireEvent.click(screen.getByTestId('category-toggle-cat-food'))
+    await waitFor(() => expect(screen.getByText('Lunch')).toBeInTheDocument())
+    // Click subcategory
+    fireEvent.click(screen.getByTestId('subcategory-nav-cat-lunch'))
+    expect(mockPush).toHaveBeenCalledWith(
+      '/transactions?type=expense&category_id=cat-lunch&start=2026-04-01&end=2026-04-19'
+    )
+  })
+
+  it('Avg/day box does NOT navigate on click', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('88.18')).toBeInTheDocument())
+    // avg/day box is not present as testid="spend-box" or "income-box"
+    expect(screen.queryByTestId('avgday-box')).not.toBeInTheDocument()
+  })
+
+  it('Budget box does NOT navigate on click', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    render(<ExpenseDashboard />)
+    await waitFor(() => expect(screen.getByText('—')).toBeInTheDocument())
+    expect(screen.queryByTestId('budget-box')).not.toBeInTheDocument()
   })
 })

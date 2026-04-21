@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 
 type Range = '1d' | '7d' | '1m' | '3m' | 'custom'
 
@@ -45,6 +46,19 @@ const RANGES: { id: Range; label: string }[] = [
 
 function fmt(n: number) {
   return n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function isoToDate(iso: string): string {
+  return iso.slice(0, 10)
+}
+
+function buildTxUrl(data: DashboardData, opts: { type?: string; categoryId?: string }): string {
+  const p = new URLSearchParams()
+  if (opts.type) p.set('type', opts.type)
+  if (opts.categoryId) p.set('category_id', opts.categoryId)
+  p.set('start', isoToDate(data.start_date))
+  p.set('end', isoToDate(data.end_date))
+  return `/transactions?${p.toString()}`
 }
 
 const labelStyle: React.CSSProperties = {
@@ -113,6 +127,7 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
 }
 
 export function ExpenseDashboard() {
+  const router = useRouter()
   const [range, setRange] = useState<Range>('1m')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -212,6 +227,23 @@ export function ExpenseDashboard() {
 
   const trendMax = trendData.reduce((m, d) => Math.max(m, d.income, d.expense), 1)
 
+  const clickableBox: React.CSSProperties = {
+    background: 'var(--bg-subtle)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    cursor: 'pointer',
+    transition: 'border-color 0.15s',
+    userSelect: 'none' as const,
+  }
+
+  const staticBox: React.CSSProperties = {
+    background: 'var(--bg-subtle)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '8px 10px',
+  }
+
   return (
     <section style={{ marginBottom: '2rem' }}>
       <div
@@ -302,27 +334,42 @@ export function ExpenseDashboard() {
               loading={loading}
             />
 
-            {/* Stat boxes - smaller/secondary */}
+            {/* Stat boxes */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', margin: '0.75rem 0' }}>
-              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
+              {/* Spend — clickable → /transactions?type=expense */}
+              <div
+                data-testid="spend-box"
+                onClick={() => data && router.push(buildTxUrl(data, { type: 'expense' }))}
+                style={data ? clickableBox : staticBox}
+              >
                 <div style={labelStyle}>Spend</div>
                 <div style={{ color: loading ? 'var(--text-dim)' : 'var(--red)', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
                   {loading ? '…' : fmt(data?.total_spend ?? 0)}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
+
+              {/* Income — clickable → /transactions?type=income */}
+              <div
+                data-testid="income-box"
+                onClick={() => data && router.push(buildTxUrl(data, { type: 'income' }))}
+                style={data ? clickableBox : staticBox}
+              >
                 <div style={labelStyle}>Income</div>
                 <div style={{ color: loading ? 'var(--text-dim)' : 'var(--green)', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
                   {loading ? '…' : fmt(data?.total_income ?? 0)}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
+
+              {/* Avg/day — not clickable */}
+              <div style={staticBox}>
                 <div style={labelStyle}>Avg/day</div>
                 <div style={{ color: loading ? 'var(--text-dim)' : 'var(--text)', fontSize: '14px', fontWeight: 700, letterSpacing: '-0.3px' }}>
                   {loading ? '…' : fmt(data?.daily_average ?? 0)}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px 10px' }}>
+
+              {/* Budget — not clickable */}
+              <div style={staticBox}>
                 <div style={labelStyle}>Budget</div>
                 <div style={{ color: 'var(--text-dim)', fontSize: '14px', fontWeight: 700 }}>
                   {loading ? '…' : (data?.budget_remaining != null ? fmt(data.budget_remaining) : '—')}
@@ -406,35 +453,50 @@ export function ExpenseDashboard() {
                     const isExpanded = expandedCategoryId === cat.category_id
                     return (
                       <div key={cat.category_name}>
-                        <button
-                          role="button"
-                          aria-expanded={isExpanded}
-                          onClick={() => drillInto(cat.category_id)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '10px',
-                            width: '100%',
-                            background: 'transparent',
-                            border: 'none',
-                            padding: '5px 0',
-                            cursor: cat.category_id ? 'pointer' : 'default',
-                            borderRadius: '4px',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <span style={{ color: 'var(--text)', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
-                          <div style={{ flex: 1, background: 'var(--bg-dim)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: 'var(--accent)', borderRadius: '4px' }} />
-                          </div>
-                          <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
-                            {fmt(cat.total)}
-                          </span>
-                          <span style={{ color: 'var(--text-dim)', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
-                            {cat.pct.toFixed(1)}%
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          {/* Navigation button — tapping navigates to /transactions */}
+                          <button
+                            data-testid={cat.category_id ? `category-nav-${cat.category_id}` : undefined}
+                            onClick={() => data && cat.category_id && router.push(buildTxUrl(data, { type: 'expense', categoryId: cat.category_id }))}
+                            style={{
+                              flex: 1,
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              background: 'transparent', border: 'none',
+                              padding: '5px 0',
+                              cursor: cat.category_id ? 'pointer' : 'default',
+                              borderRadius: '4px',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <span style={{ color: 'var(--text)', fontSize: '13px', minWidth: '100px' }}>{cat.category_name}</span>
+                            <div style={{ flex: 1, background: 'var(--bg-dim)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(100, cat.pct)}%`, height: '100%', background: 'var(--accent)', borderRadius: '4px' }} />
+                            </div>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>
+                              {fmt(cat.total)}
+                            </span>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>
+                              {cat.pct.toFixed(1)}%
+                            </span>
+                          </button>
+
+                          {/* Drill-down toggle — separate button keeps expand/collapse */}
                           {cat.category_id && (
-                            <span style={{ color: 'var(--text-dim)', fontSize: '11px', width: '16px', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                            <button
+                              data-testid={`category-toggle-${cat.category_id}`}
+                              aria-expanded={isExpanded}
+                              onClick={() => drillInto(cat.category_id)}
+                              style={{
+                                background: 'none', border: 'none',
+                                cursor: 'pointer', color: 'var(--text-dim)',
+                                fontSize: '11px', width: '24px', flexShrink: 0,
+                                padding: '4px 2px',
+                              }}
+                            >
+                              {isExpanded ? '▲' : '▼'}
+                            </button>
                           )}
-                        </button>
+                        </div>
 
                         {isExpanded && (
                           <div style={{ marginBottom: '4px', paddingLeft: '0' }}>
@@ -442,7 +504,18 @@ export function ExpenseDashboard() {
                               <div style={{ color: 'var(--text-muted)', fontSize: '12px', padding: '4px 0' }}>Loading...</div>
                             ) : drillData && drillData.length > 0 ? (
                               drillData.map(sub => (
-                                <div key={sub.category_name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '3px 0' }}>
+                                <button
+                                  key={sub.category_name}
+                                  data-testid={sub.category_id ? `subcategory-nav-${sub.category_id}` : undefined}
+                                  onClick={() => data && sub.category_id && router.push(buildTxUrl(data, { type: 'expense', categoryId: sub.category_id }))}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: '10px',
+                                    padding: '3px 0',
+                                    cursor: sub.category_id ? 'pointer' : 'default',
+                                    background: 'none', border: 'none',
+                                    width: '100%', textAlign: 'left',
+                                  }}
+                                >
                                   <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '100px' }}>{sub.category_name}</span>
                                   <div style={{ flex: 1, background: 'var(--bg-dim)', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
                                     <div style={{ width: `${Math.min(100, sub.pct)}%`, height: '100%', background: 'rgba(204, 85, 0, 0.5)', borderRadius: '4px' }} />
@@ -450,7 +523,7 @@ export function ExpenseDashboard() {
                                   <span style={{ color: 'var(--text-muted)', fontSize: '12px', minWidth: '48px', textAlign: 'right' }}>{fmt(sub.total)}</span>
                                   <span style={{ color: 'var(--text-dim)', fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>{sub.pct.toFixed(1)}%</span>
                                   <span style={{ width: '16px', flexShrink: 0 }} />
-                                </div>
+                                </button>
                               ))
                             ) : cat.tag_breakdown && cat.tag_breakdown.length > 0 ? (
                               cat.tag_breakdown.map(tag => (
