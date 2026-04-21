@@ -3,8 +3,8 @@
 import type { Tag, Category } from '@/lib/types'
 
 export function filterVisibleTags(tags: Tag[], categories: Category[]): Tag[] {
-  const catNames = new Set(categories.map((c) => c.name.toLowerCase()))
-  return tags.filter((t) => !catNames.has(t.name.toLowerCase()))
+  const catNames = new Set(categories.map((c) => c.name.toLowerCase().trim()))
+  return tags.filter((t) => !catNames.has(t.name.toLowerCase().trim()))
 }
 
 const BTN: React.CSSProperties = {

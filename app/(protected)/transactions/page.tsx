@@ -226,10 +226,13 @@ export default function TransactionsPage() {
   }
 
   function startEdit(tx: TransactionRow) {
+    const baseForm = txToForm(tx)
+    const defaultAccountId = tx.type === 'expense'
+      ? (accounts.find((a) => a.id === '9773' && a.is_active) ?? accounts.find((a) => a.type === 'credit_card' && a.is_active))?.id ?? baseForm.account_id
+      : baseForm.account_id
     setEditingId(tx.id)
-    setEditForm(txToForm(tx))
-    const acct = accounts.find((a) => a.id === tx.account_id)
-    setEditTypeFilter(acct?.type ?? '')
+    setEditForm({ ...baseForm, account_id: defaultAccountId })
+    setEditTypeFilter(tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''))
     if (tx.category_id) {
       const cat = categories.find((c) => c.id === tx.category_id)
       setEditParentCategoryId(cat?.parent_id ?? cat?.id ?? '')

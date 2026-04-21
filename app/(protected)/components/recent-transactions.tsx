@@ -101,12 +101,14 @@ export function RecentTransactions() {
   const activeAccounts = accounts.filter((a) => a.is_active === 1)
 
   function startEdit(tx: TransactionRow) {
-    const acct = accounts.find((a) => a.id === tx.account_id)
     const cat = tx.category_id ? categories.find((c) => c.id === tx.category_id) : null
+    const defaultAccountId = tx.type === 'expense'
+      ? (activeAccounts.find((a) => a.id === '9773') ?? activeAccounts.find((a) => a.type === 'credit_card'))?.id ?? tx.account_id
+      : tx.account_id
     setEditingId(tx.id)
     setEditRow({
-      typeFilter: acct?.type ?? '',
-      accountId: tx.account_id,
+      typeFilter: tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''),
+      accountId: defaultAccountId,
       parentCategoryId: cat ? (cat.parent_id ?? cat.id) : '',
       categoryId: tx.category_id ?? '',
       tagIds: tx.tags.map((t) => t.id),

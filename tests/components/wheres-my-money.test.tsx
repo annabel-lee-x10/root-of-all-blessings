@@ -56,20 +56,20 @@ afterEach(() => {
 async function renderWMM() {
   const { WheresMyMoney } = await import('@/app/(protected)/components/wheres-my-money')
   render(<WheresMyMoney />)
-  // Wait for data to load (account select populates)
-  await waitFor(() => expect(screen.getByRole('option', { name: 'DBS Savings' })).toBeInTheDocument())
+  // Wait for data to load (default credit_card filter shows credit card accounts first)
+  await waitFor(() => expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument())
 }
 
 // ---------------------------------------------------------------------------
 // BUG-026 · Payment type filter pills narrow the account list
 // ---------------------------------------------------------------------------
 describe('BUG-026: payment type filter pills narrow account list', () => {
-  it('shows all accounts when no filter is selected', async () => {
+  it('defaults to credit_card filter showing only credit card accounts', async () => {
     mockFetch()
     await renderWMM()
 
-    expect(screen.getByRole('option', { name: 'DBS Savings' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'DBS Savings' })).not.toBeInTheDocument()
   })
 
   it('shows only bank accounts when Bank filter is selected', async () => {
@@ -88,7 +88,10 @@ describe('BUG-026: payment type filter pills narrow account list', () => {
     mockFetch()
     await renderWMM()
 
-    fireEvent.click(screen.getByTestId('payment-type-credit_card'))
+    // credit_card is the default — deselect then re-select to exercise the toggle path
+    fireEvent.click(screen.getByTestId('payment-type-credit_card')) // deselect
+    await waitFor(() => expect(screen.getByRole('option', { name: 'DBS Savings' })).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('payment-type-credit_card')) // re-select
 
     await waitFor(() => {
       expect(screen.queryByRole('option', { name: 'DBS Savings' })).not.toBeInTheDocument()
@@ -100,11 +103,12 @@ describe('BUG-026: payment type filter pills narrow account list', () => {
     mockFetch()
     await renderWMM()
 
-    fireEvent.click(screen.getByTestId('payment-type-bank'))
-    await waitFor(() => expect(screen.queryByRole('option', { name: 'Citi 9773' })).not.toBeInTheDocument())
-
-    fireEvent.click(screen.getByTestId('payment-type-bank'))
-    await waitFor(() => expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument())
+    // credit_card is the default — deselecting it should show all accounts
+    fireEvent.click(screen.getByTestId('payment-type-credit_card'))
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'DBS Savings' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Citi 9773' })).toBeInTheDocument()
+    })
   })
 
   it('does not render a separate payment method dropdown', async () => {
