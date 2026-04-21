@@ -172,6 +172,18 @@ describe('POST /api/receipts/process', () => {
     expect(data.draft.account_id).toBe('acc1')
   })
 
+  it('BUG-021: falls back to first active account when accountId is stale/not found', async () => {
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'stale-account-id-that-doesnt-exist',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.account_id).toBe('acc1')
+  })
+
   it('returns 422 when Claude cannot extract amount', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

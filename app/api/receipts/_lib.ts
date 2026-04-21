@@ -8,7 +8,7 @@ export async function resolveAccount(accountId?: string): Promise<string | null>
       args: [accountId],
     })
     if (check.rows.length > 0) return accountId
-    return null  // provided ID not found — don't silently use wrong account
+    // Stale or deactivated ID — fall through to first active account
   }
   const fallback = await db.execute({
     sql: 'SELECT id FROM accounts WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1',
