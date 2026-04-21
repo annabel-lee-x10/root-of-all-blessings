@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import type { InValue } from '@libsql/client'
 
 export async function PATCH(
   request: NextRequest,
@@ -12,7 +13,7 @@ export async function PATCH(
   if (existing.rows.length === 0) return Response.json({ error: 'Not found' }, { status: 404 })
 
   const fields: string[] = []
-  const args: unknown[] = []
+  const args: InValue[] = []
   if (body.current_price !== undefined) { fields.push('current_price = ?'); args.push(body.current_price) }
   if (body.status !== undefined)        { fields.push('status = ?');        args.push(body.status) }
   if (body.price !== undefined)         { fields.push('price = ?');         args.push(body.price) }
