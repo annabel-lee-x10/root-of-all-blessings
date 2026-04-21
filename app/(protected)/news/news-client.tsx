@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useToast } from '../components/toast'
 import type { QsNewsCard, QsBriefSections, QsNewsBriefRow, Sentiment } from '@/lib/types'
-import { stripCiteTags } from '@/lib/news-utils'
+import { stripCiteTags, parseArr } from '@/lib/news-utils'
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const BG = 'var(--bg)'
@@ -99,14 +99,6 @@ async function agenticLoop(system: string, userMsg: string): Promise<string> {
   return ''
 }
 
-function parseArr(raw: string): Record<string, unknown>[] {
-  if (!raw) return []
-  try {
-    const c = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
-    const m = c.match(/\[[\s\S]*\]/)
-    return m ? JSON.parse(m[0]) : []
-  } catch { return [] }
-}
 
 function nowSGT(): string {
   try {
@@ -291,15 +283,23 @@ function SecHdr({
 }
 
 function SectionBlock({
-  secId, title, color, items, loading, showTicker = false, defaultOpen = true,
+  secId, title, color, items, loading, showTicker = false, defaultOpen = true, onOpen,
 }: {
   secId: string; title: string; color: string; items: QsNewsCard[]
   loading?: boolean; showTicker?: boolean; defaultOpen?: boolean
+  onOpen?: () => void
 }) {
   const [open, setOpen] = useState(defaultOpen)
+
+  function toggle() {
+    const next = !open
+    setOpen(next)
+    if (next && items.length === 0 && !loading) onOpen?.()
+  }
+
   return (
     <div style={{ marginBottom: '1.25rem' }}>
-      <SecHdr secId={secId} title={title} color={color} count={items.length} open={open} onToggle={() => setOpen(v => !v)} />
+      <SecHdr secId={secId} title={title} color={color} count={items.length} open={open} onToggle={toggle} />
       {open && (
         loading
           ? [1, 2, 3].map(i => <Skeleton key={i} />)
@@ -337,6 +337,7 @@ export function NewsClient() {
   const [loadingSections, setLoadingSections] = useState<Record<string, boolean>>({})
   const [sentFilter, setSentFilter] = useState<'all' | Sentiment>('all')
   const fileRef = useRef<HTMLInputElement>(null)
+  const propFetchedRef = useRef(false)
 
   // ── load brief from DB on mount ─────────────────────────────────────────────
   const loadBrief = useCallback(async () => {
@@ -361,6 +362,56 @@ export function NewsClient() {
 
   useEffect(() => { loadBrief() }, [loadBrief])
 
+  useEffect(() => {
+    function onOpenUpload() { fileRef.current?.click() }
+    window.addEventListener('news:open-upload', onOpenUpload)
+    return () => window.removeEventListener('news:open-upload', onOpenUpload)
+  }, [])
+
+  // ── portfolio news generation (called after upload and during full refresh) ──
+  async function refreshPortfolioNews(tickers: string[]) {
+    if (tickers.length === 0) return
+    setLoadingSections(p => ({ ...p, port: true }))
+    try {
+      const today = new Date().toLocaleDateString('en-SG', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Singapore',
+      })
+      const q = `Search recent news for these portfolio tickers today ${today}: ${tickers.join(', ')}.`
+      const raw = await agenticLoop(PORT_SYS, q)
+      const items = parseArr(raw)
+      const ts = nowSGT()
+      const cards = items.slice(0, 20).map((it, i) => {
+        const ticker = it.ticker ? String(it.ticker) : undefined
+        return mapCard(it, 'port', i, ts, ticker)
+      })
+      setNews(p => ({ ...p, port: cards }))
+    } catch (err) {
+      console.error('Portfolio refresh error:', err)
+    }
+    setLoadingSections(p => ({ ...p, port: false }))
+  }
+
+  // ── property auto-fetch on first open (only if empty, only once per session) ─
+  async function handlePropOpen() {
+    if (propFetchedRef.current) return
+    propFetchedRef.current = true
+    setLoadingSections(p => ({ ...p, prop: true }))
+    try {
+      const today = new Date().toLocaleDateString('en-SG', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Singapore',
+      })
+      const q = `Search top 5 Singapore property market news today ${today}: HDB, condo, landed, commercial, launches, policy.`
+      const raw = await agenticLoop(SEARCH_SYS, q)
+      const items = parseArr(raw)
+      const ts = nowSGT()
+      const cards = items.slice(0, 5).map((it, i) => mapCard(it, 'prop', i, ts))
+      setNews(p => ({ ...p, prop: cards }))
+    } catch (err) {
+      console.error('Property auto-fetch error:', err)
+    }
+    setLoadingSections(p => ({ ...p, prop: false }))
+  }
+
   // ── upload portfolio HTML ────────────────────────────────────────────────────
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -377,6 +428,7 @@ export function NewsClient() {
       const { tickers } = await res.json() as { tickers: string[] }
       setPortfolioTickers(tickers)
       showToast(`Portfolio loaded — ${tickers.length} tickers found`, 'success')
+      if (tickers.length > 0) void refreshPortfolioNews(tickers)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Upload failed', 'error')
     } finally {
@@ -657,6 +709,7 @@ export function NewsClient() {
           items={filt(news.prop)}
           loading={loadingSections.prop}
           defaultOpen={false}
+          onOpen={handlePropOpen}
         />
 
         {/* Jobs: two subsections under one scroll anchor */}

@@ -274,3 +274,81 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Root cause:** Both components independently implemented voice input. WheresMyMoney's voice button fills the form via `applyPasteData()`. ReceiptDropzone had a second voice button that sent audio to `/api/receipts/voice`.
 
 **Fix:** Removed the voice button from ReceiptDropzone. Voice input is handled exclusively by WheresMyMoney; ReceiptDropzone focuses on image OCR.
+
+---
+
+## BUG-021 · News: FAB (+) button does nothing on /news page
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/nav-bar.tsx`, `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Tapping the (+) FAB button in the bottom nav while on the News page had no effect — it was a `<Link href="/news">` which navigates to the page the user is already on.
+
+**Root cause:** The news-view FAB was rendered as `<Link href="/news">` (same pattern as portfolio, which navigates to `/portfolio`). Since the user is already on `/news`, the navigation was a no-op. No file upload was triggered.
+
+**Fix:** The news-view FAB is now a `<button>` that dispatches `window.CustomEvent('news:open-upload')`. `NewsClient` listens for this event and calls `fileRef.current?.click()` to open the browser's file picker.
+
+**Regression test:** `tests/components/news-client-fab.test.tsx`
+
+---
+
+## BUG-022 · News: Portfolio tab never shows content
+
+**Status:** Fixed (secondary to BUG-021)
+**Reported:** 2026-04-21
+**Fixed in:** See BUG-021 fix
+
+**Symptom:** The Portfolio News section was never visible, even after generating a news brief.
+
+**Root cause:** The Portfolio section only renders when `portfolioTickers.length > 0 || news.port.length > 0`. Tickers were never populated because the FAB upload never triggered (BUG-021). With no tickers, Refresh skips the portfolio section, so `news.port` stays empty too.
+
+**Fix:** Fixed by BUG-021. Once the FAB correctly triggers the portfolio HTML upload, tickers populate and the Portfolio section becomes visible after Refresh.
+
+---
+
+## BUG-023 · News: Singapore Property section always empty after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `lib/news-utils.ts`, `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The Singapore Property section consistently showed "No stories yet — hit Refresh to generate" even after hitting Refresh. World, Singapore, and Jobs sections populated correctly.
+
+**Root cause:** `parseArr()` used a greedy regex `/\[[\s\S]*\]/` to extract a JSON array from the model's raw text response. When the model included a preamble sentence containing `[N]` (e.g. "Here are [5] stories today:"), the greedy match found the first `[` (in `[5]`) and the last `]` (at the end of the JSON array), producing invalid JSON that `JSON.parse` could not handle. `catch { return [] }` silently swallowed the error and the section stayed empty. The Property search query ("HDB, condo, landed, commercial, launches, policy") triggers this preamble pattern more often than World or Singapore topics.
+
+**Fix:** `parseArr()` now tries `JSON.parse` directly first (fast path for clean responses). On failure, it scans for the last `[` that opens a JSON array of objects or an empty array (pattern `[\s*[{` or `[\s*]`), then parses from there. Moved to `lib/news-utils.ts` for testability.
+
+**Regression test:** `tests/regression/news-property-parse.test.ts`
+
+---
+
+## BUG-024 · News: upload does not auto-generate portfolio news after upload
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Uploading a portfolio HTML snapshot extracted tickers correctly and showed "N tickers found" toast, but the Portfolio section remained empty until the user manually clicked Refresh.
+
+**Root cause:** `handleUpload` called `setPortfolioTickers(tickers)` and showed the toast but did not trigger portfolio news generation.
+
+**Fix:** Extracted `refreshPortfolioNews(tickers)` helper. After a successful upload with at least one ticker, `handleUpload` calls `void refreshPortfolioNews(tickers)` immediately — portfolio news generates in the background while the upload UI is already dismissed.
+
+**Regression test:** `tests/components/news-upload-auto-refresh.test.tsx`
+
+---
+
+## BUG-025 · News: Singapore Property section does not auto-fetch when expanded
+
+**Status:** Fixed  
+**Reported:** 2026-04-21  
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Expanding the Singapore Property section (collapsed by default) only toggled the collapsed state — it never initiated a fetch. Users had to separately click Refresh to populate it.
+
+**Root cause:** `SectionBlock`'s toggle handler had no hook into the expand event and no `onOpen` callback mechanism.
+
+**Fix:** Added `onOpen?: () => void` prop to `SectionBlock`. The toggle function now calls `onOpen()` when transitioning to open with `items.length === 0 && !loading`. Added `handlePropOpen` in `NewsClient` (guarded by `propFetchedRef` to prevent re-fetching on subsequent collapses/re-expands). Property `SectionBlock` receives `onOpen={handlePropOpen}`.
+
+**Regression test:** `tests/components/news-property-auto-fetch.test.tsx`

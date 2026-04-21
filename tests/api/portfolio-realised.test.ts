@@ -22,31 +22,31 @@ describe('GET /api/portfolio/realised', () => {
     const res = await GET()
     const data = await res.json()
     expect(data).toHaveLength(2)
-    const qqq = data.find((r: { ticker: string }) => r.ticker === 'QQQ')
-    expect(qqq.pnl).toBeCloseTo(20.50, 2)
+    const qqq = data.find((r: { key: string }) => r.key === 'QQQ')
+    expect(qqq.value).toBeCloseTo(20.50, 2)
   })
 })
 
 describe('POST /api/portfolio/realised', () => {
   it('creates a realised trade and returns 201', async () => {
     const { POST } = await import('@/app/api/portfolio/realised/route')
-    const res = await POST(req('/api/portfolio/realised', 'POST', { ticker: 'GOOG', pnl: 54.50 }))
+    const res = await POST(req('/api/portfolio/realised', 'POST', { key: 'GOOG', value: 54.50 }))
     expect(res.status).toBe(201)
     const data = await res.json()
-    expect(data.ticker).toBe('GOOG')
-    expect(data.pnl).toBeCloseTo(54.50, 2)
+    expect(data.key).toBe('GOOG')
+    expect(data.value).toBeCloseTo(54.50, 2)
     expect(data.id).toBeTruthy()
   })
 
-  it('rejects missing ticker with 400', async () => {
+  it('rejects missing key with 400', async () => {
     const { POST } = await import('@/app/api/portfolio/realised/route')
-    const res = await POST(req('/api/portfolio/realised', 'POST', { pnl: 10 }))
+    const res = await POST(req('/api/portfolio/realised', 'POST', { value: 10 }))
     expect(res.status).toBe(400)
   })
 
-  it('rejects missing pnl with 400', async () => {
+  it('rejects missing value with 400', async () => {
     const { POST } = await import('@/app/api/portfolio/realised/route')
-    const res = await POST(req('/api/portfolio/realised', 'POST', { ticker: 'MU' }))
+    const res = await POST(req('/api/portfolio/realised', 'POST', { key: 'MU' }))
     expect(res.status).toBe(400)
   })
 })

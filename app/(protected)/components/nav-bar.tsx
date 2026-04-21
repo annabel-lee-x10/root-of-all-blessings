@@ -335,13 +335,19 @@ export function NavBar() {
         ) : (
           /* Portfolio / News — FAB only */
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Link
-              href={VIEW_HOME[view]}
-              aria-label={view === 'portfolio' ? 'Upload portfolio snapshot' : 'Add news'}
-              style={fabStyle}
-            >
-              <PlusIcon size={26} />
-            </Link>
+            {view === 'portfolio' ? (
+              <Link href="/portfolio" aria-label="Upload portfolio snapshot" style={fabStyle}>
+                <PlusIcon size={26} />
+              </Link>
+            ) : (
+              <button
+                aria-label="Add news"
+                style={{ ...fabStyle, cursor: 'pointer', border: 'none', padding: 0 }}
+                onClick={() => window.dispatchEvent(new CustomEvent('news:open-upload'))}
+              >
+                <PlusIcon size={26} />
+              </button>
+            )}
           </div>
         )}
       </nav>

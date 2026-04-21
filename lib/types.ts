@@ -79,9 +79,9 @@ export interface Holding {
   sector?: string
   currency?: string
   // Snap27 enrichments
-  target?: number
-  sell_limit?: number
-  buy_limit?: number
+  target?: number | null
+  sell_limit?: number | null
+  buy_limit?: number | null
   approx?: boolean
   is_new?: boolean
 }

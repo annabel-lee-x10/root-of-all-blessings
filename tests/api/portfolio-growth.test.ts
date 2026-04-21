@@ -28,7 +28,7 @@ describe('GET /api/portfolio/growth', () => {
     expect(k.level).toBe('Developing')
     expect(Array.isArray(k.items)).toBe(true)
     expect(k.items).toHaveLength(2)
-    expect(k.next_action).toBe('Next step')
+    expect(k.next_text).toBe('Next step')
   })
 
   it('returns milestones sorted by sort_order', async () => {
@@ -56,7 +56,7 @@ describe('PUT /api/portfolio/growth', () => {
     const { PUT } = await import('@/app/api/portfolio/growth/route')
     const res = await PUT(req('/api/portfolio/growth', 'PUT', {
       dimension: 'K', score: 5, label: 'Knowledge', level: 'Competent',
-      items: ['P/E understood'], next_action: 'Next',
+      items: ['P/E understood'], next_text: 'Next',
     }))
     expect(res.status).toBe(200)
     const data = await res.json()

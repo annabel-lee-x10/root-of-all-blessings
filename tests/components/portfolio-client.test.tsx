@@ -7,68 +7,126 @@ vi.mock('@/app/(protected)/components/toast', () => ({
   useToast: () => ({ showToast: vi.fn() }),
 }))
 
+vi.mock('recharts', () => ({
+  PieChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Pie: () => null,
+  Cell: () => null,
+  Tooltip: () => null,
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
 const BASE_HOLDINGS = [
   {
     ticker: 'MU', name: 'Micron Technology',
     market_value: 1600, pnl: -50, pnl_pct: -3.0,
     avg_cost: 337.20, current_price: 320, units: 5,
     geo: 'US', sector: 'Technology', currency: 'USD',
-    target: 500,
+    target: 500, sell_limit: null, buy_limit: null,
+    is_new: false, approx: false, note: null,
+    dividend_amount: null, dividend_date: null,
   },
   {
     ticker: 'ABBV', name: 'AbbVie Inc.',
     market_value: 640, pnl: 20, pnl_pct: 3.2,
     avg_cost: 213.20, current_price: 220, units: 3,
     geo: 'US', sector: 'Healthcare', currency: 'USD',
+    target: null, sell_limit: 218, buy_limit: null,
+    is_new: false, approx: false, note: null,
+    dividend_amount: null, dividend_date: null,
   },
   {
     ticker: 'AGIX', name: 'KraneShares AI ETF',
     market_value: 160, pnl: -5, pnl_pct: -3.0,
     avg_cost: 16.05, current_price: 16.00, units: 10,
     geo: 'US', sector: 'ETF', currency: 'USD',
+    target: null, sell_limit: null, buy_limit: 15.39,
+    is_new: false, approx: false, note: null,
+    dividend_amount: null, dividend_date: null,
   },
   {
     ticker: 'NEE', name: 'NextEra Energy',
     market_value: 475, pnl: 5, pnl_pct: 1.1,
     avg_cost: 94.70, current_price: 95.00, units: 5,
     geo: 'US', sector: 'Utilities', currency: 'USD',
+    target: null, sell_limit: null, buy_limit: null,
+    is_new: false, approx: false, note: null,
+    dividend_amount: null, dividend_date: null,
+  },
+]
+
+const BASE_GROWTH = [
+  {
+    id: 'g1', snapshot_id: 'snap1', dimension: 'K', score: 4,
+    label: 'Knowledge', level: 'Developing',
+    items_json: JSON.stringify(['P/E understood', 'ETF mechanics']),
+    next_text: 'MU cycle-stage valuation',
+  },
+  {
+    id: 'g2', snapshot_id: 'snap1', dimension: 'S', score: 4,
+    label: 'Strategy', level: 'Developing',
+    items_json: JSON.stringify(['Pre-committed sell limits', 'Geo diversification']),
+    next_text: 'MU take-profit plan',
+  },
+  {
+    id: 'g3', snapshot_id: 'snap1', dimension: 'E', score: 3,
+    label: 'Execution', level: 'Developing',
+    items_json: JSON.stringify(['First SGX odd-lot']),
+    next_text: 'Process audit',
   },
 ]
 
 const SNAP = {
   id: 'snap1',
   snapshot_date: '2026-04-09T07:19:00.000Z',
+  snap_label: 'Snap 19',
+  snap_time: '07:19 SGT 9 Apr 2026',
   total_value: 10000,
-  total_pnl: -30,
+  unrealised_pnl: -30,
+  realised_pnl: 9.46,
+  cash: 200,
   holdings: BASE_HOLDINGS,
+  orders: [
+    {
+      id: 'o1', snapshot_id: 'snap1',
+      ticker: 'ABBV', geo: 'US', type: 'SELL LIMIT',
+      price: 218, qty: 3, currency: 'USD',
+      placed: '07 Apr 20:44 SGT', current_price: 220,
+      note: '', new_flag: 0,
+    },
+    {
+      id: 'o2', snapshot_id: 'snap1',
+      ticker: 'AGIX', geo: 'US', type: 'BUY LIMIT',
+      price: 15.39, qty: 2, currency: 'USD',
+      placed: '08 Apr 01:17 SGT', current_price: 16.00,
+      note: '', new_flag: 0,
+    },
+  ],
+  realised: [
+    { id: 'r1', snapshot_id: 'snap1', key: 'QQQ', value: 20.50 },
+    { id: 'r2', snapshot_id: 'snap1', key: 'AAPL', value: -11.03 },
+  ],
+  growth: BASE_GROWTH,
+  milestones: [
+    { id: 'm1', snapshot_id: 'snap1', date: '27 Mar', tags_json: '["E"]', text: 'First position - MU entry', sort_order: 0 },
+  ],
 }
 
-const ORDERS = [
-  { ticker: 'ABBV', geo: 'US', type: 'SELL LIMIT', price: 218.00, qty: 3, currency: 'USD', placed: '07 Apr 20:44 SGT' },
-  { ticker: 'AGIX', geo: 'US', type: 'BUY LIMIT',  price: 15.39,  qty: 2, currency: 'USD', placed: '08 Apr 01:17 SGT' },
-]
-
-/** Mock fetch to return correct data per URL */
-function mockMultiFetch() {
-  vi.stubGlobal('fetch', vi.fn((url: string) => {
-    let data: unknown = null
-    if (url === '/api/portfolio/orders')   data = ORDERS
-    else if (url === '/api/portfolio/realised') data = []
-    else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
-    else /* /api/portfolio */               data = SNAP
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+function mockFetch(data: unknown) {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(data),
   }))
 }
 
-beforeEach(() => mockMultiFetch())
+beforeEach(() => mockFetch(SNAP))
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
 
-async function renderDashboard() {
-  mockMultiFetch()
+async function renderDashboard(data = SNAP) {
+  mockFetch(data)
   const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
   render(<PortfolioClient />)
   // Wait for Holdings tab to load (cards have data-testid="holding-card-{ticker}")
@@ -111,36 +169,34 @@ describe('Holdings tab – sparklines', () => {
 
 // ── Feature 2: SELL / BUY limit badges ───────────────────────────────────────
 describe('Holdings tab – limit badges', () => {
-  it('shows SELL badge on card when ticker has an active SELL LIMIT order', async () => {
+  it('shows SELL badge on card when holding has a sell_limit set', async () => {
     await renderDashboard()
-    // ABBV has SELL LIMIT in ORDERS
+    // ABBV has sell_limit: 218
     expect(screen.getByTestId('limit-badge-ABBV')).toHaveTextContent('SELL')
   })
 
-  it('shows BUY badge on card when ticker has an active BUY LIMIT order', async () => {
+  it('shows BUY badge on card when holding has a buy_limit set', async () => {
     await renderDashboard()
-    // AGIX has BUY LIMIT in ORDERS
+    // AGIX has buy_limit: 15.39
     expect(screen.getByTestId('limit-badge-AGIX')).toHaveTextContent('BUY')
   })
 
-  it('shows no limit badge when ticker has no active orders', async () => {
+  it('shows no limit badge when holding has no sell_limit or buy_limit', async () => {
     await renderDashboard()
-    // MU has no entry in ORDERS
+    // MU has sell_limit: null, buy_limit: null
     expect(screen.queryByTestId('limit-badge-MU')).not.toBeInTheDocument()
   })
 
-  it('SELL badge is styled with purple colour scheme', async () => {
+  it('SELL badge is styled with red colour scheme', async () => {
     await renderDashboard()
     const badge = screen.getByTestId('limit-badge-ABBV')
-    // Purple color used for sell limits (snap27 style)
-    expect(badge.style.color).toMatch(/#9B6DFF|rgb\(155,\s*109,\s*255\)/)
+    expect(badge.style.color).toMatch(/#FF5A5A|rgb\(255,\s*90,\s*90\)/)
   })
 
-  it('BUY badge is styled with green colour scheme', async () => {
+  it('BUY badge is styled with teal colour scheme', async () => {
     await renderDashboard()
     const badge = screen.getByTestId('limit-badge-AGIX')
-    // Green color used for buy limits (snap27 style)
-    expect(badge.style.color).toMatch(/#3DD68C|rgb\(61,\s*214,\s*140\)/)
+    expect(badge.style.color).toMatch(/#06D6A0|rgb\(6,\s*214,\s*160\)/)
   })
 })
 
@@ -180,17 +236,7 @@ describe('Holdings tab – 1D% change', () => {
         change_1d_pct: h.ticker === 'MU' ? -2.5 : 1.0,
       })),
     }
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      let data: unknown = null
-      if (url === '/api/portfolio/orders')   data = ORDERS
-      else if (url === '/api/portfolio/realised') data = []
-      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
-      else data = snapWith1D
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
-    }))
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => expect(screen.getAllByTestId(/^holding-card-/).length).toBeGreaterThan(0))
+    await renderDashboard(snapWith1D)
     expect(screen.getByTestId('change-1d-MU')).toBeInTheDocument()
   })
 
@@ -199,17 +245,7 @@ describe('Holdings tab – 1D% change', () => {
       ...SNAP,
       holdings: BASE_HOLDINGS.map(h => ({ ...h, change_1d_pct: h.ticker === 'MU' ? -2.5 : 1.0 })),
     }
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      let data: unknown = null
-      if (url === '/api/portfolio/orders')   data = ORDERS
-      else if (url === '/api/portfolio/realised') data = []
-      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
-      else data = snapWith1D
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
-    }))
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => expect(screen.getAllByTestId(/^holding-card-/).length).toBeGreaterThan(0))
+    await renderDashboard(snapWith1D)
     expect(screen.getByTestId('change-1d-MU').textContent).toMatch(/-2[.,]50%/)
   })
 
@@ -223,17 +259,7 @@ describe('Holdings tab – 1D% change', () => {
       ...SNAP,
       holdings: BASE_HOLDINGS.map(h => ({ ...h, change_1d_pct: 1.5 })),
     }
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      let data: unknown = null
-      if (url === '/api/portfolio/orders')   data = ORDERS
-      else if (url === '/api/portfolio/realised') data = []
-      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
-      else data = snapWith1D
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
-    }))
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => expect(screen.getAllByTestId(/^holding-card-/).length).toBeGreaterThan(0))
+    await renderDashboard(snapWith1D)
     expect(screen.getByTestId('change-1d-MU').textContent).toContain('+')
   })
 })
@@ -278,16 +304,125 @@ describe('theme toggle', () => {
   })
 
   it('theme toggle is visible in empty state (null snapshot — no portfolio uploaded yet)', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      let data: unknown = null
-      if (url === '/api/portfolio/orders')   data = []
-      else if (url === '/api/portfolio/realised') data = []
-      else if (url === '/api/portfolio/growth')   data = { scores: [], milestones: [] }
-      else data = null
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
-    }))
+    mockFetch(null)
     const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
     render(<PortfolioClient />)
     await waitFor(() => expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument())
+  })
+})
+
+// ── Feature 6: Orders tab wired to API data ───────────────────────────────────
+describe('Orders tab – API-wired data', () => {
+  it('renders orders from the snap response (not static data)', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Orders$/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('order-ticker-ABBV')).toBeInTheDocument()
+      expect(screen.getByTestId('order-ticker-AGIX')).toBeInTheDocument()
+    })
+  })
+
+  it('shows SELL LIMIT type badge on sell orders', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Orders$/i }))
+    await waitFor(() => expect(screen.getByTestId('order-type-ABBV')).toHaveTextContent('SELL LIMIT'))
+  })
+
+  it('shows BUY LIMIT type badge on buy orders', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Orders$/i }))
+    await waitFor(() => expect(screen.getByTestId('order-type-AGIX')).toHaveTextContent('BUY LIMIT'))
+  })
+
+  it('shows "no orders" message when orders array is empty', async () => {
+    await renderDashboard({ ...SNAP, orders: [] })
+    fireEvent.click(screen.getByRole('button', { name: /^Orders$/i }))
+    await waitFor(() => expect(screen.getByTestId('orders-empty')).toBeInTheDocument())
+  })
+})
+
+// ── Feature 7: Growth tab ─────────────────────────────────────────────────────
+describe('Growth tab', () => {
+  it('renders Growth tab button', async () => {
+    await renderDashboard()
+    expect(screen.getByRole('button', { name: /^Growth$/i })).toBeInTheDocument()
+  })
+
+  it('shows K, S, E dimension scores when Growth tab is active', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Growth$/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('growth-dimension-K')).toBeInTheDocument()
+      expect(screen.getByTestId('growth-dimension-S')).toBeInTheDocument()
+      expect(screen.getByTestId('growth-dimension-E')).toBeInTheDocument()
+    })
+  })
+
+  it('shows score value for each dimension', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Growth$/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('growth-score-K').textContent).toContain('4')
+      expect(screen.getByTestId('growth-score-S').textContent).toContain('4')
+      expect(screen.getByTestId('growth-score-E').textContent).toContain('3')
+    })
+  })
+
+  it('shows level text for each dimension', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Growth$/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('growth-dimension-K').textContent).toContain('Developing')
+    })
+  })
+
+  it('shows next-steps text for a dimension after expanding it', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Growth$/i }))
+    await waitFor(() => expect(screen.getByTestId('growth-dimension-K')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('growth-dimension-K'))
+    await waitFor(() => {
+      expect(screen.getByTestId('growth-next-K').textContent).toContain('MU cycle-stage valuation')
+    })
+  })
+
+  it('shows "no growth data" message when growth array is empty', async () => {
+    await renderDashboard({ ...SNAP, growth: [] })
+    fireEvent.click(screen.getByRole('button', { name: /^Growth$/i }))
+    await waitFor(() => expect(screen.getByTestId('growth-empty')).toBeInTheDocument())
+  })
+})
+
+// ── Feature 8: What-If tab ────────────────────────────────────────────────────
+describe('What-If tab', () => {
+  it('renders What-If tab button', async () => {
+    await renderDashboard()
+    expect(screen.getByRole('button', { name: /What.If/i })).toBeInTheDocument()
+  })
+
+  it('shows each holding with its current price in What-If tab', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /What.If/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('whatif-row-MU')).toBeInTheDocument()
+    })
+  })
+
+  it('shows total portfolio value initially', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /What.If/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('whatif-total')).toBeInTheDocument()
+    })
+  })
+})
+
+// ── Feature 9: KPI row shows snap-level data ──────────────────────────────────
+describe('KPI row', () => {
+  it('shows snap label in topbar', async () => {
+    await renderDashboard()
+    await waitFor(() => {
+      expect(screen.getByTestId('snap-label')).toHaveTextContent('Snap 19')
+    })
   })
 })
