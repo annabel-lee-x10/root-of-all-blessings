@@ -9,6 +9,30 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-036 · HTML upload strips pnl from skill-generated reports (URZ P&L header not matched)
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** After uploading the syfe-portfolio skill's HTML report, all holdings have `pnl = null` and `avg_cost = null` in the database. The portfolio page shows "—" for unrealised P&L instead of the correct value.
+
+**Root cause:** Two independent failures in `parseHtml()`:
+
+1. **HTML entity encoding:** `stripTags()` strips HTML tags but does not decode HTML entities. The skill's HTML renders the pnl column header as `<th>URZ P&amp;L</th>`. After `stripTags()`, this becomes `"URZ P&amp;L"` (literal string), not `"URZ P&L"`. The pnl pattern `^p&l$` tests for a literal `&`, which can't match the 5-character sequence `&amp;`.
+
+2. **Over-anchored regex:** Even if the entity were decoded, `^p&l$` anchors require the header to be exactly `"p&l"` with nothing before or after. The actual header `"URZ P&L"` would fail the start anchor. Removing the anchors so the pattern reads `p&l` correctly matches any header containing `"p&l"` as a substring.
+
+**Fix:**
+- `stripTags()` now decodes common HTML entities (`&amp;`, `&lt;`, `&gt;`, `&nbsp;`, `&quot;`, `&#39;`) before returning.
+- `detectColumnMap` pnl pattern changed from `/^p&l$/i` to `/p&l/i` (substring match, no anchors).
+
+**Note:** `avg_cost` is not in the skill's HTML holdings table — the table only has Ticker, Price, 1D%, Value, URZ P&L, Qty, Weight. Adding avg_cost requires updating the skill's html-report-spec.md. Tracked separately.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts` — "BUG-036" describe block
+
+---
+
 ## BUG-034 · Portfolio page shows "This page couldn't load" on mobile
 
 **Status:** Fixed
