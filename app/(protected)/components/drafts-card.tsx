@@ -12,6 +12,7 @@ interface EditForm {
   amount: string
   currency: string
   account_id: string
+  to_account_id: string
   category_id: string
   payee: string
   note: string
@@ -61,6 +62,7 @@ function txToForm(tx: TransactionRow): EditForm {
     amount: String(tx.amount),
     currency: tx.currency,
     account_id: tx.account_id,
+    to_account_id: tx.to_account_id ?? '',
     category_id: tx.category_id ?? '',
     payee: tx.payee ?? '',
     note: tx.note ?? '',
@@ -131,7 +133,8 @@ export function DraftsCard() {
         amount: amt,
         currency: editForm.currency,
         account_id: editForm.account_id,
-        category_id: editForm.category_id || null,
+        to_account_id: editForm.type === 'transfer' ? (editForm.to_account_id || null) : null,
+        category_id: editForm.type === 'transfer' ? null : (editForm.category_id || null),
         payee: editForm.payee || null,
         note: editForm.note || null,
         payment_method: selectedAccount?.type ?? null,
@@ -474,6 +477,25 @@ export function DraftsCard() {
                           <input type="datetime-local" style={INPUT} value={editForm.datetime} onChange={(e) => ef('datetime', e.target.value)} />
                         </div>
                       </div>
+
+                      {/* To Account picker (transfers only) */}
+                      {editForm.type === 'transfer' && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <label style={LABEL}>To Account</label>
+                          <select
+                            style={SELECT}
+                            value={editForm.to_account_id}
+                            onChange={(e) => ef('to_account_id', e.target.value)}
+                          >
+                            <option value="">Select destination…</option>
+                            {activeAccounts
+                              .filter((a) => a.id !== editForm.account_id)
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
 
                       {/* Category two-step picker */}
                       {editForm.type !== 'transfer' && (

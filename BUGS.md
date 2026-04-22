@@ -652,3 +652,21 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Added `'credit_card'` to `TYPE_ORDER` (between `cash` and `fund`) and `credit_card: 'Credit Card'` to `TYPE_LABEL`.
 
 **Regression test:** `tests/components/accounts-page-credit-card.test.tsx`
+
+---
+
+## BUG-039 · Edit screens: switching type to Transfer shows no destination account picker
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/components/drafts-card.tsx`, `app/(protected)/components/recent-transactions.tsx`
+
+**Symptom:** In the Dashboard edit screens (DraftsCard inline edit form and RecentTransactions inline edit form), switching a transaction's type to "Transfer" did not reveal a "To Account" destination account picker. The category picker was also still shown for transfer transactions in RecentTransactions, and `to_account_id` was never included in the PATCH body on save.
+
+**Root cause:** Both `DraftsCard` and `RecentTransactions` had incomplete `EditForm`/`EditRow` interfaces and edit form UIs. The working reference (`transactions/page.tsx`) had the pattern correct: `to_account_id` in the form state, a conditional "To Account" `<select>` when `type === 'transfer'`, hidden `CategoryPicker` for transfers, and `to_account_id` in the PATCH body. Neither dashboard component implemented any of this.
+
+**Fix:**
+- `DraftsCard`: Added `to_account_id` to `EditForm` interface and `txToForm()`, added conditional "To Account" select when `editForm.type === 'transfer'`, added `to_account_id` to `saveEdit()` PATCH body.
+- `RecentTransactions`: Added `toAccountId` to `EditRow` interface and `startEdit()`, added conditional "To Account" select when `tx.type === 'transfer'`, hidden `CategoryPicker` for transfers, added `to_account_id` to `saveEdit()` PATCH body.
+
+**Regression tests:** `tests/components/drafts-card.test.tsx` — BUG-039 describe block; `tests/components/recent-transactions.test.tsx` — BUG-039 describe block
