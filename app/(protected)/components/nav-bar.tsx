@@ -88,11 +88,9 @@ export function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
   const view = getView(pathname)
-  const [viewOpen, setViewOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
 
   function switchView(v: View) {
-    setViewOpen(false)
     if (v !== view) router.push(VIEW_HOME[v])
   }
 
@@ -161,80 +159,30 @@ export function NavBar() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-light.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-light" />
 
-          {/* View Switcher */}
-          <div style={{ position: 'relative' }}>
-            <button
-              aria-label="Switch view"
-              aria-expanded={viewOpen}
-              onClick={() => setViewOpen((v) => !v)}
-              style={{
-                background: 'none',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                color: 'var(--text)',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                padding: '4px 10px',
-                minHeight: '44px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {VIEW_LABELS[view]}
-              <span style={{ fontSize: '10px', opacity: 0.7 }}>{viewOpen ? '▲' : '▼'}</span>
-            </button>
-
-            {viewOpen && (
-              <>
-                {/* Click-away backdrop */}
-                <div
-                  onClick={() => setViewOpen(false)}
-                  style={{ position: 'fixed', inset: 0, zIndex: 49 }}
-                />
-                <div
-                  role="menu"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    left: 0,
-                    background: 'var(--bg-subtle)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '4px 0',
-                    minWidth: '140px',
-                    zIndex: 50,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                  }}
-                >
-                  {(['budget', 'portfolio', 'news'] as View[]).map((v) => (
-                    <button
-                      key={v}
-                      role="menuitem"
-                      onClick={() => switchView(v)}
-                      style={{
-                        display: 'flex',
-                        width: '100%',
-                        background: 'none',
-                        border: 'none',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        color: view === v ? 'var(--accent)' : 'var(--text)',
-                        fontWeight: view === v ? 500 : 400,
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        minHeight: '44px',
-                        alignItems: 'center',
-                      }}
-                    >
-                      {VIEW_LABELS[v]}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+          {/* View Switcher — pill tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', background: 'var(--bg-subtle)', borderRadius: '8px', padding: '2px' }}>
+            {(['budget', 'portfolio', 'news'] as View[]).map((v) => (
+              <button
+                key={v}
+                aria-current={view === v ? 'page' : undefined}
+                onClick={() => switchView(v)}
+                style={{
+                  background: view === v ? 'var(--accent)' : 'transparent',
+                  border: view === v ? 'none' : '1px solid transparent',
+                  borderRadius: '6px',
+                  color: view === v ? 'white' : 'var(--text-muted)',
+                  fontSize: '12px',
+                  fontWeight: view === v ? 600 : 400,
+                  cursor: 'pointer',
+                  padding: '3px 8px',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.15s, color 0.15s',
+                  lineHeight: 1.4,
+                }}
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
           </div>
         </div>
 
