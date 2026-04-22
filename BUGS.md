@@ -569,3 +569,20 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 **Regression tests:** `tests/regression/portfolio-upload.test.ts`
 
+
+---
+
+## BUG-035 · Portfolio: HTML upload resets Realised, Cash, Net Invested to zero
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** After uploading a Syfe HTML export on the Portfolio page, the Realised KPI dropped from its correct value (e.g. +$430.88) to +$0.00, and Cash dropped from $87.45 to $0.00. The portfolio was visually "broken" even though holdings imported correctly.
+
+**Root cause:** `POST /api/portfolio` defaulted `realised_pnl`, `cash`, and related financial context to `0` / `null` when not provided in the request body. The UploadPanel only sends `{ html, snapshot_date }` — Syfe HTML exports do not contain realised P&L, cash balance, or net invested data. So every HTML upload silently overwrote the previous snapshot's financial context with zeros.
+
+**Fix (`app/api/portfolio/route.ts` POST):**
+Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from the request, fetch the most recent previous v2 snapshot and carry forward: `realised_pnl`, `cash`, `net_invested`, `net_deposited`, `dividends`, and sets `prior_*` fields from the previous snapshot so vs-prev comparisons continue to work. Explicit values in the request are always respected and never overridden.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts` — BUG-035 describe block

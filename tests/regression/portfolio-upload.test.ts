@@ -52,3 +52,70 @@ describe('BUG-032: HTML upload visible via /api/portfolio/snapshots', () => {
     expect(snap?.snap_label).toBeTruthy()
   })
 })
+
+describe('BUG-035: HTML upload carries forward financial context from previous v2 snapshot', () => {
+  it('carries forward realised_pnl, cash, net_invested when absent from HTML upload', async () => {
+    const { POST: postOld } = await import('@/app/api/portfolio/route')
+    const { POST: postV2, GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    // Seed a previous v2 snapshot with known financial context
+    await postV2(req('/api/portfolio/snapshots', 'POST', {
+      snap_label: 'Snap 27', total_value: 11656.18,
+      realised_pnl: 430.88, cash: 87.45, net_invested: 11569.76,
+      net_deposited: 11222.32, dividends: 4.77,
+      snapshot_date: '2026-04-21T05:34:00.000Z',
+      holdings: [],
+    }))
+
+    // Upload new HTML with no financial context provided
+    await postOld(req('/api/portfolio', 'POST', { html: VALID_HTML }))
+
+    const snap = await (await GET()).json()
+    // Fails before fix: realised_pnl=0, cash=0, net_invested=null (defaulted from nullish)
+    expect(snap?.realised_pnl).toBeCloseTo(430.88)
+    expect(snap?.cash).toBeCloseTo(87.45)
+    expect(snap?.net_invested).toBeCloseTo(11569.76)
+  })
+
+  it('sets prior_* from the previous snapshot so vs-prev comparisons work', async () => {
+    const { POST: postOld } = await import('@/app/api/portfolio/route')
+    const { POST: postV2, GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await postV2(req('/api/portfolio/snapshots', 'POST', {
+      snap_label: 'Snap 27', total_value: 11656.18,
+      realised_pnl: 430.88, cash: 87.45,
+      snapshot_date: '2026-04-21T05:34:00.000Z',
+      holdings: [],
+    }))
+
+    await postOld(req('/api/portfolio', 'POST', { html: VALID_HTML }))
+
+    const snap = await (await GET()).json()
+    // prior_value should be the previous snapshot's total_value
+    expect(snap?.prior_value).toBeCloseTo(11656.18)
+    // prior_cash should be the previous snapshot's cash
+    expect(snap?.prior_cash).toBeCloseTo(87.45)
+  })
+
+  it('does not overwrite financial context when caller provides it explicitly', async () => {
+    const { POST: postOld } = await import('@/app/api/portfolio/route')
+    const { POST: postV2, GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await postV2(req('/api/portfolio/snapshots', 'POST', {
+      snap_label: 'Snap 27', total_value: 11656.18,
+      realised_pnl: 430.88, cash: 87.45,
+      snapshot_date: '2026-04-21T05:34:00.000Z',
+      holdings: [],
+    }))
+
+    // Caller explicitly provides different values
+    await postOld(req('/api/portfolio', 'POST', {
+      html: VALID_HTML, realised_pnl: 999.00, cash: 200.00,
+    }))
+
+    const snap = await (await GET()).json()
+    // Explicit values win over carry-forward
+    expect(snap?.realised_pnl).toBeCloseTo(999.00)
+    expect(snap?.cash).toBeCloseTo(200.00)
+  })
+})
