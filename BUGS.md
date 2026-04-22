@@ -9,6 +9,32 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-037 · HTML upload snapshots show wrong total_value, realised_pnl, cash vs skill output
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** After uploading the skill's HTML report, all financial summary values are wrong:
+- `total_value` shows $14,229.64 instead of $14,369.02 (skill's total)
+- `realised_pnl` shows $430.88 instead of $469.50
+- `cash` shows $87.45 instead of $224.63
+- `unrealised_pnl` shows $405.39 instead of $411.38
+
+**Root cause 1 — total_value computed from equity sum only:** `parseHtml()` sums `market_value` across all holdings without FX conversion and without including cash. The skill's total_value is the true portfolio total (FX-adjusted, including cash). There is no way to derive this from the table alone.
+
+**Root cause 2 — carry-forward uses stale values:** When the caller doesn't provide `realised_pnl` and `cash`, the route carries them from the previous snapshot (`snap_label IS NOT NULL`). For Snap 28, the previous was Snap 27 ($430.88 / $87.45). Snap 28 updated those to $469.50 / $224.63 — but the HTML table contains neither.
+
+**Root cause 3 — unrealised_pnl never written on HTML upload:** `parseHtml()` returns `total_pnl` from the holdings sum, but the INSERT omits the `unrealised_pnl` column. The GET route backfills it live by summing `portfolio_holdings.pnl`. For non-USD holdings (WISE UK pnl in GBP, Z74 SG pnl in SGD), the stored value is in original currency but treated as USD — causing ~$6 undercount.
+
+**Fix:** Added `parseSummary(html)` which extracts a machine-readable `<script type="application/json" id="portfolio-summary">` block from the skill's HTML output. Values in this block take priority over all computed/carried-forward values. The skill embeds this block so the upload route reads exact numbers instead of approximating them.
+
+**Skill update:** Added the JSON summary block to the skill's HTML generation spec. Block includes: `total_value`, `unrealised_pnl`, `realised_pnl`, `cash`, `pending`.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts` — "BUG-037" describe block
+
+---
+
 ## BUG-036 · HTML upload strips pnl from skill-generated reports (URZ P&L header not matched)
 
 **Status:** Fixed
