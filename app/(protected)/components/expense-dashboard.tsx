@@ -92,7 +92,7 @@ function SavingsGauge({ income, expense, loading }: { income: number; expense: n
 
   return (
     <div style={{ textAlign: 'center', padding: '0.25rem 0 0', overflow: 'hidden' }}>
-      <svg viewBox="0 0 200 120" style={{ width: '100%', maxWidth: '200px', display: 'block', margin: '0 auto', overflow: 'hidden', aspectRatio: '200 / 120' }}>
+      <svg viewBox="0 0 200 120" width="200" height="120" style={{ maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto', overflow: 'hidden' }}>
         <path
           d="M 10,110 A 90,90 0 0,1 190,110"
           fill="none" stroke="var(--bg-dim)" strokeWidth="14" strokeLinecap="round"

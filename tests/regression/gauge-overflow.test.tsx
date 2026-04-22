@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
-// Regression test for BUG-031: savings gauge SVG overflows / fragments on mobile
-// Root cause: SVG height collapses to ~0 in flex containers on mobile browsers;
-// overflow:visible then paints arc outside the element (3rd report).
-// overflow:hidden without aspectRatio caused visible fragments as the SVG clipped
-// a near-zero-height viewport.
-// Fix: aspectRatio:'200 / 120' prevents height collapse; overflow:'hidden' contains
-// the arc within SVG bounds; wrapper overflow:'hidden' is defense-in-depth.
+// Regression test for BUG-031: savings gauge SVG overflows its container on real Android phones.
+// Previous fix attempts (#64 overflow:hidden, #65 aspectRatio) still failed on device.
+// Root cause: SVG height collapses to ~0 on mobile when only CSS controls width/height.
+// Fix (4th attempt): intrinsic HTML width/height attrs + maxWidth:100% + height:auto.
+// This prevents height collapse AND allows responsive scaling without layout tricks.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import '@testing-library/jest-dom'
@@ -54,12 +52,34 @@ describe('BUG-031 · SavingsGauge SVG overflow containment', () => {
     expect(wrapper.style.overflow).toBe('hidden')
   })
 
-  it('SVG has aspectRatio to prevent height collapsing to zero in mobile flex containers', async () => {
+  it('SVG has intrinsic width="200" HTML attribute to prevent height collapse on mobile', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
     const svg = container.querySelector('svg')!
-    // Without aspectRatio, Safari/iOS collapses SVG height to ~0 in flex containers.
-    // A collapsed SVG + overflow:hidden clips the arc into disconnected fragments.
-    expect(svg.style.aspectRatio).toBe('200 / 120')
+    // HTML width/height attrs give browsers intrinsic dimensions they need to
+    // maintain aspect ratio without collapsing height on mobile flex containers.
+    expect(svg.getAttribute('width')).toBe('200')
+  })
+
+  it('SVG has intrinsic height="120" HTML attribute to prevent height collapse on mobile', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    const { container } = render(<ExpenseDashboard />)
+    const svg = container.querySelector('svg')!
+    expect(svg.getAttribute('height')).toBe('120')
+  })
+
+  it('SVG uses maxWidth:100% (not width:100%) to allow responsive shrinking', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    const { container } = render(<ExpenseDashboard />)
+    const svg = container.querySelector('svg')!
+    expect(svg.style.maxWidth).toBe('100%')
+    expect(svg.style.width).not.toBe('100%')
+  })
+
+  it('SVG uses height:auto to maintain aspect ratio when scaled down', async () => {
+    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
+    const { container } = render(<ExpenseDashboard />)
+    const svg = container.querySelector('svg')!
+    expect(svg.style.height).toBe('auto')
   })
 })

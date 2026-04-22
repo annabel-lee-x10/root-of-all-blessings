@@ -460,6 +460,44 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
+## BUG-031 · Savings gauge SVG overflows on real Android phones (4th report)
+
+**Status:** Fixed (4th attempt)
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/components/expense-dashboard.tsx`
+
+**Symptom:** The savings gauge arc was clipped or overflowing its card on real Android phones. PRs #64, #65, #66 all deployed fixes that passed emulator tests but failed on physical devices.
+
+**Root cause:** The SVG element had no intrinsic HTML `width`/`height` attributes — only CSS controlled sizing. Mobile browsers in flex containers cannot reliably compute the SVG height from `viewBox` alone when CSS `width: 100%` is set. This causes height to collapse to zero. Previous fix attempts used `overflow: hidden` (#64), `aspectRatio: '200 / 120'` CSS (#65), and combined approaches (#66) — all defeated by the same root cause: no intrinsic dimensions.
+
+**Fix:** Added `width="200" height="120"` as HTML attributes (intrinsic dimensions the browser can use as a natural size before CSS runs). Changed CSS `width: '100%'` to `maxWidth: '100%'` (browser uses the 200px intrinsic width, CSS caps it at container width). Added `height: 'auto'` to maintain aspect ratio during scaling. Removed `aspectRatio` CSS hack (now redundant with intrinsic attrs). viewBox, paths, and arc geometry unchanged.
+
+**Regression test:** `tests/regression/gauge-overflow.test.tsx` — updated to assert intrinsic `width`/`height` attrs and `maxWidth`/`height:auto` style
+
+---
+
+## BUG-033 · Portfolio upload fails on prod: missing tables + no JSON error responses
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/migrate/route.ts`, `app/api/portfolio/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** On prod, uploading a portfolio HTML file shows "Upload failed" toast and the portfolio page shows "Failed to load portfolio". PR #66 (BUG-032 fix) deployed but did not resolve the prod errors.
+
+**Root cause (primary):** The `/api/migrate` route never created the `portfolio_holdings` table. When `POST /api/portfolio` (the HTML upload route) tried to `INSERT INTO portfolio_holdings`, it threw "no such table: portfolio_holdings". The route had no try-catch, so Next.js returned a 500 HTML error page. The client called `res.json()` on that HTML, which threw `SyntaxError`, landing in the outer `catch` → "Upload failed" toast.
+
+**Root cause (secondary):** The `/api/migrate` route created `portfolio_realised_trades` (wrong name) instead of `portfolio_realised`. The `GET /api/portfolio/snapshots` route (used to load the portfolio page) queries `portfolio_realised`. After an HTML upload, once a snapshot with `snap_label` existed, this SELECT failed → same 500 HTML path → "Failed to load portfolio".
+
+**Root cause (tertiary):** `portfolio_growth` was created by the migration with `next TEXT` instead of `next_text TEXT` and without a `label TEXT` column, diverging from the schema that `GET /api/portfolio/snapshots` expects.
+
+**Fix (migrate route):** Replaced the `portfolio_realised_trades` CREATE with the correct `portfolio_realised` table (columns: `id, snapshot_id, key, value, note, trade_date, created_at`). Added `portfolio_holdings` CREATE TABLE with all required columns. Fixed `portfolio_growth` schema (`label TEXT, next_text TEXT`). Added ALTER TABLE migrations to patch existing `portfolio_growth` tables with wrong column names. All table creations now tracked individually in the `migrations` response.
+
+**Fix (API routes):** Wrapped all DB operations in `POST /api/portfolio` and `GET /api/portfolio/snapshots` in try-catch. On DB failure, routes return `Response.json({ error: '...' }, { status: 500 })` instead of throwing — so `res.json()` never throws in the client, and the actual error message is surfaced.
+
+**Regression test:** `tests/regression/portfolio-migration.test.ts`
+
+---
+
 ## BUG-031 · Dashboard: savings gauge SVG overflows card on mobile (3rd report)
 
 **Status:** Fixed

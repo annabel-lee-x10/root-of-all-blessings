@@ -42,6 +42,7 @@ function mapHolding(h: Record<string, unknown>, totalValueUSD: number) {
 }
 
 export async function GET() {
+  try {
   // Find the latest v2 snapshot (one that has snap_label set, distinguishing it from old schema)
   const snapResult = await db.execute(
     `SELECT * FROM portfolio_snapshots
@@ -97,6 +98,12 @@ export async function GET() {
     growth: growthResult.rows,
     milestones: milestonesResult.rows,
   })
+  } catch (err) {
+    return Response.json(
+      { error: `Database error: ${err instanceof Error ? err.message : String(err)}. Run /api/migrate to set up schema.` },
+      { status: 500 }
+    )
+  }
 }
 
 export async function POST(request: NextRequest) {
