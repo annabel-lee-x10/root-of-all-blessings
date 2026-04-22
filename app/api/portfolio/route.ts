@@ -218,6 +218,45 @@ export async function POST(request: NextRequest) {
   const date = snapshot_date || new Date().toISOString()
   const now = new Date().toISOString()
 
+  // Carry forward financial context (realised_pnl, cash, etc.) from the most recent
+  // previous v2 snapshot when the caller doesn't provide those fields.
+  // HTML exports only contain holdings/prices — they don't include realised gains,
+  // cash balance, or net invested. Without carry-forward, those KPIs reset to 0/null.
+  let effectiveCash = cash ?? null
+  let effectiveRealised = realised_pnl ?? null
+  let effectiveNetInvested = net_invested ?? null
+  let effectiveNetDeposited = net_deposited ?? null
+  let effectiveDividends = dividends ?? null
+  let effectivePriorValue = prior_value ?? null
+  let effectivePriorUnrealised = prior_unrealised ?? null
+  let effectivePriorRealised = prior_realised ?? null
+  let effectivePriorCash = prior_cash ?? null
+
+  if (effectiveCash === null && effectiveRealised === null) {
+    const prevResult = await db.execute(
+      `SELECT total_value, total_pnl, unrealised_pnl, realised_pnl, cash,
+              net_invested, net_deposited, dividends
+       FROM portfolio_snapshots
+       WHERE snap_label IS NOT NULL
+       ORDER BY snapshot_date DESC, created_at DESC LIMIT 1`
+    )
+    if (prevResult.rows.length > 0) {
+      const prev = prevResult.rows[0] as Record<string, unknown>
+      effectiveCash = (prev.cash as number | null) ?? null
+      effectiveRealised = (prev.realised_pnl as number | null) ?? null
+      effectiveNetInvested = (prev.net_invested as number | null) ?? null
+      effectiveNetDeposited = (prev.net_deposited as number | null) ?? null
+      effectiveDividends = (prev.dividends as number | null) ?? null
+      effectivePriorValue = effectivePriorValue ?? (prev.total_value as number | null) ?? null
+      effectivePriorUnrealised = effectivePriorUnrealised
+        ?? (prev.unrealised_pnl as number | null)
+        ?? (prev.total_pnl as number | null)
+        ?? null
+      effectivePriorRealised = effectivePriorRealised ?? (prev.realised_pnl as number | null) ?? null
+      effectivePriorCash = effectivePriorCash ?? (prev.cash as number | null) ?? null
+    }
+  }
+
   // Auto-generate snap_label so the v2 GET route (WHERE snap_label IS NOT NULL) can see this snapshot
   const autoLabel = snap_label ?? (() => {
     const d = new Date(date)
@@ -235,9 +274,10 @@ export async function POST(request: NextRequest) {
                prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
-             cash ?? 0, pending ?? 0, realised_pnl ?? 0, net_invested ?? null, net_deposited ?? null,
-             dividends ?? 0, prior_value ?? null, prior_unrealised ?? null,
-             prior_realised ?? null, prior_cash ?? null, autoLabel, prior_holdings ?? null],
+             effectiveCash ?? 0, pending ?? 0, effectiveRealised ?? 0, effectiveNetInvested,
+             effectiveNetDeposited, effectiveDividends ?? 0,
+             effectivePriorValue, effectivePriorUnrealised,
+             effectivePriorRealised, effectivePriorCash, autoLabel, prior_holdings ?? null],
     })
 
     // Also insert into portfolio_holdings so the v2 snapshots route can serve individual holding rows.
