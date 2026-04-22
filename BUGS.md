@@ -460,19 +460,19 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
-## BUG-031 · Savings gauge SVG overflows on real Android phones (4th report)
+## BUG-031 · Savings gauge SVG overflows on real Android phones (5th report — SVG removed)
 
-**Status:** Fixed (4th attempt)
+**Status:** Fixed (5th attempt — SVG removed entirely)
 **Reported:** 2026-04-22
 **Fixed in:** `app/(protected)/components/expense-dashboard.tsx`
 
-**Symptom:** The savings gauge arc was clipped or overflowing its card on real Android phones. PRs #64, #65, #66 all deployed fixes that passed emulator tests but failed on physical devices.
+**Symptom:** The savings gauge arc was clipped or overflowing its card on real Android phones. PRs #64, #65, #66, #67 all deployed fixes that passed emulator tests but failed on physical devices.
 
-**Root cause:** The SVG element had no intrinsic HTML `width`/`height` attributes — only CSS controlled sizing. Mobile browsers in flex containers cannot reliably compute the SVG height from `viewBox` alone when CSS `width: 100%` is set. This causes height to collapse to zero. Previous fix attempts used `overflow: hidden` (#64), `aspectRatio: '200 / 120'` CSS (#65), and combined approaches (#66) — all defeated by the same root cause: no intrinsic dimensions.
+**Root cause:** SVG sizing is fundamentally unreliable on mobile browsers in flex containers. All four prior attempts (overflow:hidden, aspectRatio CSS, intrinsic width/height HTML attrs) failed on real Android. The SVG approach itself is the problem.
 
-**Fix:** Added `width="200" height="120"` as HTML attributes (intrinsic dimensions the browser can use as a natural size before CSS runs). Changed CSS `width: '100%'` to `maxWidth: '100%'` (browser uses the 200px intrinsic width, CSS caps it at container width). Added `height: 'auto'` to maintain aspect ratio during scaling. Removed `aspectRatio` CSS hack (now redundant with intrinsic attrs). viewBox, paths, and arc geometry unchanged.
+**Fix:** Removed the entire SVG arc gauge. Replaced `SavingsGauge` with a plain-div horizontal progress bar: outer `div` with `overflow:hidden`/`border-radius` as the track, inner `div` with `width: ${progress}%` as the fill, and a text label below. No SVG, no arc geometry, no viewBox. Cannot overflow or collapse.
 
-**Regression test:** `tests/regression/gauge-overflow.test.tsx` — updated to assert intrinsic `width`/`height` attrs and `maxWidth`/`height:auto` style
+**Regression test:** `tests/regression/gauge-overflow.test.tsx` — updated to assert no SVG present, bar div with overflow:hidden, and correct label text
 
 ---
 

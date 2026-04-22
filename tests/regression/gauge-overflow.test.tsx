@@ -1,11 +1,8 @@
 // @vitest-environment jsdom
-// Regression test for BUG-031: savings gauge SVG overflows its container on real Android phones.
-// Previous fix attempts (#64 overflow:hidden, #65 aspectRatio) still failed on device.
-// Root cause: SVG height collapses to ~0 on mobile when only CSS controls width/height.
-// Fix (4th attempt): intrinsic HTML width/height attrs + maxWidth:100% + height:auto.
-// This prevents height collapse AND allows responsive scaling without layout tricks.
+// Regression test for BUG-031: savings gauge overflows on real Android phones.
+// SVG approach failed 4 attempts (#64, #65, #66, #67). Replaced with div progress bar.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 vi.mock('next/navigation', () => ({
@@ -35,51 +32,38 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('BUG-031 · SavingsGauge SVG overflow containment', () => {
-  it('SVG must NOT have overflow:visible — it must be hidden', async () => {
+describe('BUG-031 · SavingsGauge div progress bar (SVG removed)', () => {
+  it('must NOT render any SVG element — SVG approach failed on real Android', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
     const svg = container.querySelector('svg')
-    expect(svg).not.toBeNull()
-    expect(svg!.style.overflow).toBe('hidden')
+    expect(svg).toBeNull()
   })
 
-  it('SVG wrapper div must clip overflow to prevent arc escaping card', async () => {
+  it('renders a horizontal bar div with overflow:hidden to contain the fill', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
-    const svg = container.querySelector('svg')!
-    const wrapper = svg.parentElement!
-    expect(wrapper.style.overflow).toBe('hidden')
+    // Find the track div: must have overflow:hidden so the fill bar is clipped
+    const bars = Array.from(container.querySelectorAll('div')).filter(
+      d => d.style.overflow === 'hidden' && d.style.borderRadius !== ''
+    )
+    expect(bars.length).toBeGreaterThan(0)
   })
 
-  it('SVG has intrinsic width="200" HTML attribute to prevent height collapse on mobile', async () => {
+  it('shows the savings percentage label text when income > expense', async () => {
     const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
     const { container } = render(<ExpenseDashboard />)
-    const svg = container.querySelector('svg')!
-    // HTML width/height attrs give browsers intrinsic dimensions they need to
-    // maintain aspect ratio without collapsing height on mobile flex containers.
-    expect(svg.getAttribute('width')).toBe('200')
+    // income=5000, expense=800 → savings = (5000-800)/5000 = 84% saved
+    await waitFor(() => expect(container.textContent).toMatch(/84.*saved|saved.*84/))
   })
 
-  it('SVG has intrinsic height="120" HTML attribute to prevent height collapse on mobile', async () => {
-    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
-    const { container } = render(<ExpenseDashboard />)
-    const svg = container.querySelector('svg')!
-    expect(svg.getAttribute('height')).toBe('120')
-  })
-
-  it('SVG uses maxWidth:100% (not width:100%) to allow responsive shrinking', async () => {
-    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
-    const { container } = render(<ExpenseDashboard />)
-    const svg = container.querySelector('svg')!
-    expect(svg.style.maxWidth).toBe('100%')
-    expect(svg.style.width).not.toBe('100%')
-  })
-
-  it('SVG uses height:auto to maintain aspect ratio when scaled down', async () => {
-    const { ExpenseDashboard } = await import('@/app/(protected)/components/expense-dashboard')
-    const { container } = render(<ExpenseDashboard />)
-    const svg = container.querySelector('svg')!
-    expect(svg.style.height).toBe('auto')
+  it('shows "deficit" label when expense > income', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...loadedData, total_spend: 6000, total_income: 5000 }),
+    }))
+    const mod = await import('@/app/(protected)/components/expense-dashboard')
+    const { container } = render(<mod.ExpenseDashboard />)
+    await waitFor(() => expect(container.textContent).toMatch(/deficit/))
   })
 })
