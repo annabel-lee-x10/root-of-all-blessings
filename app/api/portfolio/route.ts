@@ -57,6 +57,27 @@ function detectColumnMap(headers: string[]): Record<string, number> {
   return map
 }
 
+type PortfolioSummary = {
+  total_value?: number
+  unrealised_pnl?: number
+  realised_pnl?: number
+  cash?: number
+  pending?: number
+}
+
+// Extracts the machine-readable summary block the skill embeds in its HTML output:
+// <script type="application/json" id="portfolio-summary">{...}</script>
+// Values here are exact (FX-adjusted, including cash) and override all computed/carried-forward values.
+function parseSummary(html: string): PortfolioSummary {
+  const m = html.match(/<script[^>]*id=["']portfolio-summary["'][^>]*>([\s\S]*?)<\/script>/i)
+  if (!m) return {}
+  try {
+    return JSON.parse(m[1].trim()) as PortfolioSummary
+  } catch {
+    return {}
+  }
+}
+
 function parseHtml(html: string): { holdings: Holding[]; total_value: number; total_pnl: number | null } {
   // Process each <table> independently — a single global pass mixes different tables'
   // column structures (e.g. the Open Orders table columns corrupt the P&L values).
@@ -209,7 +230,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'html is required' }, { status: 400 })
   }
 
-  const { holdings, total_value, total_pnl } = parseHtml(html)
+  const { holdings, total_value: parsedTotal, total_pnl: parsedPnl } = parseHtml(html)
 
   if (holdings.length === 0) {
     return Response.json(
@@ -218,16 +239,21 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Extract machine-readable summary block embedded by the skill.
+  // Values here are FX-adjusted and include cash — they override all computed/carried-forward values.
+  const summary = parseSummary(html)
+  const total_value = summary.total_value ?? parsedTotal
+
   const id = crypto.randomUUID()
   const date = snapshot_date || new Date().toISOString()
   const now = new Date().toISOString()
 
-  // Carry forward financial context (realised_pnl, cash, etc.) from the most recent
-  // previous v2 snapshot when the caller doesn't provide those fields.
-  // HTML exports only contain holdings/prices — they don't include realised gains,
-  // cash balance, or net invested. Without carry-forward, those KPIs reset to 0/null.
-  let effectiveCash = cash ?? null
-  let effectiveRealised = realised_pnl ?? null
+  // Summary block values take priority over carry-forward.
+  // Explicit caller-provided values always win over both.
+  let effectiveCash = cash ?? summary.cash ?? null
+  let effectiveRealised = realised_pnl ?? summary.realised_pnl ?? null
+  let effectivePending = pending ?? summary.pending ?? null
+  let effectiveUnrealised = summary.unrealised_pnl ?? parsedPnl ?? null
   let effectiveNetInvested = net_invested ?? null
   let effectiveNetDeposited = net_deposited ?? null
   let effectiveDividends = dividends ?? null
@@ -273,12 +299,13 @@ export async function POST(request: NextRequest) {
   try {
     await db.execute({
       sql: `INSERT INTO portfolio_snapshots
-              (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
+              (id, snapshot_date, total_value, total_pnl, unrealised_pnl, holdings_json, raw_html, created_at,
                cash, pending, realised_pnl, net_invested, net_deposited, dividends,
                prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
-             effectiveCash ?? 0, pending ?? 0, effectiveRealised ?? 0, effectiveNetInvested,
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [id, date, total_value, parsedPnl ?? null, effectiveUnrealised ?? null,
+             JSON.stringify(holdings), html, now,
+             effectiveCash ?? 0, effectivePending ?? 0, effectiveRealised ?? 0, effectiveNetInvested,
              effectiveNetDeposited, effectiveDividends ?? 0,
              effectivePriorValue, effectivePriorUnrealised,
              effectivePriorRealised, effectivePriorCash, autoLabel, prior_holdings ?? null],
@@ -311,5 +338,5 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  return Response.json({ id, total_value, total_pnl, holdings_count: holdings.length }, { status: 201 })
+  return Response.json({ id, total_value, total_pnl: effectiveUnrealised, holdings_count: holdings.length }, { status: 201 })
 }
