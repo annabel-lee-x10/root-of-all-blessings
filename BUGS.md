@@ -457,6 +457,22 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
+## BUG-031 · Portfolio: UNREALISED P&L shows "--" when snapshot uploaded without unrealised_pnl
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** The UNREALISED KPI on the portfolio page showed "--" (double dash) even though all holdings had individual P&L values. Total VALUE was correct; only the aggregate unrealised figure was missing.
+
+**Root cause:** `GET /api/portfolio/snapshots` returned `snap.unrealised_pnl` directly from the DB column. Snapshots uploaded via the blessings-of-root-bless-this skill omit this field in the POST body, causing `unrealised_pnl ?? null` to store NULL. The handler had no fallback to compute the aggregate from the holdings' individual `pnl` values in `portfolio_holdings`.
+
+**Fix:** After loading holdings in the GET handler, if `snap.unrealised_pnl === null`, compute the aggregate by summing `pnl` from all holdings rows that have a non-null value. If no holdings have pnl values, `unrealised_pnl` remains null (renders "--" correctly). Explicit DB values are always respected and never overridden.
+
+**Regression test:** `tests/api/portfolio-snapshots.test.ts` — "BUG-031: backfills unrealised_pnl from holdings when snapshot has null unrealised_pnl" describe block
+
+---
+
 ## BUG-030 · OCR receipt: Date/Time field defaults to current timestamp instead of receipt date
 
 **Status:** Fixed
