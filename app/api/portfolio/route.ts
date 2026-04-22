@@ -227,37 +227,44 @@ export async function POST(request: NextRequest) {
     return `${day} ${mon} ${yr} (HTML import)`
   })()
 
-  await db.execute({
-    sql: `INSERT INTO portfolio_snapshots
-            (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
-             cash, pending, realised_pnl, net_invested, net_deposited, dividends,
-             prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
-           cash ?? 0, pending ?? 0, realised_pnl ?? 0, net_invested ?? null, net_deposited ?? null,
-           dividends ?? 0, prior_value ?? null, prior_unrealised ?? null,
-           prior_realised ?? null, prior_cash ?? null, autoLabel, prior_holdings ?? null],
-  })
-
-  // Also insert into portfolio_holdings so the v2 snapshots route can serve individual holding rows.
-  // Apply enrichHolding so geo/sector/currency/ticker are resolved from the name-lookup table.
-  for (const h of holdings) {
-    const enriched = enrichHolding(h)
+  try {
     await db.execute({
-      sql: `INSERT INTO portfolio_holdings
-        (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
-         value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
-         is_new, approx, note, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      args: [
-        crypto.randomUUID(), id,
-        enriched.ticker ?? null, enriched.name, enriched.geo ?? null, enriched.sector ?? null, enriched.currency ?? null,
-        enriched.current_price ?? null, enriched.change_1d_pct ?? null,
-        enriched.market_value, enriched.pnl ?? null, enriched.units ?? null, null, enriched.avg_cost ?? null,
-        null, null, null,
-        0, 0, null, now,
-      ],
+      sql: `INSERT INTO portfolio_snapshots
+              (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
+               cash, pending, realised_pnl, net_invested, net_deposited, dividends,
+               prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
+             cash ?? 0, pending ?? 0, realised_pnl ?? 0, net_invested ?? null, net_deposited ?? null,
+             dividends ?? 0, prior_value ?? null, prior_unrealised ?? null,
+             prior_realised ?? null, prior_cash ?? null, autoLabel, prior_holdings ?? null],
     })
+
+    // Also insert into portfolio_holdings so the v2 snapshots route can serve individual holding rows.
+    // Apply enrichHolding so geo/sector/currency/ticker are resolved from the name-lookup table.
+    for (const h of holdings) {
+      const enriched = enrichHolding(h)
+      await db.execute({
+        sql: `INSERT INTO portfolio_holdings
+          (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
+           value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
+           is_new, approx, note, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        args: [
+          crypto.randomUUID(), id,
+          enriched.ticker ?? null, enriched.name, enriched.geo ?? null, enriched.sector ?? null, enriched.currency ?? null,
+          enriched.current_price ?? null, enriched.change_1d_pct ?? null,
+          enriched.market_value, enriched.pnl ?? null, enriched.units ?? null, null, enriched.avg_cost ?? null,
+          null, null, null,
+          0, 0, null, now,
+        ],
+      })
+    }
+  } catch (err) {
+    return Response.json(
+      { error: `Database error: ${err instanceof Error ? err.message : String(err)}. Run /api/migrate to set up schema.` },
+      { status: 500 }
+    )
   }
 
   return Response.json({ id, total_value, total_pnl, holdings_count: holdings.length }, { status: 201 })

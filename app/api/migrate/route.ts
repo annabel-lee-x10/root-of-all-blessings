@@ -285,32 +285,83 @@ export async function POST() {
     results['subcategories'] = `${subcatsCreated} created, ${subcatsLinked} linked`
 
     // ── Portfolio related tables ──────────────────────────────────────────────
-    for (const sql of [
-      `CREATE TABLE IF NOT EXISTS portfolio_orders (
-        id TEXT PRIMARY KEY,
-        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
-        ticker TEXT NOT NULL, geo TEXT NOT NULL DEFAULT 'US', type TEXT NOT NULL,
-        price REAL NOT NULL, qty REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
-        placed TEXT, current_price REAL, note TEXT,
-        new_flag INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`,
-      `CREATE TABLE IF NOT EXISTS portfolio_realised_trades (
-        id TEXT PRIMARY KEY,
-        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
-        ticker TEXT NOT NULL, amount REAL NOT NULL, created_at TEXT NOT NULL)`,
-      `CREATE TABLE IF NOT EXISTS portfolio_growth (
-        id TEXT PRIMARY KEY,
-        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
-        dimension TEXT NOT NULL, score INTEGER NOT NULL, level TEXT NOT NULL,
-        items_json TEXT NOT NULL, next TEXT, created_at TEXT NOT NULL)`,
-      `CREATE TABLE IF NOT EXISTS portfolio_milestones (
-        id TEXT PRIMARY KEY,
-        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
-        date TEXT NOT NULL, tags_json TEXT NOT NULL, text TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`,
-    ]) {
-      await db.execute(sql)
+    const portfolioTables: Array<{ name: string; sql: string }> = [
+      {
+        name: 'portfolio_holdings',
+        sql: `CREATE TABLE IF NOT EXISTS portfolio_holdings (
+          id TEXT PRIMARY KEY,
+          snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+          ticker TEXT, name TEXT NOT NULL,
+          geo TEXT, sector TEXT, currency TEXT,
+          price REAL, change_1d REAL,
+          value REAL NOT NULL, pnl REAL, qty REAL, value_usd REAL, avg_cost REAL,
+          target REAL, sell_limit REAL, buy_limit REAL,
+          is_new INTEGER NOT NULL DEFAULT 0, approx INTEGER NOT NULL DEFAULT 0,
+          note TEXT, dividend_amount REAL, dividend_date TEXT,
+          created_at TEXT NOT NULL)`,
+      },
+      {
+        name: 'portfolio_orders',
+        sql: `CREATE TABLE IF NOT EXISTS portfolio_orders (
+          id TEXT PRIMARY KEY,
+          snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+          ticker TEXT NOT NULL, geo TEXT, type TEXT NOT NULL,
+          price REAL NOT NULL, qty REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'USD',
+          placed TEXT, current_price REAL, note TEXT,
+          new_flag INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL)`,
+      },
+      {
+        name: 'portfolio_realised',
+        sql: `CREATE TABLE IF NOT EXISTS portfolio_realised (
+          id TEXT PRIMARY KEY,
+          snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+          key TEXT NOT NULL, value REAL NOT NULL,
+          note TEXT, trade_date TEXT, created_at TEXT NOT NULL)`,
+      },
+      {
+        name: 'portfolio_growth',
+        sql: `CREATE TABLE IF NOT EXISTS portfolio_growth (
+          id TEXT PRIMARY KEY,
+          snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+          dimension TEXT NOT NULL, score REAL NOT NULL,
+          label TEXT, level TEXT,
+          items_json TEXT NOT NULL DEFAULT '[]',
+          next_text TEXT, created_at TEXT NOT NULL)`,
+      },
+      {
+        name: 'portfolio_milestones',
+        sql: `CREATE TABLE IF NOT EXISTS portfolio_milestones (
+          id TEXT PRIMARY KEY,
+          snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+          date TEXT NOT NULL, tags_json TEXT NOT NULL DEFAULT '[]',
+          text TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL)`,
+      },
+    ]
+
+    for (const { name, sql } of portfolioTables) {
+      try {
+        await db.execute(sql)
+        results[name] = 'created'
+      } catch {
+        results[name] = 'already exists'
+      }
     }
-    results['portfolio_tables'] = 'ready'
+
+    // Fix portfolio_growth tables that were created with wrong column names (next TEXT instead of next_text)
+    const growthColFixes: Array<{ name: string; sql: string }> = [
+      { name: 'portfolio_growth.label',     sql: 'ALTER TABLE portfolio_growth ADD COLUMN label TEXT' },
+      { name: 'portfolio_growth.next_text',  sql: 'ALTER TABLE portfolio_growth ADD COLUMN next_text TEXT' },
+    ]
+    for (const { name, sql } of growthColFixes) {
+      try {
+        await db.execute(sql)
+        results[name] = 'added'
+      } catch {
+        results[name] = 'already exists'
+      }
+    }
 
     // ── Backup transactions currently pointing to parent categories ───────────
     // INSERT OR IGNORE ensures the backup row records the *original* category_id
