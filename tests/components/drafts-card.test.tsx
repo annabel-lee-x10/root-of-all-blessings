@@ -42,6 +42,9 @@ function makeFetch(drafts = [DRAFT], { categories = [] as object[], tags = [] as
     if (typeof url === 'string' && url.includes('/api/accounts')) {
       return Promise.resolve({ ok: true, json: async () => [] })
     }
+    if (typeof url === 'string' && url.includes('/api/categories/frequent')) {
+      return Promise.resolve({ ok: true, json: async () => [] })
+    }
     if (typeof url === 'string' && url.includes('/api/categories')) {
       return Promise.resolve({ ok: true, json: async () => categories })
     }
@@ -107,6 +110,28 @@ describe('DraftsCard — BUG-029 regression: tag picker excludes category-named 
 
     // "weekend" has no matching category — must appear as a tag button
     expect(screen.getByRole('button', { name: /^weekend$/i })).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Searchable category picker regression in DraftsCard edit form
+// ---------------------------------------------------------------------------
+describe('DraftsCard — searchable category picker in edit form', () => {
+  it('renders category-search-input (not legacy two-step selects) in edit form', async () => {
+    vi.stubGlobal('fetch', makeFetch([DRAFT], { categories: [CATEGORY_DINING] }))
+
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('NTUC')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    expect(screen.getByTestId('category-search-input')).toBeInTheDocument()
+    expect(screen.queryByTestId('parent-category-select')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('subcategory-select')).not.toBeInTheDocument()
   })
 })
 

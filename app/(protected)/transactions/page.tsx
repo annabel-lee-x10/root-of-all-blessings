@@ -150,7 +150,6 @@ export default function TransactionsPage() {
   const [confirmDelete, setConfirmDelete] = useState<TransactionRow | null>(null)
   const [undoStack, setUndoStack] = useState<TransactionRow[]>([])
   const [editTypeFilter, setEditTypeFilter] = useState<AccountType | ''>('')
-  const [editParentCategoryId, setEditParentCategoryId] = useState('')
 
   useEffect(() => {
     // Read URL search params on mount
@@ -233,19 +232,12 @@ export default function TransactionsPage() {
     setEditingId(tx.id)
     setEditForm({ ...baseForm, account_id: defaultAccountId })
     setEditTypeFilter(tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''))
-    if (tx.category_id) {
-      const cat = categories.find((c) => c.id === tx.category_id)
-      setEditParentCategoryId(cat?.parent_id ?? cat?.id ?? '')
-    } else {
-      setEditParentCategoryId('')
-    }
   }
 
   function cancelEdit() {
     setEditingId(null)
     setEditForm(null)
     setEditTypeFilter('')
-    setEditParentCategoryId('')
   }
 
   async function saveEdit(id: string) {
@@ -771,11 +763,9 @@ export default function TransactionsPage() {
                     <CategoryPicker
                       categories={categories}
                       txType={editForm.type}
-                      parentId={editParentCategoryId}
                       categoryId={editForm.category_id}
-                      onParentChange={setEditParentCategoryId}
-                      onCategoryChange={(id) => ef('category_id', id)}
-                      selectStyle={{ ...SELECT, width: '100%' }}
+                      onChange={(cid) => ef('category_id', cid)}
+                      inputStyle={{ ...SELECT, width: '100%' }}
                     />
                   </div>
                 )}

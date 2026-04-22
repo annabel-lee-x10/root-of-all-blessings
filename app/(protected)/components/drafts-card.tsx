@@ -81,7 +81,6 @@ export function DraftsCard() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [editTypeFilter, setEditTypeFilter] = useState<AccountType | ''>('')
-  const [editParentCategoryId, setEditParentCategoryId] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [approvingAll, setApprovingAll] = useState(false)
@@ -370,12 +369,6 @@ export function DraftsCard() {
                             setEditingId(tx.id)
                             setEditForm({ ...baseForm, account_id: defaultAccountId })
                             setEditTypeFilter(tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''))
-                            if (tx.category_id) {
-                              const cat = categories.find((c) => c.id === tx.category_id)
-                              setEditParentCategoryId(cat?.parent_id ?? cat?.id ?? '')
-                            } else {
-                              setEditParentCategoryId('')
-                            }
                           }
                         }}
                         style={BTN_SEC}
@@ -489,11 +482,9 @@ export function DraftsCard() {
                           <CategoryPicker
                             categories={categories}
                             txType={editForm.type}
-                            parentId={editParentCategoryId}
                             categoryId={editForm.category_id}
-                            onParentChange={setEditParentCategoryId}
-                            onCategoryChange={(cid) => ef('category_id', cid)}
-                            selectStyle={SELECT}
+                            onChange={(cid) => ef('category_id', cid)}
+                            inputStyle={SELECT}
                           />
                         </div>
                       )}

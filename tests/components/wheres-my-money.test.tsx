@@ -41,6 +41,7 @@ const TAGS = [
 function mockFetch() {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.includes('/api/accounts')) return { ok: true, json: async () => ACCOUNTS }
+    if (url.includes('/api/categories/frequent')) return { ok: true, json: async () => [] }
     if (url.includes('/api/categories')) return { ok: true, json: async () => CATEGORIES }
     if (url.includes('/api/tags')) return { ok: true, json: async () => TAGS }
     if (url.includes('/api/transactions/payees')) return { ok: true, json: async () => [] }
@@ -119,83 +120,80 @@ describe('BUG-026: payment type filter pills narrow account list', () => {
 })
 
 // ---------------------------------------------------------------------------
-// BUG-027 · No duplicate category names in the dropdown
+// BUG-027 · No duplicate category names (searchable picker, scoped by parent)
 // ---------------------------------------------------------------------------
-describe('BUG-027: no duplicate category names', () => {
-  it('shows "Toys" only once even though it exists under two parent categories', async () => {
+describe('BUG-027: no duplicate category names in searchable picker', () => {
+  it('searching "toys" shows "Shopping > Toys" and "Technology > Toys" separately — no merging', async () => {
     mockFetch()
     await renderWMM()
 
-    // Select "Shopping" as parent to see its Toys
-    const parentSelect = screen.getByTestId('parent-category-select')
-    fireEvent.change(parentSelect, { target: { value: 'cat-shopping' } })
+    const input = screen.getByTestId('category-search-input')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'toys' } })
 
     await waitFor(() => {
-      const toysOpts = screen.getAllByRole('option', { name: 'Toys' })
-      expect(toysOpts).toHaveLength(1)
+      // Both Toys entries appear but labeled with their parents, so they are distinct
+      expect(screen.getByTestId('category-option-cat-toys-shop')).toBeInTheDocument()
+      expect(screen.getByTestId('category-option-cat-toys-tech')).toBeInTheDocument()
     })
   })
 })
 
 // ---------------------------------------------------------------------------
-// BUG-028 · Two-step category picker
+// BUG-028 · Category picker respects parent hierarchy (searchable unified picker)
 // ---------------------------------------------------------------------------
-describe('BUG-028: two-step category picker', () => {
-  it('shows only parent categories in the first picker', async () => {
+describe('BUG-028: searchable picker respects parent/child hierarchy', () => {
+  it('parents with children are NOT shown as standalone selectable options', async () => {
     mockFetch()
     await renderWMM()
 
-    const parentSelect = screen.getByTestId('parent-category-select')
-    const options = Array.from(parentSelect.querySelectorAll('option')).map(o => o.textContent)
+    const input = screen.getByTestId('category-search-input')
+    fireEvent.focus(input)
+    await waitFor(() => expect(screen.getByTestId('category-dropdown')).toBeInTheDocument())
 
-    expect(options).toContain('Food')
-    expect(options).toContain('Shopping')
-    expect(options).toContain('Technology')
-    expect(options).toContain('Transport')
-    // Children must NOT appear in the parent picker
-    expect(options).not.toContain('Dining Out')
-    expect(options).not.toContain('Toys')
+    // Parents that have children should not be directly selectable
+    expect(screen.queryByTestId('category-option-cat-food')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('category-option-cat-shopping')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('category-option-cat-tech')).not.toBeInTheDocument()
   })
 
-  it('shows subcategories after selecting a parent', async () => {
+  it('typing parent name "food" shows all Food subcategories labeled "Food > ..."', async () => {
     mockFetch()
     await renderWMM()
 
-    const parentSelect = screen.getByTestId('parent-category-select')
-    fireEvent.change(parentSelect, { target: { value: 'cat-food' } })
+    const input = screen.getByTestId('category-search-input')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'food' } })
 
     await waitFor(() => {
-      const subSelect = screen.getByTestId('subcategory-select')
-      const opts = Array.from(subSelect.querySelectorAll('option')).map(o => o.textContent)
-      expect(opts).toContain('Dining Out')
+      expect(screen.getByTestId('category-option-cat-dining')).toBeInTheDocument()
+      // Transport > ... should not appear
+      expect(screen.queryByTestId('category-option-cat-transport')).not.toBeInTheDocument()
     })
   })
 
-  it('subcategory picker is scoped to the selected parent (no cross-parent leakage)', async () => {
+  it('searching "shopping" does not show Food > Dining Out', async () => {
     mockFetch()
     await renderWMM()
 
-    const parentSelect = screen.getByTestId('parent-category-select')
-    fireEvent.change(parentSelect, { target: { value: 'cat-shopping' } })
+    const input = screen.getByTestId('category-search-input')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'shopping' } })
 
     await waitFor(() => {
-      const subSelect = screen.getByTestId('subcategory-select')
-      const opts = Array.from(subSelect.querySelectorAll('option')).map(o => o.textContent)
-      expect(opts).toContain('Toys')
-      expect(opts).not.toContain('Dining Out') // belongs to Food, not Shopping
+      expect(screen.getByTestId('category-option-cat-toys-shop')).toBeInTheDocument()
+      expect(screen.queryByTestId('category-option-cat-dining')).not.toBeInTheDocument()
     })
   })
 
-  it('does not show subcategory picker for a parent with no children', async () => {
+  it('parent with no children (Transport) appears directly as a selectable option', async () => {
     mockFetch()
     await renderWMM()
 
-    const parentSelect = screen.getByTestId('parent-category-select')
-    fireEvent.change(parentSelect, { target: { value: 'cat-transport' } })
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('subcategory-select')).not.toBeInTheDocument()
-    })
+    const input = screen.getByTestId('category-search-input')
+    fireEvent.focus(input)
+    await waitFor(() => expect(screen.getByTestId('category-dropdown')).toBeInTheDocument())
+    expect(screen.getByTestId('category-option-cat-transport')).toBeInTheDocument()
   })
 })
 
@@ -225,6 +223,31 @@ describe('BUG-029: tag suggestions exclude category-named entries', () => {
 
     await waitFor(() => {
       expect(screen.getByText('weekend')).toBeInTheDocument()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Searchable category picker regression (replaces two-step parent→child selects)
+// ---------------------------------------------------------------------------
+describe('searchable category picker in WheresMyMoney', () => {
+  it('shows category-search-input, not legacy parent/subcategory selects', async () => {
+    mockFetch()
+    await renderWMM()
+    expect(screen.getByTestId('category-search-input')).toBeInTheDocument()
+    expect(screen.queryByTestId('parent-category-select')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('subcategory-select')).not.toBeInTheDocument()
+  })
+
+  it('typing "din" filters dropdown to Food > Dining Out only', async () => {
+    mockFetch()
+    await renderWMM()
+    const input = screen.getByTestId('category-search-input')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'din' } })
+    await waitFor(() => {
+      expect(screen.getByTestId('category-option-cat-dining')).toBeInTheDocument()
+      expect(screen.queryByTestId('category-option-cat-toys-shop')).not.toBeInTheDocument()
     })
   })
 })

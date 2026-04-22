@@ -58,7 +58,6 @@ const compactSelect: React.CSSProperties = {
 interface EditRow {
   typeFilter: AccountType | ''
   accountId: string
-  parentCategoryId: string
   categoryId: string
   tagIds: string[]
 }
@@ -109,7 +108,6 @@ export function RecentTransactions() {
     setEditRow({
       typeFilter: tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''),
       accountId: defaultAccountId,
-      parentCategoryId: cat ? (cat.parent_id ?? cat.id) : '',
       categoryId: tx.category_id ?? '',
       tagIds: tx.tags.map((t) => t.id),
     })
@@ -336,11 +334,9 @@ export function RecentTransactions() {
                       <CategoryPicker
                         categories={categories}
                         txType={tx.type}
-                        parentId={editRow.parentCategoryId}
                         categoryId={editRow.categoryId}
-                        onParentChange={(pid) => setEditRow((p) => p ? { ...p, parentCategoryId: pid } : p)}
-                        onCategoryChange={(id) => setEditRow((p) => p ? { ...p, categoryId: id } : p)}
-                        selectStyle={compactSelect}
+                        onChange={(cid) => setEditRow((p) => p ? { ...p, categoryId: cid } : p)}
+                        inputStyle={compactSelect}
                       />
                       {tags.length > 0 && (
                         <TagSelector

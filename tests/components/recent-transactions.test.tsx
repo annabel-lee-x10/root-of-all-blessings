@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 function makeTx(id: string, overrides: Partial<{ payee: string; type: string; amount: number }> = {}) {
@@ -38,9 +38,23 @@ vi.mock('next/link', () => ({
 
 const sevenTxs = [1, 2, 3, 4, 5, 6, 7].map((n) => makeTx(String(n)))
 
+const CATEGORIES = [
+  { id: 'cat-food', name: 'Food', type: 'expense', sort_order: 1, parent_id: null, created_at: '2024-01-01', updated_at: '2024-01-01' },
+  { id: 'cat-dining', name: 'Dining Out', type: 'expense', sort_order: 1, parent_id: 'cat-food', created_at: '2024-01-01', updated_at: '2024-01-01' },
+]
+
 function makeFetch(txs: ReturnType<typeof makeTx>[], total?: number) {
   return vi.fn().mockImplementation((url: string) => {
     if (typeof url === 'string' && url.includes('/api/accounts')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }
+    if (typeof url === 'string' && url.includes('/api/categories/frequent')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }
+    if (typeof url === 'string' && url.includes('/api/categories')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(CATEGORIES) })
+    }
+    if (typeof url === 'string' && url.includes('/api/tags')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     }
     return Promise.resolve({
@@ -127,5 +141,24 @@ describe('RecentTransactions', () => {
     await waitFor(() => {
       expect(screen.queryByRole('link', { name: /show more/i })).not.toBeInTheDocument()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Searchable category picker regression in RecentTransactions inline edit
+// ---------------------------------------------------------------------------
+describe('RecentTransactions — searchable category picker in inline edit', () => {
+  it('renders category-search-input (not legacy two-step selects) in edit form', async () => {
+    const txWithCat = { ...makeTx('rt1', { payee: 'CatPayee' }), category_id: 'cat-dining' }
+    vi.stubGlobal('fetch', makeFetch([txWithCat], 1))
+
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+
+    await waitFor(() => expect(screen.getByText('CatPayee')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    await waitFor(() => expect(screen.getByTestId('category-search-input')).toBeInTheDocument())
+    expect(screen.queryByTestId('parent-category-select')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('subcategory-select')).not.toBeInTheDocument()
   })
 })
