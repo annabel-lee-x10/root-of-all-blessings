@@ -212,6 +212,30 @@ export async function POST() {
     { name: 'portfolio_snapshots.prior_realised',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_realised REAL' },
     { name: 'portfolio_snapshots.prior_cash',       sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_cash REAL' },
     { name: 'portfolio_snapshots.prior_holdings',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN prior_holdings INTEGER' },
+    // portfolio_holdings — never created by this route before PR #63
+    {
+      name: 'portfolio_holdings',
+      sql: `CREATE TABLE IF NOT EXISTS portfolio_holdings (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+        ticker TEXT, name TEXT NOT NULL, geo TEXT, sector TEXT, currency TEXT,
+        price REAL, change_1d REAL, value REAL NOT NULL, pnl REAL, qty REAL,
+        value_usd REAL, avg_cost REAL, target REAL, sell_limit REAL, buy_limit REAL,
+        is_new INTEGER NOT NULL DEFAULT 0, approx INTEGER NOT NULL DEFAULT 0,
+        note TEXT, dividend_amount REAL, dividend_date TEXT, created_at TEXT NOT NULL)`,
+    },
+    // portfolio_realised — was mistakenly created as portfolio_realised_trades before PR #63
+    {
+      name: 'portfolio_realised',
+      sql: `CREATE TABLE IF NOT EXISTS portfolio_realised (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+        key TEXT NOT NULL, value REAL NOT NULL, note TEXT, trade_date TEXT,
+        created_at TEXT NOT NULL)`,
+    },
+    // portfolio_growth — add columns missing from earlier migration
+    { name: 'portfolio_growth.label',     sql: 'ALTER TABLE portfolio_growth ADD COLUMN label TEXT' },
+    { name: 'portfolio_growth.next_text', sql: 'ALTER TABLE portfolio_growth ADD COLUMN next_text TEXT' },
   ]
 
   for (const m of ddlMigrations) {

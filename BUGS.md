@@ -9,6 +9,28 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-034 · Portfolio page shows "This page couldn't load" on mobile
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`, `app/api/portfolio/snapshots/route.ts`, `app/api/migrate/route.ts`
+
+**Symptom:** The portfolio page showed "This page couldn't load" on mobile immediately after loading.
+
+**Root cause 1 (client crash):** `PortfolioClient.load()` called `setSnapshot(snap)` without checking `res.ok`. When the API returned a 500 JSON error body (e.g. `{"error":"Database error"}`), `res.json()` succeeded and `setSnapshot` was called with the error object. Since the object is truthy, the component skipped the upload-panel branch and tried to destructure `holdings` from the error object — `undefined.reduce()` crashed React.
+
+**Root cause 2 (API 500):** The `/api/migrate` route never created the `portfolio_holdings` table. The `portfolio_realised` table was also wrongly created as `portfolio_realised_trades`. The `portfolio_growth` table was missing `label` and `next_text` columns. When the snapshots route queried `portfolio_holdings WHERE snapshot_id = ?`, it threw "no such table", causing all portfolio loads to 500.
+
+**Fix (client):** Added `if (!res.ok) { showToast('Failed to load portfolio', 'error'); return }` guard before `setSnapshot` — prevents setting truthy non-null state on API errors.
+
+**Fix (API):** Added `try/catch` to `GET /api/portfolio/snapshots` so it always returns JSON (never raw 500 HTML).
+
+**Fix (migration):** Added `portfolio_holdings` `CREATE TABLE IF NOT EXISTS`, added `portfolio_realised` with correct schema, and added `ALTER TABLE portfolio_growth ADD COLUMN` for `label` and `next_text` to `/api/migrate`.
+
+**Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-034" describe block
+
+---
+
 ## BUG-002 · News: `<cite>` tags render as visible text in card summaries
 
 **Status:** Fixed  
