@@ -236,6 +236,7 @@ export async function POST() {
     // portfolio_growth — add columns missing from earlier migration
     { name: 'portfolio_growth.label',     sql: 'ALTER TABLE portfolio_growth ADD COLUMN label TEXT' },
     { name: 'portfolio_growth.next_text', sql: 'ALTER TABLE portfolio_growth ADD COLUMN next_text TEXT' },
+    { name: 'portfolio_snapshots.unrealised_pnl',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN unrealised_pnl REAL' },
   ]
 
   for (const m of ddlMigrations) {

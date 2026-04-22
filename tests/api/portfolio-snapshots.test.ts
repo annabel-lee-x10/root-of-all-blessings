@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import {
   initTestDb, clearTestDb, resetTestDb, req,
   seedPortfolioSnapshotV2, seedPortfolioHolding, seedPortfolioOrder,
@@ -152,6 +152,37 @@ describe('GET /api/portfolio/snapshots', () => {
       const { GET } = await import('@/app/api/portfolio/snapshots/route')
       const snap = await (await GET()).json()
       expect(snap.unrealised_pnl).toBeNull()
+    })
+
+    it('backfills when unrealised_pnl is undefined (column absent in legacy prod schema)', async () => {
+      // Simulate the column being absent: row has no unrealised_pnl key at all.
+      // Save the real implementation, wrap it to strip the field, then restore.
+      seedPortfolioSnapshotV2('s1', { total_value: 5000, unrealised_pnl: null })
+      seedPortfolioHolding('s1', { ticker: 'MU', value: 2000, pnl: 400, value_usd: 2000 })
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const { db } = await import('@/lib/db')
+      const realImpl = vi.mocked(db.execute).getMockImplementation()!
+      vi.mocked(db.execute).mockImplementation((q) => {
+        const sql = typeof q === 'string' ? q : q.sql
+        return realImpl(q).then((res: { rows: Record<string, unknown>[] }) => {
+          if (sql.includes('portfolio_snapshots') && !sql.includes('portfolio_holdings')) {
+            return {
+              ...res,
+              rows: res.rows.map((row: Record<string, unknown>) => {
+                const { unrealised_pnl: _omit, ...rest } = row
+                return rest
+              }),
+            }
+          }
+          return res
+        }) as ReturnType<typeof db.execute>
+      })
+      try {
+        const snap = await (await GET()).json()
+        expect(snap.unrealised_pnl).toBeCloseTo(400)
+      } finally {
+        vi.mocked(db.execute).mockImplementation(realImpl)
+      }
     })
 
     it('uses explicit unrealised_pnl from DB when set, even if different from holdings sum', async () => {

@@ -73,10 +73,11 @@ export async function GET() {
 
   const holdings = (holdingsResult.rows as Record<string, unknown>[]).map(h => mapHolding(h, totalValueUSD))
 
-  // BUG-031: backfill unrealised_pnl from holdings when DB value is null
-  // (snapshots uploaded via skill may omit this field)
-  let unrealised_pnl = snap.unrealised_pnl as number | null
-  if (unrealised_pnl === null) {
+  // BUG-031: backfill unrealised_pnl from holdings when DB value is null/undefined.
+  // Use == null (not ===) to catch undefined, which occurs when the column doesn't
+  // exist in prod yet and SELECT * omits it from the result row.
+  let unrealised_pnl = (snap.unrealised_pnl ?? null) as number | null
+  if (unrealised_pnl == null) {
     const pnlValues = (holdingsResult.rows as Record<string, unknown>[])
       .map(h => h.pnl as number | null)
       .filter((v): v is number => v !== null)
