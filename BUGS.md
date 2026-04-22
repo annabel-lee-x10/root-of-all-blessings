@@ -636,3 +636,19 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from the request, fetch the most recent previous v2 snapshot and carry forward: `realised_pnl`, `cash`, `net_invested`, `net_deposited`, `dividends`, and sets `prior_*` fields from the previous snapshot so vs-prev comparisons continue to work. Explicit values in the request are always respected and never overridden.
 
 **Regression tests:** `tests/regression/portfolio-upload.test.ts` — BUG-035 describe block
+
+---
+
+## BUG-038 · Accounts page: credit_card accounts not displayed
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/accounts/page.tsx`
+
+**Symptom:** Credit card accounts (type `credit_card`) were invisible on the /accounts page — they did not appear under any section heading, and `credit_card` was absent from the Type dropdown when creating or editing an account.
+
+**Root cause:** `TYPE_ORDER` and `TYPE_LABEL` on lines 16–17 of the accounts page were missing `credit_card`. `groupByType` added credit_card accounts to the groups map, but `TYPE_ORDER.map(...)` never iterated over them, so they silently dropped from the render.
+
+**Fix:** Added `'credit_card'` to `TYPE_ORDER` (between `cash` and `fund`) and `credit_card: 'Credit Card'` to `TYPE_LABEL`.
+
+**Regression test:** `tests/components/accounts-page-credit-card.test.tsx`
