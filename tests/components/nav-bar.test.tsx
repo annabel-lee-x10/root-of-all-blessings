@@ -36,83 +36,114 @@ describe('Top nav', () => {
     expect(within(topNav).getAllByAltText('Root OS').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders view switcher button', () => {
+  it('renders three pill buttons: Budget, Portfolio, News', () => {
     render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toBeInTheDocument()
+    const topNav = getTopNav()
+    expect(within(topNav).getByRole('button', { name: 'Budget' })).toBeInTheDocument()
+    expect(within(topNav).getByRole('button', { name: 'Portfolio' })).toBeInTheDocument()
+    expect(within(topNav).getByRole('button', { name: 'News' })).toBeInTheDocument()
   })
 
-  it('shows Budget label on budget-view paths', () => {
-    vi.mocked(usePathname).mockReturnValue('/transactions')
+  it('no dropdown or menu exists', () => {
     render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Budget')
-  })
-
-  it('shows Portfolio label on /portfolio', () => {
-    vi.mocked(usePathname).mockReturnValue('/portfolio')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Portfolio')
-  })
-
-  it('shows News label on /news', () => {
-    vi.mocked(usePathname).mockReturnValue('/news')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('News')
-  })
-
-  it('opens view switcher dropdown when button is clicked', () => {
-    render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    expect(screen.getByRole('menu')).toBeInTheDocument()
-  })
-
-  it('dropdown contains Budget, Portfolio, News menu items', () => {
-    render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    const menu = screen.getByRole('menu')
-    expect(within(menu).getByRole('menuitem', { name: 'Budget' })).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitem', { name: 'Portfolio' })).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitem', { name: 'News' })).toBeInTheDocument()
-  })
-
-  it('closes dropdown when clicking a menu item', () => {
-    render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Budget' }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('navigates to /portfolio when Portfolio view is selected', () => {
+  it('Budget pill is active (aria-pressed=true) on budget-view paths', () => {
+    vi.mocked(usePathname).mockReturnValue('/transactions')
     render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Portfolio' }))
-    expect(mockPush).toHaveBeenCalledWith('/portfolio')
+    const topNav = getTopNav()
+    expect(within(topNav).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(topNav).getByRole('button', { name: 'Portfolio' })).toHaveAttribute('aria-pressed', 'false')
+    expect(within(topNav).getByRole('button', { name: 'News' })).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('navigates to /news when News view is selected', () => {
-    render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'News' }))
-    expect(mockPush).toHaveBeenCalledWith('/news')
-  })
-
-  it('navigates to /dashboard when Budget view is selected from another view', () => {
+  it('Portfolio pill is active (aria-pressed=true) on /portfolio', () => {
     vi.mocked(usePathname).mockReturnValue('/portfolio')
     render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Budget' }))
+    const topNav = getTopNav()
+    expect(within(topNav).getByRole('button', { name: 'Portfolio' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(topNav).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'false')
+    expect(within(topNav).getByRole('button', { name: 'News' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('News pill is active (aria-pressed=true) on /news', () => {
+    vi.mocked(usePathname).mockReturnValue('/news')
+    render(<NavBar />)
+    const topNav = getTopNav()
+    expect(within(topNav).getByRole('button', { name: 'News' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(topNav).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'false')
+    expect(within(topNav).getByRole('button', { name: 'Portfolio' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('clicking Budget pill navigates to /dashboard from another view', () => {
+    vi.mocked(usePathname).mockReturnValue('/portfolio')
+    render(<NavBar />)
+    fireEvent.click(within(getTopNav()).getByRole('button', { name: 'Budget' }))
     expect(mockPush).toHaveBeenCalledWith('/dashboard')
   })
 
-  it('does not navigate when selecting the already-active view', () => {
+  it('clicking Portfolio pill navigates to /portfolio', () => {
     render(<NavBar />)
-    fireEvent.click(screen.getByRole('button', { name: 'Switch view' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Budget' }))
+    fireEvent.click(within(getTopNav()).getByRole('button', { name: 'Portfolio' }))
+    expect(mockPush).toHaveBeenCalledWith('/portfolio')
+  })
+
+  it('clicking News pill navigates to /news', () => {
+    render(<NavBar />)
+    fireEvent.click(within(getTopNav()).getByRole('button', { name: 'News' }))
+    expect(mockPush).toHaveBeenCalledWith('/news')
+  })
+
+  it('clicking the active pill does not navigate', () => {
+    render(<NavBar />)
+    fireEvent.click(within(getTopNav()).getByRole('button', { name: 'Budget' }))
     expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('renders Sign out button', () => {
     render(<NavBar />)
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
+})
+
+// ── View detection from URL ───────────────────────────────────────────────────
+
+describe('View detection from URL', () => {
+  it('budget view for /', () => {
+    vi.mocked(usePathname).mockReturnValue('/')
+    render(<NavBar />)
+    expect(within(getTopNav()).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('budget view for /dashboard', () => {
+    vi.mocked(usePathname).mockReturnValue('/dashboard')
+    render(<NavBar />)
+    expect(within(getTopNav()).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('budget view for /accounts', () => {
+    vi.mocked(usePathname).mockReturnValue('/accounts')
+    render(<NavBar />)
+    expect(within(getTopNav()).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('budget view for /tags', () => {
+    vi.mocked(usePathname).mockReturnValue('/tags')
+    render(<NavBar />)
+    expect(within(getTopNav()).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('portfolio view for /portfolio', () => {
+    vi.mocked(usePathname).mockReturnValue('/portfolio')
+    render(<NavBar />)
+    expect(within(getTopNav()).getByRole('button', { name: 'Portfolio' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('news view for /news', () => {
+    vi.mocked(usePathname).mockReturnValue('/news')
+    render(<NavBar />)
+    expect(within(getTopNav()).getByRole('button', { name: 'News' })).toHaveAttribute('aria-pressed', 'true')
   })
 })
 
@@ -279,45 +310,5 @@ describe('News view bottom nav', () => {
   it('does not show More button', () => {
     render(<NavBar />)
     expect(within(getBottomNav()).queryByRole('button', { name: /More/i })).not.toBeInTheDocument()
-  })
-})
-
-// ── View detection ────────────────────────────────────────────────────────────
-
-describe('View detection from URL', () => {
-  it('budget view for /', () => {
-    vi.mocked(usePathname).mockReturnValue('/')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Budget')
-  })
-
-  it('budget view for /dashboard', () => {
-    vi.mocked(usePathname).mockReturnValue('/dashboard')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Budget')
-  })
-
-  it('budget view for /accounts', () => {
-    vi.mocked(usePathname).mockReturnValue('/accounts')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Budget')
-  })
-
-  it('budget view for /tags', () => {
-    vi.mocked(usePathname).mockReturnValue('/tags')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Budget')
-  })
-
-  it('portfolio view for /portfolio', () => {
-    vi.mocked(usePathname).mockReturnValue('/portfolio')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('Portfolio')
-  })
-
-  it('news view for /news', () => {
-    vi.mocked(usePathname).mockReturnValue('/news')
-    render(<NavBar />)
-    expect(screen.getByRole('button', { name: 'Switch view' })).toHaveTextContent('News')
   })
 })
