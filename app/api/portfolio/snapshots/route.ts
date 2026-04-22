@@ -99,6 +99,7 @@ export async function GET() {
     milestones: milestonesResult.rows,
   })
   } catch (err) {
+    console.error('[portfolio/snapshots] GET error:', err)
     return Response.json(
       { error: `Database error: ${err instanceof Error ? err.message : String(err)}. Run /api/migrate to set up schema.` },
       { status: 500 }

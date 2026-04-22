@@ -952,6 +952,7 @@ export function PortfolioClient() {
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/portfolio/snapshots')
+      if (!res.ok) { showToast('Failed to load portfolio', 'error'); return }
       const snap = await res.json()
       setSnapshot(snap)
     } catch { showToast('Failed to load portfolio', 'error') }
