@@ -24,25 +24,17 @@ afterEach(() => {
 })
 
 describe('NavBar — news view removed', () => {
-  it('view switcher dropdown does NOT include News', async () => {
+  it('view switcher pills do NOT include News', async () => {
     const { NavBar } = await import('@/app/(protected)/components/nav-bar')
-    const user = userEvent.setup()
     render(<NavBar />)
-    const switchBtn = screen.getByRole('button', { name: /switch view/i })
-    await user.click(switchBtn)
-    const items = screen.queryAllByRole('menuitem')
-    const labels = items.map(el => el.textContent)
-    expect(labels).not.toContain('News')
+    expect(screen.queryByRole('button', { name: 'News' })).not.toBeInTheDocument()
   })
 
-  it('view switcher includes Budget and Portfolio', async () => {
+  it('view switcher pills include Budget and Portfolio', async () => {
     const { NavBar } = await import('@/app/(protected)/components/nav-bar')
-    const user = userEvent.setup()
     render(<NavBar />)
-    await user.click(screen.getByRole('button', { name: /switch view/i }))
-    const labels = screen.getAllByRole('menuitem').map(el => el.textContent)
-    expect(labels).toContain('Budget')
-    expect(labels).toContain('Portfolio')
+    expect(screen.getByRole('button', { name: 'Budget' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Portfolio' })).toBeInTheDocument()
   })
 
   it('portfolio FAB dispatches portfolio:open-upload event', async () => {
