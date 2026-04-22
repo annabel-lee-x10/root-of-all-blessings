@@ -6,23 +6,20 @@ import { ThemeToggle } from './theme-toggle'
 
 // ── View types ────────────────────────────────────────────────────────────────
 
-type View = 'budget' | 'portfolio' | 'news'
+type View = 'budget' | 'portfolio'
 
 const VIEW_LABELS: Record<View, string> = {
   budget: 'Budget',
   portfolio: 'Portfolio',
-  news: 'News',
 }
 
 const VIEW_HOME: Record<View, string> = {
   budget: '/dashboard',
   portfolio: '/portfolio',
-  news: '/news',
 }
 
 function getView(pathname: string): View {
   if (pathname.startsWith('/portfolio')) return 'portfolio'
-  if (pathname.startsWith('/news')) return 'news'
   return 'budget'
 }
 
@@ -161,7 +158,7 @@ export function NavBar() {
 
           {/* View Switcher — pill tabs */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', background: 'var(--bg-subtle)', borderRadius: '8px', padding: '2px' }}>
-            {(['budget', 'portfolio', 'news'] as View[]).map((v) => (
+            {(['budget', 'portfolio'] as View[]).map((v) => (
               <button
                 key={v}
                 aria-current={view === v ? 'page' : undefined}
@@ -281,21 +278,15 @@ export function NavBar() {
             </button>
           </>
         ) : (
-          /* Portfolio / News — FAB only */
+          /* Portfolio — FAB only */
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {view === 'portfolio' ? (
-              <Link href="/portfolio" aria-label="Upload portfolio snapshot" style={fabStyle}>
-                <PlusIcon size={26} />
-              </Link>
-            ) : (
-              <button
-                aria-label="Add news"
-                style={{ ...fabStyle, cursor: 'pointer', border: 'none', padding: 0 }}
-                onClick={() => window.dispatchEvent(new CustomEvent('news:open-upload'))}
-              >
-                <PlusIcon size={26} />
-              </button>
-            )}
+            <button
+              aria-label="Upload portfolio snapshot"
+              style={{ ...fabStyle, cursor: 'pointer', border: 'none', padding: 0 }}
+              onClick={() => window.dispatchEvent(new CustomEvent('portfolio:open-upload'))}
+            >
+              <PlusIcon size={26} />
+            </button>
           </div>
         )}
       </nav>

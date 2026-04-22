@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 function makeTx(id: string, overrides: Partial<{ payee: string; type: string; amount: number }> = {}) {
@@ -38,9 +38,25 @@ vi.mock('next/link', () => ({
 
 const sevenTxs = [1, 2, 3, 4, 5, 6, 7].map((n) => makeTx(String(n)))
 
-function makeFetch(txs: ReturnType<typeof makeTx>[], total?: number) {
+const CATEGORIES = [
+  { id: 'cat-food', name: 'Food', type: 'expense', sort_order: 1, parent_id: null, created_at: '2024-01-01', updated_at: '2024-01-01' },
+  { id: 'cat-dining', name: 'Dining Out', type: 'expense', sort_order: 1, parent_id: 'cat-food', created_at: '2024-01-01', updated_at: '2024-01-01' },
+]
+const ACCOUNT_DBS = { id: 'acc1', name: 'DBS', type: 'bank', currency: 'SGD', is_active: 1, created_at: '2024-01-01', updated_at: '2024-01-01' }
+const ACCOUNT_CITI = { id: 'acc2', name: 'Citi', type: 'credit_card', currency: 'SGD', is_active: 1, created_at: '2024-01-01', updated_at: '2024-01-01' }
+
+function makeFetch(txs: ReturnType<typeof makeTx>[], total?: number, accounts: object[] = []) {
   return vi.fn().mockImplementation((url: string) => {
     if (typeof url === 'string' && url.includes('/api/accounts')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(accounts) })
+    }
+    if (typeof url === 'string' && url.includes('/api/categories/frequent')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    }
+    if (typeof url === 'string' && url.includes('/api/categories')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(CATEGORIES) })
+    }
+    if (typeof url === 'string' && url.includes('/api/tags')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
     }
     return Promise.resolve({
@@ -51,7 +67,7 @@ function makeFetch(txs: ReturnType<typeof makeTx>[], total?: number) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', makeFetch(sevenTxs, 7))
+  vi.stubGlobal('fetch', makeFetch(sevenTxs, 7, []))
 })
 
 afterEach(() => {
@@ -126,6 +142,85 @@ describe('RecentTransactions', () => {
     render(<RecentTransactions />)
     await waitFor(() => {
       expect(screen.queryByRole('link', { name: /show more/i })).not.toBeInTheDocument()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Searchable category picker regression in RecentTransactions inline edit
+// ---------------------------------------------------------------------------
+describe('RecentTransactions — searchable category picker in inline edit', () => {
+  it('renders category-search-input (not legacy two-step selects) in edit form', async () => {
+    const txWithCat = { ...makeTx('rt1', { payee: 'CatPayee' }), category_id: 'cat-dining' }
+    vi.stubGlobal('fetch', makeFetch([txWithCat], 1))
+
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+
+    await waitFor(() => expect(screen.getByText('CatPayee')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    await waitFor(() => expect(screen.getByTestId('category-search-input')).toBeInTheDocument())
+    expect(screen.queryByTestId('parent-category-select')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('subcategory-select')).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// BUG-039: RecentTransactions transfer type must show destination account picker
+// ---------------------------------------------------------------------------
+describe('RecentTransactions — BUG-039: transfer type shows destination account picker', () => {
+  it('shows To Account picker in edit form for a transfer transaction', async () => {
+    const transferTx = { ...makeTx('t1'), type: 'transfer', to_account_id: 'acc2', to_account_name: 'Citi', account_id: 'acc1' }
+    vi.stubGlobal('fetch', makeFetch([transferTx as ReturnType<typeof makeTx>], 1, [ACCOUNT_DBS, ACCOUNT_CITI]))
+
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+
+    await waitFor(() => expect(screen.getByText('Payee t1')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument())
+
+    expect(screen.getByText(/to account/i)).toBeInTheDocument()
+  })
+
+  it('hides category picker in edit form for a transfer transaction', async () => {
+    const transferTx = { ...makeTx('t2'), type: 'transfer', to_account_id: 'acc2', to_account_name: 'Citi', account_id: 'acc1' }
+    vi.stubGlobal('fetch', makeFetch([transferTx as ReturnType<typeof makeTx>], 1, [ACCOUNT_DBS, ACCOUNT_CITI]))
+
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+
+    await waitFor(() => expect(screen.getByText('Payee t2')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument())
+
+    expect(screen.queryByTestId('category-search-input')).not.toBeInTheDocument()
+  })
+
+  it('includes to_account_id in PATCH body when saving a transfer edit', async () => {
+    const transferTx = { ...makeTx('t3'), type: 'transfer', to_account_id: 'acc2', to_account_name: 'Citi', account_id: 'acc1' }
+    const fetchMock = makeFetch([transferTx as ReturnType<typeof makeTx>], 1, [ACCOUNT_DBS, ACCOUNT_CITI])
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { RecentTransactions } = await import('@/app/(protected)/components/recent-transactions')
+    render(<RecentTransactions />)
+
+    await waitFor(() => expect(screen.getByText('Payee t3')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        ([, opts]) => (opts as RequestInit)?.method === 'PATCH'
+      )
+      expect(patchCall).toBeTruthy()
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string)
+      expect(body.to_account_id).toBe('acc2')
     })
   })
 })

@@ -45,12 +45,11 @@ describe('Top nav', () => {
 // ── Top nav - pill view switcher ──────────────────────────────────────────────
 
 describe('Top nav pill view switcher', () => {
-  it('renders three pill buttons: Budget, Portfolio, News', () => {
+  it('renders Budget and Portfolio pill buttons', () => {
     render(<NavBar />)
     const topNav = getTopNav()
     expect(within(topNav).getByRole('button', { name: 'Budget' })).toBeInTheDocument()
     expect(within(topNav).getByRole('button', { name: 'Portfolio' })).toBeInTheDocument()
-    expect(within(topNav).getByRole('button', { name: 'News' })).toBeInTheDocument()
   })
 
   it('does not render a dropdown menu', () => {
@@ -64,7 +63,6 @@ describe('Top nav pill view switcher', () => {
     const topNav = getTopNav()
     expect(within(topNav).getByRole('button', { name: 'Budget' })).toHaveAttribute('aria-current', 'page')
     expect(within(topNav).getByRole('button', { name: 'Portfolio' })).not.toHaveAttribute('aria-current', 'page')
-    expect(within(topNav).getByRole('button', { name: 'News' })).not.toHaveAttribute('aria-current', 'page')
   })
 
   it('Portfolio pill is active on /portfolio', () => {
@@ -73,28 +71,12 @@ describe('Top nav pill view switcher', () => {
     const topNav = getTopNav()
     expect(within(topNav).getByRole('button', { name: 'Portfolio' })).toHaveAttribute('aria-current', 'page')
     expect(within(topNav).getByRole('button', { name: 'Budget' })).not.toHaveAttribute('aria-current', 'page')
-    expect(within(topNav).getByRole('button', { name: 'News' })).not.toHaveAttribute('aria-current', 'page')
-  })
-
-  it('News pill is active on /news', () => {
-    vi.mocked(usePathname).mockReturnValue('/news')
-    render(<NavBar />)
-    const topNav = getTopNav()
-    expect(within(topNav).getByRole('button', { name: 'News' })).toHaveAttribute('aria-current', 'page')
-    expect(within(topNav).getByRole('button', { name: 'Budget' })).not.toHaveAttribute('aria-current', 'page')
-    expect(within(topNav).getByRole('button', { name: 'Portfolio' })).not.toHaveAttribute('aria-current', 'page')
   })
 
   it('clicking Portfolio pill navigates to /portfolio', () => {
     render(<NavBar />)
     fireEvent.click(within(getTopNav()).getByRole('button', { name: 'Portfolio' }))
     expect(mockPush).toHaveBeenCalledWith('/portfolio')
-  })
-
-  it('clicking News pill navigates to /news', () => {
-    render(<NavBar />)
-    fireEvent.click(within(getTopNav()).getByRole('button', { name: 'News' }))
-    expect(mockPush).toHaveBeenCalledWith('/news')
   })
 
   it('clicking Budget pill from portfolio view navigates to /dashboard', () => {
@@ -180,14 +162,12 @@ describe('Budget More sheet', () => {
     expect(screen.getByRole('dialog', { name: 'More options' })).toBeInTheDocument()
   })
 
-  it('contains Accounts and Tags links (News and Portfolio removed)', () => {
+  it('contains Accounts and Tags links', () => {
     render(<NavBar />)
     fireEvent.click(within(getBottomNav()).getByRole('button', { name: /More/i }))
     const sheet = screen.getByRole('dialog', { name: 'More options' })
     expect(within(sheet).getByRole('link', { name: 'Accounts' })).toHaveAttribute('href', '/accounts')
     expect(within(sheet).getByRole('link', { name: 'Tags' })).toHaveAttribute('href', '/tags')
-    expect(within(sheet).queryByRole('link', { name: 'News' })).not.toBeInTheDocument()
-    expect(within(sheet).queryByRole('link', { name: 'Portfolio' })).not.toBeInTheDocument()
   })
 
   it('does NOT contain Dashboard, Transactions, or Categories links', () => {
@@ -230,44 +210,13 @@ describe('Portfolio view bottom nav', () => {
     expect(within(bottomNav).queryByRole('link', { name: /Categories/i })).not.toBeInTheDocument()
   })
 
-  it('FAB points to /portfolio', () => {
-    render(<NavBar />)
-    expect(within(getBottomNav()).getByRole('link', { name: 'Upload portfolio snapshot' })).toHaveAttribute('href', '/portfolio')
-  })
-
-  it('does not show More button', () => {
-    render(<NavBar />)
-    expect(within(getBottomNav()).queryByRole('button', { name: /More/i })).not.toBeInTheDocument()
-  })
-})
-
-// ── News bottom nav ───────────────────────────────────────────────────────────
-
-describe('News view bottom nav', () => {
-  beforeEach(() => {
-    vi.mocked(usePathname).mockReturnValue('/news')
-  })
-
-  it('shows only the FAB — no Budget tabs', () => {
-    render(<NavBar />)
-    const bottomNav = getBottomNav()
-    expect(within(bottomNav).queryByRole('link', { name: /Dashboard/i })).not.toBeInTheDocument()
-    expect(within(bottomNav).queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument()
-  })
-
-  it('FAB is a button (not a link) on news view', () => {
-    render(<NavBar />)
-    expect(within(getBottomNav()).getByRole('button', { name: 'Add news' })).toBeInTheDocument()
-    expect(within(getBottomNav()).queryByRole('link', { name: 'Add news' })).not.toBeInTheDocument()
-  })
-
-  it('FAB dispatches news:open-upload custom event when clicked', () => {
+  it('FAB is a button that dispatches portfolio:open-upload event', () => {
     render(<NavBar />)
     const dispatched: Event[] = []
     const handler = (e: Event) => dispatched.push(e)
-    window.addEventListener('news:open-upload', handler)
-    fireEvent.click(within(getBottomNav()).getByRole('button', { name: 'Add news' }))
-    window.removeEventListener('news:open-upload', handler)
+    window.addEventListener('portfolio:open-upload', handler)
+    fireEvent.click(within(getBottomNav()).getByRole('button', { name: 'Upload portfolio snapshot' }))
+    window.removeEventListener('portfolio:open-upload', handler)
     expect(dispatched).toHaveLength(1)
   })
 

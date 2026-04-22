@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import {
   initTestDb, clearTestDb, resetTestDb, req,
   seedPortfolioSnapshotV2, seedPortfolioHolding, seedPortfolioOrder,
@@ -133,6 +133,67 @@ describe('GET /api/portfolio/snapshots', () => {
     expect(snap.snap_label).toBe('New Snap')
   })
 })
+
+  describe('BUG-031: backfills unrealised_pnl from holdings when snapshot has null unrealised_pnl', () => {
+    it('returns sum of holdings pnl as unrealised_pnl when snapshot unrealised_pnl is null', async () => {
+      seedPortfolioSnapshotV2('s1', { total_value: 14229.64, unrealised_pnl: null })
+      seedPortfolioHolding('s1', { ticker: 'MU', value: 2246.90, pnl: 560.70, value_usd: 2246.90 })
+      seedPortfolioHolding('s1', { ticker: 'RING', value: 1208.85, pnl: -15.40, value_usd: 1208.85 })
+      seedPortfolioHolding('s1', { ticker: 'MOO', value: 1163.54, pnl: -25.90, value_usd: 1163.54 })
+      // Expected unrealised_pnl = 560.70 + (-15.40) + (-25.90) = 519.40
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const snap = await (await GET()).json()
+      expect(snap.unrealised_pnl).toBeCloseTo(519.40, 1)
+    })
+
+    it('returns null unrealised_pnl when snapshot is null AND holdings have no pnl', async () => {
+      seedPortfolioSnapshotV2('s1', { total_value: 5000, unrealised_pnl: null })
+      seedPortfolioHolding('s1', { ticker: 'CART', value: 1071.25, pnl: null, value_usd: 1071.25 })
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const snap = await (await GET()).json()
+      expect(snap.unrealised_pnl).toBeNull()
+    })
+
+    it('backfills when unrealised_pnl is undefined (column absent in legacy prod schema)', async () => {
+      // Simulate the column being absent: row has no unrealised_pnl key at all.
+      // Save the real implementation, wrap it to strip the field, then restore.
+      seedPortfolioSnapshotV2('s1', { total_value: 5000, unrealised_pnl: null })
+      seedPortfolioHolding('s1', { ticker: 'MU', value: 2000, pnl: 400, value_usd: 2000 })
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const { db } = await import('@/lib/db')
+      const realImpl = vi.mocked(db.execute).getMockImplementation()!
+      vi.mocked(db.execute).mockImplementation((q) => {
+        const sql = typeof q === 'string' ? q : q.sql
+        return realImpl(q).then((res: { rows: Record<string, unknown>[] }) => {
+          if (sql.includes('portfolio_snapshots') && !sql.includes('portfolio_holdings')) {
+            return {
+              ...res,
+              rows: res.rows.map((row: Record<string, unknown>) => {
+                const { unrealised_pnl: _omit, ...rest } = row
+                return rest
+              }),
+            }
+          }
+          return res
+        }) as ReturnType<typeof db.execute>
+      })
+      try {
+        const snap = await (await GET()).json()
+        expect(snap.unrealised_pnl).toBeCloseTo(400)
+      } finally {
+        vi.mocked(db.execute).mockImplementation(realImpl)
+      }
+    })
+
+    it('uses explicit unrealised_pnl from DB when set, even if different from holdings sum', async () => {
+      seedPortfolioSnapshotV2('s1', { total_value: 12165.28, unrealised_pnl: 593.25 })
+      seedPortfolioHolding('s1', { ticker: 'MU', value: 2242.10, pnl: 100, value_usd: 2242.10 })
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const snap = await (await GET()).json()
+      // Explicit DB value wins — do not override with holdings sum
+      expect(snap.unrealised_pnl).toBeCloseTo(593.25)
+    })
+  })
 
 describe('POST /api/portfolio/snapshots', () => {
   it('rejects missing total_value', async () => {

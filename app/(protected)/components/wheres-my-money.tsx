@@ -58,7 +58,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
   const [tagSearch, setTagSearch] = useState('')
   const [showNoteField, setShowNoteField] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [parentCategoryId, setParentCategoryId] = useState('')
 
   const [accounts, setAccounts] = useState<Account[]>([])
   const [categories, setCategories] = useState<import('@/lib/types').Category[]>([])
@@ -161,20 +160,14 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
       setDatetime(`${datePart}T${timePart}`)
     }
 
-    // Category: match by name; set both parent and child for two-step picker
+    // Category: match by name; leaf categories only (parents with children need explicit sub-selection)
     if (data.category) {
       const match = categories.find(
         (c) => c.name.toLowerCase() === data.category!.toLowerCase()
       )
       if (match) {
-        if (match.parent_id) {
-          setParentCategoryId(match.parent_id)
-          setCategoryId(match.id)
-        } else {
-          setParentCategoryId(match.id)
-          const hasChildren = categories.some((c) => c.parent_id === match.id)
-          if (!hasChildren) setCategoryId(match.id)
-        }
+        const hasChildren = categories.some((c) => c.parent_id === match.id)
+        if (!hasChildren) setCategoryId(match.id)
       }
     }
 
@@ -294,7 +287,6 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
     setFxRate('')
     setFxDate('')
     setCategoryId('')
-    setParentCategoryId('')
     setPayee('')
     setNote('')
     setPaymentTypeFilter('')
@@ -631,11 +623,9 @@ export function WheresMyMoney({ collapsed = false, onToggle }: { collapsed?: boo
               <CategoryPicker
                 categories={categories}
                 txType={type}
-                parentId={parentCategoryId}
                 categoryId={categoryId}
-                onParentChange={setParentCategoryId}
-                onCategoryChange={setCategoryId}
-                selectStyle={selectStyle}
+                onChange={(cid) => setCategoryId(cid)}
+                inputStyle={selectStyle}
               />
             </div>
           )}

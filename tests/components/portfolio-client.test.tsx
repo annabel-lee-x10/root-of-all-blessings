@@ -426,3 +426,32 @@ describe('KPI row', () => {
     })
   })
 })
+
+// ── BUG-034: non-ok API response must not crash the component ─────────────────
+describe('BUG-034 – API error does not crash component', () => {
+  it('shows upload panel (not crash) when API returns 500 with JSON error body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ error: 'no such table: portfolio_holdings' }),
+    }))
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() =>
+      expect(screen.getByText(/No portfolio data yet/i)).toBeInTheDocument()
+    )
+  })
+
+  it('shows upload panel when API returns 500 with non-JSON body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+    }))
+    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
+    render(<PortfolioClient />)
+    await waitFor(() =>
+      expect(screen.getByText(/No portfolio data yet/i)).toBeInTheDocument()
+    )
+  })
+})

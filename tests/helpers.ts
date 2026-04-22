@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
   prior_unrealised REAL,
   prior_realised REAL,
   prior_cash REAL,
-  prior_holdings INTEGER
+  prior_holdings INTEGER,
+  drift_warning TEXT
 );
 CREATE TABLE IF NOT EXISTS portfolio_holdings (
   id TEXT PRIMARY KEY,
