@@ -72,13 +72,25 @@ export async function GET() {
 
   const holdings = (holdingsResult.rows as Record<string, unknown>[]).map(h => mapHolding(h, totalValueUSD))
 
+  // BUG-031: backfill unrealised_pnl from holdings when DB value is null
+  // (snapshots uploaded via skill may omit this field)
+  let unrealised_pnl = snap.unrealised_pnl as number | null
+  if (unrealised_pnl === null) {
+    const pnlValues = (holdingsResult.rows as Record<string, unknown>[])
+      .map(h => h.pnl as number | null)
+      .filter((v): v is number => v !== null)
+    if (pnlValues.length > 0) {
+      unrealised_pnl = pnlValues.reduce((s, v) => s + v, 0)
+    }
+  }
+
   return Response.json({
     id: snap.id,
     snapshot_date: snap.snapshot_date,
     snap_label: snap.snap_label,
     snap_time: snap.snap_time,
     total_value: snap.total_value,
-    unrealised_pnl: snap.unrealised_pnl,
+    unrealised_pnl,
     realised_pnl: snap.realised_pnl,
     cash: snap.cash,
     pending: snap.pending,

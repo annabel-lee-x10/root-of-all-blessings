@@ -134,6 +134,36 @@ describe('GET /api/portfolio/snapshots', () => {
   })
 })
 
+  describe('BUG-031: backfills unrealised_pnl from holdings when snapshot has null unrealised_pnl', () => {
+    it('returns sum of holdings pnl as unrealised_pnl when snapshot unrealised_pnl is null', async () => {
+      seedPortfolioSnapshotV2('s1', { total_value: 14229.64, unrealised_pnl: null })
+      seedPortfolioHolding('s1', { ticker: 'MU', value: 2246.90, pnl: 560.70, value_usd: 2246.90 })
+      seedPortfolioHolding('s1', { ticker: 'RING', value: 1208.85, pnl: -15.40, value_usd: 1208.85 })
+      seedPortfolioHolding('s1', { ticker: 'MOO', value: 1163.54, pnl: -25.90, value_usd: 1163.54 })
+      // Expected unrealised_pnl = 560.70 + (-15.40) + (-25.90) = 519.40
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const snap = await (await GET()).json()
+      expect(snap.unrealised_pnl).toBeCloseTo(519.40, 1)
+    })
+
+    it('returns null unrealised_pnl when snapshot is null AND holdings have no pnl', async () => {
+      seedPortfolioSnapshotV2('s1', { total_value: 5000, unrealised_pnl: null })
+      seedPortfolioHolding('s1', { ticker: 'CART', value: 1071.25, pnl: null, value_usd: 1071.25 })
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const snap = await (await GET()).json()
+      expect(snap.unrealised_pnl).toBeNull()
+    })
+
+    it('uses explicit unrealised_pnl from DB when set, even if different from holdings sum', async () => {
+      seedPortfolioSnapshotV2('s1', { total_value: 12165.28, unrealised_pnl: 593.25 })
+      seedPortfolioHolding('s1', { ticker: 'MU', value: 2242.10, pnl: 100, value_usd: 2242.10 })
+      const { GET } = await import('@/app/api/portfolio/snapshots/route')
+      const snap = await (await GET()).json()
+      // Explicit DB value wins — do not override with holdings sum
+      expect(snap.unrealised_pnl).toBeCloseTo(593.25)
+    })
+  })
+
 describe('POST /api/portfolio/snapshots', () => {
   it('rejects missing total_value', async () => {
     const { POST } = await import('@/app/api/portfolio/snapshots/route')
