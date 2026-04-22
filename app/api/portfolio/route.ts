@@ -65,6 +65,17 @@ type PortfolioSummary = {
   pending?: number
 }
 
+// Returns a warning string if |referenceValue - computedValue| exceeds min(1%, $50) of reference.
+// Returns null when values are within threshold (no actionable drift).
+function computeDrift(label: string, referenceValue: number, computedValue: number): string | null {
+  const diff = referenceValue - computedValue
+  const threshold = Math.min(0.01 * Math.abs(referenceValue), 50)
+  if (Math.abs(diff) <= threshold) return null
+  const pct = (Math.abs(diff) / Math.abs(referenceValue)) * 100
+  const sign = diff >= 0 ? '+' : '-'
+  return `${label}: summary=${referenceValue.toFixed(2)} computed=${computedValue.toFixed(2)} diff=${sign}${Math.abs(diff).toFixed(2)} (${pct.toFixed(1)}%)`
+}
+
 // Extracts the machine-readable summary block the skill embeds in its HTML output:
 // <script type="application/json" id="portfolio-summary">{...}</script>
 // Values here are exact (FX-adjusted, including cash) and override all computed/carried-forward values.
@@ -199,7 +210,8 @@ export async function GET() {
   const result = await db.execute(
     `SELECT id, snapshot_date, total_value, total_pnl, holdings_json, created_at,
             cash, pending, realised_pnl, net_invested, net_deposited, dividends,
-            prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings
+            prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings,
+            drift_warning
      FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1`
   )
   if (result.rows.length === 0) {
@@ -287,6 +299,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Compare summary block values against computed holdings sums.
+  // Threshold = min(1% of summary value, $50) — flag anything larger as informational drift.
+  const driftWarnings: string[] = []
+  if (summary.total_value !== undefined) {
+    const w = computeDrift('total_value', summary.total_value, parsedTotal)
+    if (w) { console.warn('[portfolio/drift]', w); driftWarnings.push(w) }
+  }
+  if (summary.unrealised_pnl !== undefined && parsedPnl !== null) {
+    const w = computeDrift('unrealised_pnl', summary.unrealised_pnl, parsedPnl)
+    if (w) { console.warn('[portfolio/drift]', w); driftWarnings.push(w) }
+  }
+  const drift_warning = driftWarnings.length > 0 ? driftWarnings.join('\n') : null
+
   // Auto-generate snap_label so the v2 GET route (WHERE snap_label IS NOT NULL) can see this snapshot
   const autoLabel = snap_label ?? (() => {
     const d = new Date(date)
@@ -301,14 +326,16 @@ export async function POST(request: NextRequest) {
       sql: `INSERT INTO portfolio_snapshots
               (id, snapshot_date, total_value, total_pnl, unrealised_pnl, holdings_json, raw_html, created_at,
                cash, pending, realised_pnl, net_invested, net_deposited, dividends,
-               prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+               prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings,
+               drift_warning)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [id, date, total_value, parsedPnl ?? null, effectiveUnrealised ?? null,
              JSON.stringify(holdings), html, now,
              effectiveCash ?? 0, effectivePending ?? 0, effectiveRealised ?? 0, effectiveNetInvested,
              effectiveNetDeposited, effectiveDividends ?? 0,
              effectivePriorValue, effectivePriorUnrealised,
-             effectivePriorRealised, effectivePriorCash, autoLabel, prior_holdings ?? null],
+             effectivePriorRealised, effectivePriorCash, autoLabel, prior_holdings ?? null,
+             drift_warning],
     })
 
     // Also insert into portfolio_holdings so the v2 snapshots route can serve individual holding rows.

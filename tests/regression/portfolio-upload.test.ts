@@ -172,6 +172,140 @@ describe('BUG-037: HTML upload uses summary JSON block for exact financial value
   })
 })
 
+describe('FEAT: drift_warning when summary total_value diverges from holdings sum (v1 HTML upload)', () => {
+  // summary.total_value is FX-adjusted + cash; holdings sum is equity only.
+  // When the gap is > min(1% of summary, $50), a drift_warning is stored and returned.
+  const DRIFT_MATCH_HTML = `
+    <script type="application/json" id="portfolio-summary">
+    {"total_value":2862.26,"unrealised_pnl":536.66}
+    </script>
+    <table class="holdings">
+      <thead><tr><th>Ticker</th><th>Value</th><th>URZ P&amp;L</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MU</strong></td><td>$2,246.90</td><td>+$560.90</td></tr>
+        <tr><td><strong>ABBV</strong></td><td>$615.36</td><td>-$24.24</td></tr>
+      </tbody>
+    </table>`
+
+  // Summary says $14369.02 but holdings only sum to $2862.26 — large FX/cash gap.
+  const DRIFT_MISMATCH_HTML = `
+    <script type="application/json" id="portfolio-summary">
+    {"total_value":14369.02,"unrealised_pnl":411.38}
+    </script>
+    <table class="holdings">
+      <thead><tr><th>Ticker</th><th>Value</th><th>URZ P&amp;L</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MU</strong></td><td>$2,246.90</td><td>+$560.90</td></tr>
+        <tr><td><strong>ABBV</strong></td><td>$615.36</td><td>-$24.24</td></tr>
+      </tbody>
+    </table>`
+
+  it('drift_warning is null when summary matches holdings sum within threshold', async () => {
+    const { POST } = await import('@/app/api/portfolio/route')
+    const { GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio', 'POST', { html: DRIFT_MATCH_HTML }))
+    const snap = await (await GET()).json()
+    // Fails before fix: drift_warning column does not exist → undefined ≠ null
+    expect(snap?.drift_warning).toBeNull()
+  })
+
+  it('drift_warning is set when total_value diverges beyond threshold', async () => {
+    const { POST } = await import('@/app/api/portfolio/route')
+    const { GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio', 'POST', { html: DRIFT_MISMATCH_HTML }))
+    const snap = await (await GET()).json()
+    // $14369 summary vs $2862 holdings — diff $11506 >> $50 threshold
+    // Fails before fix: drift_warning is undefined (column not implemented)
+    expect(snap?.drift_warning).toBeTruthy()
+    expect(snap?.drift_warning).toContain('total_value')
+  })
+
+  it('drift_warning is set when unrealised_pnl diverges beyond threshold', async () => {
+    const { POST } = await import('@/app/api/portfolio/route')
+    const { GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio', 'POST', { html: DRIFT_MISMATCH_HTML }))
+    const snap = await (await GET()).json()
+    // $411.38 summary vs $536.66 computed — diff $125.28 >> min(1%*$411=$4.11, $50) = $4.11
+    expect(snap?.drift_warning).toContain('unrealised_pnl')
+  })
+
+  it('drift_warning is null when no summary block present', async () => {
+    const { POST } = await import('@/app/api/portfolio/route')
+    const { GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    // VALID_HTML has no summary block — no reference to compare against
+    await POST(req('/api/portfolio', 'POST', { html: VALID_HTML }))
+    const snap = await (await GET()).json()
+    expect(snap?.drift_warning).toBeNull()
+  })
+
+  it('summary values are still used as source of truth when drift is detected', async () => {
+    const { POST } = await import('@/app/api/portfolio/route')
+    const { GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio', 'POST', { html: DRIFT_MISMATCH_HTML }))
+    const snap = await (await GET()).json()
+    // Warning is informational — summary values must still win
+    expect(snap?.total_value).toBeCloseTo(14369.02)
+    expect(snap?.unrealised_pnl).toBeCloseTo(411.38)
+  })
+})
+
+describe('FEAT: drift_warning for v2 (direct JSON) snapshot upload', () => {
+  it('drift_warning is set when total_value diverges from holdings sum beyond threshold', async () => {
+    const { POST, GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio/snapshots', 'POST', {
+      snap_label: 'Drift Test',
+      total_value: 14369.02,
+      unrealised_pnl: 411.38,
+      snapshot_date: '2026-04-22T06:00:00.000Z',
+      holdings: [
+        { name: 'Micron Technology', ticker: 'MU', value: 2246.90, pnl: 560.90, geo: 'US', currency: 'USD' },
+        { name: 'AbbVie Inc.', ticker: 'ABBV', value: 615.36, pnl: -24.24, geo: 'US', currency: 'USD' },
+      ],
+    }))
+    const snap = await (await GET()).json()
+    // $14369 declared vs $2862 holdings sum — threshold = $50 → $11506 >> $50
+    expect(snap?.drift_warning).toBeTruthy()
+    expect(snap?.drift_warning).toContain('total_value')
+  })
+
+  it('drift_warning is null when total_value matches holdings sum within threshold', async () => {
+    const { POST, GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio/snapshots', 'POST', {
+      snap_label: 'No Drift Test',
+      total_value: 2862.26,
+      unrealised_pnl: 536.66,
+      snapshot_date: '2026-04-22T06:00:00.000Z',
+      holdings: [
+        { name: 'Micron Technology', ticker: 'MU', value: 2246.90, pnl: 560.90, geo: 'US', currency: 'USD' },
+        { name: 'AbbVie Inc.', ticker: 'ABBV', value: 615.36, pnl: -24.24, geo: 'US', currency: 'USD' },
+      ],
+    }))
+    const snap = await (await GET()).json()
+    expect(snap?.drift_warning).toBeNull()
+  })
+
+  it('drift_warning is null when no holdings provided', async () => {
+    const { POST, GET } = await import('@/app/api/portfolio/snapshots/route')
+
+    await POST(req('/api/portfolio/snapshots', 'POST', {
+      snap_label: 'Empty Holdings',
+      total_value: 14369.02,
+      snapshot_date: '2026-04-22T06:00:00.000Z',
+      holdings: [],
+    }))
+    const snap = await (await GET()).json()
+    // No holdings to compare against — no drift check possible
+    expect(snap?.drift_warning).toBeNull()
+  })
+})
+
 describe('BUG-035: HTML upload carries forward financial context from previous v2 snapshot', () => {
   it('carries forward realised_pnl, cash, net_invested when absent from HTML upload', async () => {
     const { POST: postOld } = await import('@/app/api/portfolio/route')
