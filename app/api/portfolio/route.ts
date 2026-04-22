@@ -10,7 +10,11 @@ function parseNum(s: string): number | undefined {
 }
 
 function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim()
 }
 
 function extractTableRows(html: string): string[][] {
@@ -38,7 +42,7 @@ function detectColumnMap(headers: string[]): Record<string, number> {
     ['avg_cost',       /avg.*cost|average.*cost|cost.*price|purchase.*price/i],
     ['current_price',  /current.*price|last.*price|market.*price|price/i],
     ['market_value',   /market.*val|current.*val|value|worth/i],
-    ['pnl',            /unrealised|unrealized|^p&l$|gain.*loss|profit.*loss|p\/l/i],
+    ['pnl',            /unrealised|unrealized|urz|p&l|gain.*loss|profit.*loss|p\/l/i],
     ['allocation_pct', /weight|alloc|portion/i],
     ['change_1d_pct',  /1d\s*%|1d\s+ch|day\s+ch|daily\s+ch/i],
   ]
