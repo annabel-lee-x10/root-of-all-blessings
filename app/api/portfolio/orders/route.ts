@@ -1,11 +1,22 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 
-export async function GET() {
-  const result = await db.execute(
-    `SELECT id, ticker, geo, type, price, qty, currency, placed, current_price, note, new_flag, status, created_at
-     FROM portfolio_orders WHERE status = 'open' ORDER BY created_at DESC`
-  )
+export async function GET(request?: NextRequest) {
+  const snapshotId = request?.nextUrl?.searchParams.get('snapshot_id') ?? null
+
+  let result
+  if (snapshotId) {
+    result = await db.execute({
+      sql: `SELECT id, ticker, geo, type, price, qty, currency, placed, current_price, note, new_flag, status, created_at
+            FROM portfolio_orders WHERE snapshot_id = ? ORDER BY created_at DESC`,
+      args: [snapshotId],
+    })
+  } else {
+    result = await db.execute(
+      `SELECT id, ticker, geo, type, price, qty, currency, placed, current_price, note, new_flag, status, created_at
+       FROM portfolio_orders WHERE status = 'open' ORDER BY created_at DESC`
+    )
+  }
   return Response.json(result.rows)
 }
 

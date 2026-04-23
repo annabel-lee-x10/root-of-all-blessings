@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
   prior_realised REAL,
   prior_cash REAL,
   prior_holdings INTEGER,
-  drift_warning TEXT
+  drift_warning TEXT,
+  source TEXT DEFAULT 'html_import'
 );
 CREATE TABLE IF NOT EXISTS portfolio_holdings (
   id TEXT PRIMARY KEY,
@@ -53,6 +54,21 @@ CREATE TABLE IF NOT EXISTS portfolio_holdings (
   note TEXT,
   dividend_amount REAL,
   dividend_date TEXT,
+  day_high REAL,
+  day_low REAL,
+  prev_close REAL,
+  weight REAL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS portfolio_transactions (
+  id TEXT PRIMARY KEY,
+  snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+  ticker TEXT,
+  type TEXT NOT NULL,
+  amount REAL,
+  currency TEXT NOT NULL DEFAULT 'SGD',
+  date TEXT,
+  notes TEXT,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS portfolio_orders (
@@ -184,6 +200,7 @@ export function resetTestDb() {
       DELETE FROM portfolio_milestones;
       DELETE FROM portfolio_growth;
       DELETE FROM portfolio_realised;
+      DELETE FROM portfolio_transactions;
       DELETE FROM portfolio_orders;
       DELETE FROM portfolio_holdings;
       DELETE FROM portfolio_snapshots;
@@ -292,7 +309,7 @@ export function seedPortfolioSnapshot(
     net_invested?: number; net_deposited?: number; dividends?: number
     prior_value?: number; prior_unrealised?: number; prior_realised?: number
     prior_cash?: number; snap_label?: string; prior_holdings?: number
-    snap_time?: string; unrealised_pnl?: number
+    snap_time?: string; unrealised_pnl?: number; source?: string
   } = {}
 ) {
   const n = new Date().toISOString()
@@ -300,20 +317,21 @@ export function seedPortfolioSnapshot(
           cash = null, pending = null, realised_pnl = null, net_invested = null,
           net_deposited = null, dividends = null, prior_value = null,
           prior_unrealised = null, prior_realised = null, prior_cash = null,
-          snap_label = null, prior_holdings = null, snap_time = null, unrealised_pnl = null } = opts
+          snap_label = null, prior_holdings = null, snap_time = null, unrealised_pnl = null,
+          source = 'html_import' } = opts
   testDb
     .prepare(
       `INSERT INTO portfolio_snapshots
          (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
           snap_label, snap_time, cash, pending, net_invested, unrealised_pnl, realised_pnl,
           net_deposited, dividends,
-          prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings)
-       VALUES (?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings, source)
+       VALUES (?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(id, snapshot_date, total_value, total_pnl, JSON.stringify(holdings), n,
          snap_label, snap_time, cash, pending, net_invested, unrealised_pnl, realised_pnl,
          net_deposited, dividends,
-         prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings)
+         prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings, source)
 }
 
 // V2 snapshot seeder — uses snap_label to mark as v2, child data in separate tables
@@ -499,4 +517,28 @@ export function seedTransaction(
        account_id, to_account_id, category_id, payee, note, payment_method, status, datetime, created_at, updated_at)
      VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, type, amount, currency, accountId, toAccountId, categoryId, payee, note, payment_method, status, datetime, n, n)
+}
+
+export function seedPortfolioTransaction(
+  id: string,
+  snapshotId: string,
+  opts: {
+    ticker?: string | null
+    type?: string
+    amount?: number | null
+    currency?: string
+    date?: string | null
+    notes?: string | null
+  } = {}
+) {
+  const n = new Date().toISOString()
+  const {
+    ticker = null, type = 'deposit', amount = null,
+    currency = 'SGD', date = null, notes = null,
+  } = opts
+  testDb.prepare(
+    `INSERT INTO portfolio_transactions
+      (id, snapshot_id, ticker, type, amount, currency, date, notes, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`
+  ).run(id, snapshotId, ticker, type, amount, currency, date, notes, n)
 }

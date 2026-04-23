@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { initTestDb, clearTestDb, resetTestDb, req, seedPortfolioOrder } from '../helpers'
+import { initTestDb, clearTestDb, resetTestDb, req, seedPortfolioOrder, seedPortfolioSnapshot } from '../helpers'
 
 beforeAll(() => initTestDb())
 afterAll(() => clearTestDb())
@@ -125,5 +125,42 @@ describe('DELETE /api/portfolio/orders/[id]', () => {
       { params: Promise.resolve({ id: 'none' }) }
     )
     expect(res.status).toBe(404)
+  })
+})
+
+describe('GET /api/portfolio/orders?snapshot_id', () => {
+  it('filters orders by snapshot_id when provided', async () => {
+    seedPortfolioSnapshot('s1', [])
+    seedPortfolioSnapshot('s2', [])
+    seedPortfolioOrder('o1', { snapshot_id: 's1', ticker: 'AAPL', status: 'open' })
+    seedPortfolioOrder('o2', { snapshot_id: 's2', ticker: 'MSFT', status: 'open' })
+    seedPortfolioOrder('o3', { snapshot_id: 's1', ticker: 'NVDA', status: 'open' })
+
+    const { GET } = await import('@/app/api/portfolio/orders/route')
+    const res = await GET(req('/api/portfolio/orders?snapshot_id=s1'))
+    const data = await res.json()
+    expect(data).toHaveLength(2)
+    const tickers = data.map((o: { ticker: string }) => o.ticker).sort()
+    expect(tickers).toEqual(['AAPL', 'NVDA'])
+  })
+
+  it('returns only open standalone orders when no snapshot_id', async () => {
+    seedPortfolioOrder('o1', { ticker: 'MU', status: 'open' })
+    seedPortfolioOrder('o2', { ticker: 'ABBV', status: 'filled' })
+
+    const { GET } = await import('@/app/api/portfolio/orders/route')
+    const res = await GET(req('/api/portfolio/orders'))
+    const data = await res.json()
+    expect(data.map((o: { ticker: string }) => o.ticker)).toContain('MU')
+    expect(data.map((o: { ticker: string }) => o.ticker)).not.toContain('ABBV')
+  })
+
+  it('returns empty array for snapshot with no orders', async () => {
+    seedPortfolioSnapshot('s1', [])
+
+    const { GET } = await import('@/app/api/portfolio/orders/route')
+    const res = await GET(req('/api/portfolio/orders?snapshot_id=s1'))
+    const data = await res.json()
+    expect(data).toHaveLength(0)
   })
 })
