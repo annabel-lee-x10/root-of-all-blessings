@@ -1090,6 +1090,9 @@ export function PortfolioClient() {
                 ))}
               </div>
 
+              {/* Screenshot upload — always visible when data exists */}
+              <UploadArea onUploaded={load} />
+
               {/* Tab bar */}
               <div style={{
                 display: 'flex', overflowX: 'auto', padding: '4px 12px 0',

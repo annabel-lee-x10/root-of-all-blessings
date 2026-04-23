@@ -533,6 +533,14 @@ describe('Orders tab – status badge (Phase 2)', () => {
   })
 })
 
+// ── BUG-042: screenshot UploadArea hidden when portfolio data exists ───────────
+describe('BUG-042 – screenshot upload area visible when snapshot data exists', () => {
+  it('shows "Upload Syfe Screenshots" section when portfolio has data', async () => {
+    await renderDashboard()
+    expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+  })
+})
+
 // ── BUG-034: non-ok API response must not crash the component ─────────────────
 describe('BUG-034 – API error does not crash component', () => {
   it('shows upload panel (not crash) when API returns 500 with JSON error body', async () => {
