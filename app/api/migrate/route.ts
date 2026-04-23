@@ -259,6 +259,12 @@ export async function POST() {
     { name: 'portfolio_growth.next_text', sql: 'ALTER TABLE portfolio_growth ADD COLUMN next_text TEXT' },
     { name: 'portfolio_snapshots.unrealised_pnl',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN unrealised_pnl REAL' },
     { name: 'portfolio_snapshots.drift_warning',    sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN drift_warning TEXT' },
+    // Phase 1: screenshot OCR pipeline
+    { name: 'portfolio_snapshots.source',           sql: "ALTER TABLE portfolio_snapshots ADD COLUMN source TEXT DEFAULT 'html_import'" },
+    { name: 'portfolio_holdings.day_high',          sql: 'ALTER TABLE portfolio_holdings ADD COLUMN day_high REAL' },
+    { name: 'portfolio_holdings.day_low',           sql: 'ALTER TABLE portfolio_holdings ADD COLUMN day_low REAL' },
+    { name: 'portfolio_holdings.prev_close',        sql: 'ALTER TABLE portfolio_holdings ADD COLUMN prev_close REAL' },
+    { name: 'portfolio_holdings.weight',            sql: 'ALTER TABLE portfolio_holdings ADD COLUMN weight REAL' },
   ]
 
   for (const m of ddlMigrations) {
@@ -383,6 +389,19 @@ export async function POST() {
           snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
           date TEXT NOT NULL, tags_json TEXT NOT NULL DEFAULT '[]',
           text TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL)`,
+      },
+      {
+        name: 'portfolio_transactions',
+        sql: `CREATE TABLE IF NOT EXISTS portfolio_transactions (
+          id TEXT PRIMARY KEY,
+          snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+          ticker TEXT,
+          type TEXT NOT NULL,
+          amount REAL,
+          currency TEXT NOT NULL DEFAULT 'SGD',
+          date TEXT,
+          notes TEXT,
           created_at TEXT NOT NULL)`,
       },
     ]
