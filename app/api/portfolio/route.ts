@@ -314,11 +314,14 @@ export async function POST(request: NextRequest) {
 
   // Auto-generate snap_label so the v2 GET route (WHERE snap_label IS NOT NULL) can see this snapshot
   const autoLabel = snap_label ?? (() => {
-    const d = new Date(date)
-    const day = d.getUTCDate()
-    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]
-    const yr = d.getUTCFullYear()
-    return `${day} ${mon} ${yr} (HTML import)`
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Singapore',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).formatToParts(new Date(date))
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+    return `${get('day')} ${get('month')} ${get('year')}`
   })()
 
   try {
