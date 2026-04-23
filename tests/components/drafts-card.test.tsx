@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-// Regression test: approving a draft must dispatch 'transaction-saved' so that
-// RecentTransactions and ExpenseDashboard refresh without a manual page reload.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
@@ -34,12 +32,31 @@ const CATEGORY_DINING = { id: 'cat-dining', name: 'Dining Out', type: 'expense',
 const TAG_DINING = { id: 'tag-dining', name: 'Dining Out', created_at: '2024-01-01' }
 const TAG_WEEKEND = { id: 'tag-weekend', name: 'weekend', created_at: '2024-01-01' }
 
-function makeFetch(drafts = [DRAFT], { categories = [] as object[], tags = [] as object[] } = {}) {
+const ACCOUNT_DBS = { id: 'acc-1', name: 'DBS', type: 'bank', currency: 'SGD', is_active: 1, created_at: '2024-01-01', updated_at: '2024-01-01' }
+const ACCOUNT_CITI = { id: 'acc-2', name: 'Citi 9773', type: 'credit_card', currency: 'SGD', is_active: 1, created_at: '2024-01-01', updated_at: '2024-01-01' }
+
+const TRANSFER_DRAFT: Record<string, unknown> = {
+  ...DRAFT,
+  id: 'draft-transfer',
+  type: 'transfer',
+  to_account_id: 'acc-2',
+  to_account_name: 'Citi 9773',
+  account_id: 'acc-1',
+  payee: 'Savings Transfer',
+}
+
+function makeFetch(
+  drafts = [DRAFT] as object[],
+  { categories = [] as object[], tags = [] as object[], accounts = [] as object[] } = {},
+) {
   return vi.fn((url: string, opts?: RequestInit) => {
     if (typeof url === 'string' && url.includes('status=draft')) {
       return Promise.resolve({ ok: true, json: async () => ({ data: drafts, total: drafts.length }) })
     }
     if (typeof url === 'string' && url.includes('/api/accounts')) {
+      return Promise.resolve({ ok: true, json: async () => accounts })
+    }
+    if (typeof url === 'string' && url.includes('/api/categories/frequent')) {
       return Promise.resolve({ ok: true, json: async () => [] })
     }
     if (typeof url === 'string' && url.includes('/api/categories')) {
@@ -48,7 +65,6 @@ function makeFetch(drafts = [DRAFT], { categories = [] as object[], tags = [] as
     if (typeof url === 'string' && url.includes('/api/tags')) {
       return Promise.resolve({ ok: true, json: async () => tags })
     }
-    // PATCH to approve
     if (opts?.method === 'PATCH') {
       return Promise.resolve({ ok: true, json: async () => ({ ...DRAFT, status: 'approved' }) })
     }
@@ -110,6 +126,28 @@ describe('DraftsCard — BUG-029 regression: tag picker excludes category-named 
   })
 })
 
+// ---------------------------------------------------------------------------
+// Searchable category picker regression in DraftsCard edit form
+// ---------------------------------------------------------------------------
+describe('DraftsCard — searchable category picker in edit form', () => {
+  it('renders category-search-input (not legacy two-step selects) in edit form', async () => {
+    vi.stubGlobal('fetch', makeFetch([DRAFT], { categories: [CATEGORY_DINING] }))
+
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('NTUC')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    expect(screen.getByTestId('category-search-input')).toBeInTheDocument()
+    expect(screen.queryByTestId('parent-category-select')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('subcategory-select')).not.toBeInTheDocument()
+  })
+})
+
 describe('DraftsCard — approve dispatches transaction-saved (BUG)', () => {
   it('dispatches transaction-saved event when a draft is approved', async () => {
     vi.stubGlobal('fetch', makeFetch())
@@ -151,5 +189,62 @@ describe('DraftsCard — approve dispatches transaction-saved (BUG)', () => {
     fireEvent.click(screen.getByRole('button', { name: /approve all/i }))
 
     await waitFor(() => expect(received).toHaveLength(1))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// BUG-039: DraftsCard transfer type must show destination account picker
+// ---------------------------------------------------------------------------
+describe('DraftsCard — BUG-039: transfer type shows destination account picker', () => {
+  it('shows To Account label and select when editing a transfer draft', async () => {
+    vi.stubGlobal('fetch', makeFetch([TRANSFER_DRAFT], { accounts: [ACCOUNT_DBS, ACCOUNT_CITI] }))
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('Savings Transfer')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    expect(screen.getByText(/to account/i)).toBeInTheDocument()
+  })
+
+  it('does not show category picker when editing a transfer draft', async () => {
+    vi.stubGlobal('fetch', makeFetch([TRANSFER_DRAFT], { accounts: [ACCOUNT_DBS, ACCOUNT_CITI] }))
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('Savings Transfer')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    expect(screen.queryByTestId('category-search-input')).not.toBeInTheDocument()
+  })
+
+  it('sends to_account_id in PATCH body when saving a transfer draft', async () => {
+    const fetchMock = makeFetch([TRANSFER_DRAFT], { accounts: [ACCOUNT_DBS, ACCOUNT_CITI] })
+    vi.stubGlobal('fetch', fetchMock)
+    const { DraftsCard } = await import('@/app/(protected)/components/drafts-card')
+    render(<DraftsCard />)
+
+    fireEvent.click(screen.getByRole('button', { name: /drafts/i }))
+    await waitFor(() => expect(screen.getByText('Savings Transfer')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        ([, opts]) => (opts as RequestInit)?.method === 'PATCH'
+      )
+      expect(patchCall).toBeTruthy()
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string)
+      expect(body.to_account_id).toBe('acc-2')
+    })
   })
 })

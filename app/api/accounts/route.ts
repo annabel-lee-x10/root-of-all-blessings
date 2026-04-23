@@ -6,7 +6,9 @@ export async function GET() {
   const result = await db.execute(
     'SELECT * FROM accounts ORDER BY is_active DESC, type, name'
   )
-  return Response.json(result.rows as unknown as Account[])
+  return Response.json(result.rows as unknown as Account[], {
+    headers: { 'Cache-Control': 'private, max-age=30' },
+  })
 }
 
 export async function POST(request: NextRequest) {

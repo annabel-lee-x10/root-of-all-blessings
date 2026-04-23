@@ -1,7 +1,5 @@
-import { NewsClient } from './news-client'
-
-export const metadata = { title: 'Market News - Root OS' }
+import { redirect } from 'next/navigation'
 
 export default function NewsPage() {
-  return <NewsClient />
+  redirect('/portfolio')
 }

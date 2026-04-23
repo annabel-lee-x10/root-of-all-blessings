@@ -13,8 +13,8 @@ const INPUT = { padding: '0.45rem 0.7rem', borderRadius: '6px', border: '1px sol
 const SELECT = { ...INPUT, maxWidth: '100%' }
 const CARD = { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.25rem 1.5rem', marginBottom: '1rem' }
 
-const TYPE_ORDER = ['bank', 'wallet', 'cash', 'fund'] as const
-const TYPE_LABEL: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', fund: 'Fund' }
+const TYPE_ORDER = ['bank', 'wallet', 'cash', 'credit_card', 'fund'] as const
+const TYPE_LABEL: Record<string, string> = { bank: 'Bank', wallet: 'Wallet', cash: 'Cash', credit_card: 'Credit Card', fund: 'Fund' }
 const CURRENCIES = ['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'HKD', 'MYR', 'THB']
 
 type AccountWithCount = Account & { tx_count: number }

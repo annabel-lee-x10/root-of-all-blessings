@@ -12,6 +12,7 @@ interface EditForm {
   amount: string
   currency: string
   account_id: string
+  to_account_id: string
   category_id: string
   payee: string
   note: string
@@ -61,6 +62,7 @@ function txToForm(tx: TransactionRow): EditForm {
     amount: String(tx.amount),
     currency: tx.currency,
     account_id: tx.account_id,
+    to_account_id: tx.to_account_id ?? '',
     category_id: tx.category_id ?? '',
     payee: tx.payee ?? '',
     note: tx.note ?? '',
@@ -69,19 +71,26 @@ function txToForm(tx: TransactionRow): EditForm {
   }
 }
 
-export function DraftsCard() {
+export function DraftsCard({
+  accounts: initialAccounts,
+  categories: initialCategories,
+  tags: initialTags,
+}: {
+  accounts?: Account[]
+  categories?: Category[]
+  tags?: Tag[]
+} = {}) {
   const { showToast } = useToast()
   const [open, setOpen] = useState(false)
   const [drafts, setDrafts] = useState<TransactionRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
+  const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
+  const [categories, setCategories] = useState<Category[]>(initialCategories ?? [])
+  const [tags, setTags] = useState<Tag[]>(initialTags ?? [])
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [editTypeFilter, setEditTypeFilter] = useState<AccountType | ''>('')
-  const [editParentCategoryId, setEditParentCategoryId] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [approvingAll, setApprovingAll] = useState(false)
@@ -99,17 +108,19 @@ export function DraftsCard() {
   }, [])
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/accounts').then((r) => r.json()),
-      fetch('/api/categories').then((r) => r.json()),
-      fetch('/api/tags').then((r) => r.json()),
-    ]).then(([accts, cats, tgs]) => {
-      setAccounts(accts)
-      setCategories(cats)
-      setTags(tgs)
-    })
+    if (!initialAccounts) {
+      Promise.all([
+        fetch('/api/accounts').then((r) => r.json()),
+        fetch('/api/categories').then((r) => r.json()),
+        fetch('/api/tags').then((r) => r.json()),
+      ]).then(([accts, cats, tgs]) => {
+        setAccounts(accts)
+        setCategories(cats)
+        setTags(tgs)
+      })
+    }
     loadDrafts()
-  }, [loadDrafts])
+  }, [loadDrafts, initialAccounts])
 
   useEffect(() => {
     const handler = () => loadDrafts()
@@ -132,7 +143,8 @@ export function DraftsCard() {
         amount: amt,
         currency: editForm.currency,
         account_id: editForm.account_id,
-        category_id: editForm.category_id || null,
+        to_account_id: editForm.type === 'transfer' ? (editForm.to_account_id || null) : null,
+        category_id: editForm.type === 'transfer' ? null : (editForm.category_id || null),
         payee: editForm.payee || null,
         note: editForm.note || null,
         payment_method: selectedAccount?.type ?? null,
@@ -370,12 +382,6 @@ export function DraftsCard() {
                             setEditingId(tx.id)
                             setEditForm({ ...baseForm, account_id: defaultAccountId })
                             setEditTypeFilter(tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''))
-                            if (tx.category_id) {
-                              const cat = categories.find((c) => c.id === tx.category_id)
-                              setEditParentCategoryId(cat?.parent_id ?? cat?.id ?? '')
-                            } else {
-                              setEditParentCategoryId('')
-                            }
                           }
                         }}
                         style={BTN_SEC}
@@ -482,6 +488,25 @@ export function DraftsCard() {
                         </div>
                       </div>
 
+                      {/* To Account picker (transfers only) */}
+                      {editForm.type === 'transfer' && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <label style={LABEL}>To Account</label>
+                          <select
+                            style={SELECT}
+                            value={editForm.to_account_id}
+                            onChange={(e) => ef('to_account_id', e.target.value)}
+                          >
+                            <option value="">Select destination…</option>
+                            {activeAccounts
+                              .filter((a) => a.id !== editForm.account_id)
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
+
                       {/* Category two-step picker */}
                       {editForm.type !== 'transfer' && (
                         <div style={{ marginBottom: '8px' }}>
@@ -489,11 +514,9 @@ export function DraftsCard() {
                           <CategoryPicker
                             categories={categories}
                             txType={editForm.type}
-                            parentId={editParentCategoryId}
                             categoryId={editForm.category_id}
-                            onParentChange={setEditParentCategoryId}
-                            onCategoryChange={(cid) => ef('category_id', cid)}
-                            selectStyle={SELECT}
+                            onChange={(cid) => ef('category_id', cid)}
+                            inputStyle={SELECT}
                           />
                         </div>
                       )}

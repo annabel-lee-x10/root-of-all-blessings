@@ -48,7 +48,7 @@ describe('NewsClient – upload auto-triggers portfolio refresh (BUG-011)', () =
     const { NewsClient } = await import('@/app/(protected)/news/news-client')
     render(<NewsClient />)
 
-    await waitFor(() => expect(screen.getByText('Upload Portfolio')).toBeInTheDocument())
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
 
     const generateCallsBefore = fetchMock.mock.calls.filter(c => c[0] === '/api/news/generate').length
     expect(generateCallsBefore).toBe(0)
@@ -79,7 +79,7 @@ describe('NewsClient – upload auto-triggers portfolio refresh (BUG-011)', () =
     const { NewsClient } = await import('@/app/(protected)/news/news-client')
     render(<NewsClient />)
 
-    await waitFor(() => expect(screen.getByText('Upload Portfolio')).toBeInTheDocument())
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
 
     simulateUpload('<html><body>No tickers here</body></html>', 'empty.html')
 

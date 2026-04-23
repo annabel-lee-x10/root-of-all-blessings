@@ -1,6 +1,15 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 
+function computeDrift(label: string, referenceValue: number, computedValue: number): string | null {
+  const diff = referenceValue - computedValue
+  const threshold = Math.min(0.01 * Math.abs(referenceValue), 50)
+  if (Math.abs(diff) <= threshold) return null
+  const pct = (Math.abs(diff) / Math.abs(referenceValue)) * 100
+  const sign = diff >= 0 ? '+' : '-'
+  return `${label}: summary=${referenceValue.toFixed(2)} computed=${computedValue.toFixed(2)} diff=${sign}${Math.abs(diff).toFixed(2)} (${pct.toFixed(1)}%)`
+}
+
 // Maps DB portfolio_holdings row → component-expected Holding shape
 function mapHolding(h: Record<string, unknown>, totalValueUSD: number) {
   const value = h.value as number
@@ -46,6 +55,7 @@ function mapHolding(h: Record<string, unknown>, totalValueUSD: number) {
 }
 
 export async function GET() {
+  try {
   // Find the latest v2 snapshot (one that has snap_label set, distinguishing it from old schema)
   const snapResult = await db.execute(
     `SELECT * FROM portfolio_snapshots
@@ -81,13 +91,26 @@ export async function GET() {
 
   const holdings = (holdingsResult.rows as Record<string, unknown>[]).map(h => mapHolding(h, totalValueUSD))
 
+  // BUG-031: backfill unrealised_pnl from holdings when DB value is null/undefined.
+  // Use == null (not ===) to catch undefined, which occurs when the column doesn't
+  // exist in prod yet and SELECT * omits it from the result row.
+  let unrealised_pnl = (snap.unrealised_pnl ?? null) as number | null
+  if (unrealised_pnl == null) {
+    const pnlValues = (holdingsResult.rows as Record<string, unknown>[])
+      .map(h => h.pnl as number | null)
+      .filter((v): v is number => v !== null)
+    if (pnlValues.length > 0) {
+      unrealised_pnl = pnlValues.reduce((s, v) => s + v, 0)
+    }
+  }
+
   return Response.json({
     id: snap.id,
     snapshot_date: snap.snapshot_date,
     snap_label: snap.snap_label,
     snap_time: snap.snap_time,
     total_value: snap.total_value,
-    unrealised_pnl: snap.unrealised_pnl,
+    unrealised_pnl,
     realised_pnl: snap.realised_pnl,
     cash: snap.cash,
     pending: snap.pending,
@@ -99,6 +122,7 @@ export async function GET() {
     prior_realised: snap.prior_realised,
     prior_cash: snap.prior_cash,
     prior_holdings: snap.prior_holdings,
+    drift_warning: (snap.drift_warning as string | null) ?? null,
     created_at: snap.created_at,
     holdings,
     orders: ordersResult.rows,
@@ -106,6 +130,13 @@ export async function GET() {
     growth: growthResult.rows,
     milestones: milestonesResult.rows,
   })
+  } catch (err) {
+    console.error('[portfolio/snapshots] GET error:', err)
+    return Response.json(
+      { error: `Database error: ${err instanceof Error ? err.message : String(err)}. Run /api/migrate to set up schema.` },
+      { status: 500 }
+    )
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -124,13 +155,33 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString()
   const date = snapshot_date || now
 
+  // Compare declared total_value / unrealised_pnl against sum of holdings values.
+  // Only meaningful when holdings are provided — skip if array is empty.
+  const holdingsArr = holdings as Array<{ value?: number; pnl?: number | null }>
+  const drift_warning = (() => {
+    if (holdingsArr.length === 0) return null
+    const holdingsTotal = holdingsArr.reduce((s, h) => s + (h.value ?? 0), 0)
+    const pnlValues = holdingsArr.map(h => h.pnl).filter((v): v is number => v != null)
+    const holdingsPnl = pnlValues.length > 0 ? pnlValues.reduce((s, v) => s + v, 0) : null
+
+    const warnings: string[] = []
+    const tw = computeDrift('total_value', total_value, holdingsTotal)
+    if (tw) { console.warn('[portfolio/snapshots/drift]', tw); warnings.push(tw) }
+    if (unrealised_pnl != null && holdingsPnl !== null) {
+      const pw = computeDrift('unrealised_pnl', unrealised_pnl, holdingsPnl)
+      if (pw) { console.warn('[portfolio/snapshots/drift]', pw); warnings.push(pw) }
+    }
+    return warnings.length > 0 ? warnings.join('\n') : null
+  })()
+
   await db.execute({
     sql: `INSERT INTO portfolio_snapshots
       (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
        snap_label, snap_time, unrealised_pnl, realised_pnl, cash, pending,
        net_invested, net_deposited, dividends,
-       prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings)
-     VALUES (?,?,?,NULL,'[]',NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings,
+       drift_warning)
+     VALUES (?,?,?,NULL,'[]',NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [
       id, date, total_value, now,
       snap_label ?? null, snap_time ?? null,
@@ -139,6 +190,7 @@ export async function POST(request: NextRequest) {
       net_invested ?? null, net_deposited ?? null, dividends ?? null,
       prior_value ?? null, prior_unrealised ?? null, prior_realised ?? null,
       prior_cash ?? null, prior_holdings ?? null,
+      drift_warning,
     ],
   })
 

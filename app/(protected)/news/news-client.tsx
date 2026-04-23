@@ -326,7 +326,11 @@ const NAV_ITEMS = [
   { id: 'port', label: 'Portfolio' },
 ]
 
-export function NewsClient() {
+export function NewsClient({
+  sharedTickers,
+}: {
+  sharedTickers?: string[]
+} = {}) {
   const { showToast } = useToast()
   const [brief, setBrief] = useState<QsNewsBriefRow | null | undefined>(undefined)
   const [news, setNews] = useState<QsBriefSections>(EMPTY_SECTIONS)
@@ -338,6 +342,7 @@ export function NewsClient() {
   const [sentFilter, setSentFilter] = useState<'all' | Sentiment>('all')
   const fileRef = useRef<HTMLInputElement>(null)
   const propFetchedRef = useRef(false)
+  const sharedTickersPrevRef = useRef<string>('')
 
   // ── load brief from DB on mount ─────────────────────────────────────────────
   const loadBrief = useCallback(async () => {
@@ -349,7 +354,9 @@ export function NewsClient() {
       if (data?.brief_json) {
         try {
           const parsed = JSON.parse(data.brief_json) as QsBriefSections
-          setNews(parsed)
+          setNews({ ...EMPTY_SECTIONS, ...parsed })
+          // DB already has a prop result (even empty) — no need to auto-fetch on expand
+          if ('prop' in parsed) propFetchedRef.current = true
           if (data.tickers) {
             setPortfolioTickers(JSON.parse(data.tickers) as string[])
           }
@@ -361,6 +368,19 @@ export function NewsClient() {
   }, [])
 
   useEffect(() => { loadBrief() }, [loadBrief])
+
+  useEffect(() => {
+    if (sharedTickers === undefined) return
+    const key = sharedTickers.join(',')
+    if (key === sharedTickersPrevRef.current) return
+    sharedTickersPrevRef.current = key
+    setPortfolioTickers(sharedTickers)
+    if (sharedTickers.length > 0) {
+      void refreshPortfolioNews(sharedTickers)
+    }
+    // refreshPortfolioNews closes over stable state setters; intentionally omitted from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedTickers])
 
   useEffect(() => {
     function onOpenUpload() { fileRef.current?.click() }
@@ -487,6 +507,8 @@ export function NewsClient() {
         console.error(`Refresh error [${key}]:`, err)
       }
       setLoadingSections(p => ({ ...p, [key]: false }))
+      // Refresh covered prop — no auto-fetch needed if user opens it after this
+      if (key === 'prop') propFetchedRef.current = true
     }
 
     // Portfolio section
@@ -593,21 +615,6 @@ export function NewsClient() {
           ))}
 
           <div style={{ flex: 1 }} />
-
-          {/* Upload button */}
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            style={{
-              background: uploading ? 'var(--bg-dim)' : 'var(--bg-dim)',
-              border: `1px solid ${BORDER}`, color: uploading ? MUTED : TEXT,
-              borderRadius: 6, padding: '3px 10px',
-              fontSize: 'calc(13px - 2px)', cursor: uploading ? 'not-allowed' : 'pointer',
-              whiteSpace: 'nowrap', fontFamily: 'system-ui, sans-serif', flexShrink: 0,
-            }}
-          >
-            {uploading ? 'Uploading...' : portfolioTickers.length > 0 ? `Portfolio (${portfolioTickers.length})` : 'Upload Portfolio'}
-          </button>
 
           {/* Refresh button */}
           <button

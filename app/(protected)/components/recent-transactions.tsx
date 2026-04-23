@@ -58,17 +58,25 @@ const compactSelect: React.CSSProperties = {
 interface EditRow {
   typeFilter: AccountType | ''
   accountId: string
-  parentCategoryId: string
+  toAccountId: string
   categoryId: string
   tagIds: string[]
 }
 
-export function RecentTransactions() {
+export function RecentTransactions({
+  accounts: initialAccounts,
+  categories: initialCategories,
+  tags: initialTags,
+}: {
+  accounts?: Account[]
+  categories?: Category[]
+  tags?: Tag[]
+} = {}) {
   const { showToast } = useToast()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
+  const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
+  const [categories, setCategories] = useState<Category[]>(initialCategories ?? [])
+  const [tags, setTags] = useState<Tag[]>(initialTags ?? [])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -90,9 +98,11 @@ export function RecentTransactions() {
 
   useEffect(() => {
     load()
-    fetch('/api/accounts').then((r) => r.json()).then(setAccounts).catch(() => {})
-    fetch('/api/categories').then((r) => r.json()).then(setCategories).catch(() => {})
-    fetch('/api/tags').then((r) => r.json()).then(setTags).catch(() => {})
+    if (!initialAccounts) {
+      fetch('/api/accounts').then((r) => r.json()).then(setAccounts).catch(() => {})
+      fetch('/api/categories').then((r) => r.json()).then(setCategories).catch(() => {})
+      fetch('/api/tags').then((r) => r.json()).then(setTags).catch(() => {})
+    }
     const handler = () => load()
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)
@@ -109,7 +119,7 @@ export function RecentTransactions() {
     setEditRow({
       typeFilter: tx.type === 'expense' ? 'credit_card' : (accounts.find((a) => a.id === tx.account_id)?.type ?? ''),
       accountId: defaultAccountId,
-      parentCategoryId: cat ? (cat.parent_id ?? cat.id) : '',
+      toAccountId: tx.to_account_id ?? '',
       categoryId: tx.category_id ?? '',
       tagIds: tx.tags.map((t) => t.id),
     })
@@ -151,7 +161,8 @@ export function RecentTransactions() {
     const selectedAccount = accounts.find((a) => a.id === editRow.accountId)
     await patchTransaction(tx.id, {
       account_id: editRow.accountId,
-      category_id: editRow.categoryId || null,
+      to_account_id: tx.type === 'transfer' ? (editRow.toAccountId || null) : null,
+      category_id: tx.type === 'transfer' ? null : (editRow.categoryId || null),
       tag_ids: editRow.tagIds,
       payment_method: selectedAccount?.type ?? null,
     })
@@ -333,15 +344,31 @@ export function RecentTransactions() {
                         selectStyle={compactSelect}
                         pillsContainerStyle={{ marginBottom: '4px' }}
                       />
-                      <CategoryPicker
-                        categories={categories}
-                        txType={tx.type}
-                        parentId={editRow.parentCategoryId}
-                        categoryId={editRow.categoryId}
-                        onParentChange={(pid) => setEditRow((p) => p ? { ...p, parentCategoryId: pid } : p)}
-                        onCategoryChange={(id) => setEditRow((p) => p ? { ...p, categoryId: id } : p)}
-                        selectStyle={compactSelect}
-                      />
+                      {tx.type === 'transfer' ? (
+                        <div>
+                          <div style={{ color: '#8b949e', fontSize: '11px', marginBottom: '3px' }}>To Account</div>
+                          <select
+                            style={compactSelect}
+                            value={editRow.toAccountId}
+                            onChange={(e) => setEditRow((p) => p ? { ...p, toAccountId: e.target.value } : p)}
+                          >
+                            <option value="">Select destination…</option>
+                            {activeAccounts
+                              .filter((a) => a.id !== editRow.accountId)
+                              .map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <CategoryPicker
+                          categories={categories}
+                          txType={tx.type}
+                          categoryId={editRow.categoryId}
+                          onChange={(cid) => setEditRow((p) => p ? { ...p, categoryId: cid } : p)}
+                          inputStyle={compactSelect}
+                        />
+                      )}
                       {tags.length > 0 && (
                         <TagSelector
                           tags={tags}

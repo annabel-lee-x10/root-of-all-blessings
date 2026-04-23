@@ -10,7 +10,11 @@ function parseNum(s: string): number | undefined {
 }
 
 function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim()
 }
 
 function extractTableRows(html: string): string[][] {
@@ -38,7 +42,7 @@ function detectColumnMap(headers: string[]): Record<string, number> {
     ['avg_cost',       /avg.*cost|average.*cost|cost.*price|purchase.*price/i],
     ['current_price',  /current.*price|last.*price|market.*price|price/i],
     ['market_value',   /market.*val|current.*val|value|worth/i],
-    ['pnl',            /unrealised|unrealized|^p&l$|gain.*loss|profit.*loss|p\/l/i],
+    ['pnl',            /unrealised|unrealized|urz|p&l|gain.*loss|profit.*loss|p\/l/i],
     ['allocation_pct', /weight|alloc|portion/i],
     ['change_1d_pct',  /1d\s*%|1d\s+ch|day\s+ch|daily\s+ch/i],
   ]
@@ -51,6 +55,38 @@ function detectColumnMap(headers: string[]): Record<string, number> {
     }
   })
   return map
+}
+
+type PortfolioSummary = {
+  total_value?: number
+  unrealised_pnl?: number
+  realised_pnl?: number
+  cash?: number
+  pending?: number
+}
+
+// Returns a warning string if |referenceValue - computedValue| exceeds min(1%, $50) of reference.
+// Returns null when values are within threshold (no actionable drift).
+function computeDrift(label: string, referenceValue: number, computedValue: number): string | null {
+  const diff = referenceValue - computedValue
+  const threshold = Math.min(0.01 * Math.abs(referenceValue), 50)
+  if (Math.abs(diff) <= threshold) return null
+  const pct = (Math.abs(diff) / Math.abs(referenceValue)) * 100
+  const sign = diff >= 0 ? '+' : '-'
+  return `${label}: summary=${referenceValue.toFixed(2)} computed=${computedValue.toFixed(2)} diff=${sign}${Math.abs(diff).toFixed(2)} (${pct.toFixed(1)}%)`
+}
+
+// Extracts the machine-readable summary block the skill embeds in its HTML output:
+// <script type="application/json" id="portfolio-summary">{...}</script>
+// Values here are exact (FX-adjusted, including cash) and override all computed/carried-forward values.
+function parseSummary(html: string): PortfolioSummary {
+  const m = html.match(/<script[^>]*id=["']portfolio-summary["'][^>]*>([\s\S]*?)<\/script>/i)
+  if (!m) return {}
+  try {
+    return JSON.parse(m[1].trim()) as PortfolioSummary
+  } catch {
+    return {}
+  }
 }
 
 function parseHtml(html: string): { holdings: Holding[]; total_value: number; total_pnl: number | null } {
@@ -174,7 +210,8 @@ export async function GET() {
   const result = await db.execute(
     `SELECT id, snapshot_date, total_value, total_pnl, holdings_json, created_at,
             cash, pending, realised_pnl, net_invested, net_deposited, dividends,
-            prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings
+            prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings,
+            drift_warning
      FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1`
   )
   if (result.rows.length === 0) {
@@ -205,7 +242,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'html is required' }, { status: 400 })
   }
 
-  const { holdings, total_value, total_pnl } = parseHtml(html)
+  const { holdings, total_value: parsedTotal, total_pnl: parsedPnl } = parseHtml(html)
 
   if (holdings.length === 0) {
     return Response.json(
@@ -214,21 +251,122 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Extract machine-readable summary block embedded by the skill.
+  // Values here are FX-adjusted and include cash — they override all computed/carried-forward values.
+  const summary = parseSummary(html)
+  const total_value = summary.total_value ?? parsedTotal
+
   const id = crypto.randomUUID()
   const date = snapshot_date || new Date().toISOString()
   const now = new Date().toISOString()
 
-  await db.execute({
-    sql: `INSERT INTO portfolio_snapshots
-            (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
-             cash, pending, realised_pnl, net_invested, net_deposited, dividends,
-             prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    args: [id, date, total_value, total_pnl ?? null, JSON.stringify(holdings), html, now,
-           cash ?? 0, pending ?? 0, realised_pnl ?? 0, net_invested ?? null, net_deposited ?? null,
-           dividends ?? 0, prior_value ?? null, prior_unrealised ?? null,
-           prior_realised ?? null, prior_cash ?? null, snap_label ?? null, prior_holdings ?? null],
-  })
+  // Summary block values take priority over carry-forward.
+  // Explicit caller-provided values always win over both.
+  let effectiveCash = cash ?? summary.cash ?? null
+  let effectiveRealised = realised_pnl ?? summary.realised_pnl ?? null
+  let effectivePending = pending ?? summary.pending ?? null
+  let effectiveUnrealised = summary.unrealised_pnl ?? parsedPnl ?? null
+  let effectiveNetInvested = net_invested ?? null
+  let effectiveNetDeposited = net_deposited ?? null
+  let effectiveDividends = dividends ?? null
+  let effectivePriorValue = prior_value ?? null
+  let effectivePriorUnrealised = prior_unrealised ?? null
+  let effectivePriorRealised = prior_realised ?? null
+  let effectivePriorCash = prior_cash ?? null
 
-  return Response.json({ id, total_value, total_pnl, holdings_count: holdings.length }, { status: 201 })
+  if (effectiveCash === null && effectiveRealised === null) {
+    const prevResult = await db.execute(
+      `SELECT total_value, total_pnl, unrealised_pnl, realised_pnl, cash,
+              net_invested, net_deposited, dividends
+       FROM portfolio_snapshots
+       WHERE snap_label IS NOT NULL
+       ORDER BY snapshot_date DESC, created_at DESC LIMIT 1`
+    )
+    if (prevResult.rows.length > 0) {
+      const prev = prevResult.rows[0] as Record<string, unknown>
+      effectiveCash = (prev.cash as number | null) ?? null
+      effectiveRealised = (prev.realised_pnl as number | null) ?? null
+      effectiveNetInvested = (prev.net_invested as number | null) ?? null
+      effectiveNetDeposited = (prev.net_deposited as number | null) ?? null
+      effectiveDividends = (prev.dividends as number | null) ?? null
+      effectivePriorValue = effectivePriorValue ?? (prev.total_value as number | null) ?? null
+      effectivePriorUnrealised = effectivePriorUnrealised
+        ?? (prev.unrealised_pnl as number | null)
+        ?? (prev.total_pnl as number | null)
+        ?? null
+      effectivePriorRealised = effectivePriorRealised ?? (prev.realised_pnl as number | null) ?? null
+      effectivePriorCash = effectivePriorCash ?? (prev.cash as number | null) ?? null
+    }
+  }
+
+  // Compare summary block values against computed holdings sums.
+  // Threshold = min(1% of summary value, $50) — flag anything larger as informational drift.
+  const driftWarnings: string[] = []
+  if (summary.total_value !== undefined) {
+    const w = computeDrift('total_value', summary.total_value, parsedTotal)
+    if (w) { console.warn('[portfolio/drift]', w); driftWarnings.push(w) }
+  }
+  if (summary.unrealised_pnl !== undefined && parsedPnl !== null) {
+    const w = computeDrift('unrealised_pnl', summary.unrealised_pnl, parsedPnl)
+    if (w) { console.warn('[portfolio/drift]', w); driftWarnings.push(w) }
+  }
+  const drift_warning = driftWarnings.length > 0 ? driftWarnings.join('\n') : null
+
+  // Auto-generate snap_label so the v2 GET route (WHERE snap_label IS NOT NULL) can see this snapshot
+  const autoLabel = snap_label ?? (() => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Singapore',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).formatToParts(new Date(date))
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+    return `${get('day')} ${get('month')} ${get('year')}`
+  })()
+
+  try {
+    await db.execute({
+      sql: `INSERT INTO portfolio_snapshots
+              (id, snapshot_date, total_value, total_pnl, unrealised_pnl, holdings_json, raw_html, created_at,
+               cash, pending, realised_pnl, net_invested, net_deposited, dividends,
+               prior_value, prior_unrealised, prior_realised, prior_cash, snap_label, prior_holdings,
+               drift_warning)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      args: [id, date, total_value, parsedPnl ?? null, effectiveUnrealised ?? null,
+             JSON.stringify(holdings), html, now,
+             effectiveCash ?? 0, effectivePending ?? 0, effectiveRealised ?? 0, effectiveNetInvested,
+             effectiveNetDeposited, effectiveDividends ?? 0,
+             effectivePriorValue, effectivePriorUnrealised,
+             effectivePriorRealised, effectivePriorCash, autoLabel, prior_holdings ?? null,
+             drift_warning],
+    })
+
+    // Also insert into portfolio_holdings so the v2 snapshots route can serve individual holding rows.
+    // Apply enrichHolding so geo/sector/currency/ticker are resolved from the name-lookup table.
+    for (const h of holdings) {
+      const enriched = enrichHolding(h)
+      await db.execute({
+        sql: `INSERT INTO portfolio_holdings
+          (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
+           value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
+           is_new, approx, note, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        args: [
+          crypto.randomUUID(), id,
+          enriched.ticker ?? null, enriched.name, enriched.geo ?? null, enriched.sector ?? null, enriched.currency ?? null,
+          enriched.current_price ?? null, enriched.change_1d_pct ?? null,
+          enriched.market_value, enriched.pnl ?? null, enriched.units ?? null, null, enriched.avg_cost ?? null,
+          null, null, null,
+          0, 0, null, now,
+        ],
+      })
+    }
+  } catch (err) {
+    return Response.json(
+      { error: `Database error: ${err instanceof Error ? err.message : String(err)}. Run /api/migrate to set up schema.` },
+      { status: 500 }
+    )
+  }
+
+  return Response.json({ id, total_value, total_pnl: effectiveUnrealised, holdings_count: holdings.length }, { status: 201 })
 }

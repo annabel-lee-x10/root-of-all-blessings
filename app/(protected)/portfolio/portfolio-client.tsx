@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useContext, createContext } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToast } from '../components/toast'
+import { NewsClient } from '../news/news-client'
 import type { Holding } from '@/lib/types'
 
 // ── Theme tokens ───────────────────────────────────────────────────────────────
@@ -213,6 +214,26 @@ const TAG: React.CSSProperties = {
 }
 const WRAP: React.CSSProperties = { maxWidth: 430, margin: '0 auto', padding: '0 0 80px' }
 
+function ViewToggle({
+  view, onSwitch, theme,
+}: { view: 'dashboard' | 'news'; onSwitch: (v: 'dashboard' | 'news') => void; theme: Theme }) {
+  return (
+    <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}` }}>
+      {(['dashboard', 'news'] as const).map(v => (
+        <button key={v} onClick={() => onSwitch(v)} style={{
+          flex: 1, padding: '10px', background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: '0.82rem', fontWeight: view === v ? 700 : 400,
+          color: view === v ? theme.orange : theme.mid,
+          borderBottom: view === v ? `2px solid ${theme.orange}` : '2px solid transparent',
+          textTransform: 'capitalize',
+        }}>
+          {v === 'dashboard' ? 'Dashboard' : 'News'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function lb(col: string, T: Theme): React.CSSProperties {
   return {
     borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
@@ -221,28 +242,10 @@ function lb(col: string, T: Theme): React.CSSProperties {
 }
 
 // ── Upload panel ──────────────────────────────────────────────────────────────
-function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
+function UploadPanel({ onFile, disabled }: { onFile: (file: File) => void; disabled?: boolean }) {
   const T = useTheme()
-  const { showToast } = useToast()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
+  const panelFileRef = useRef<HTMLInputElement>(null)
   const [drag, setDrag] = useState(false)
-
-  async function handleFile(file: File) {
-    setUploading(true)
-    try {
-      const html = await file.text()
-      const res = await fetch('/api/portfolio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, snapshot_date: new Date().toISOString() }),
-      })
-      const data = await res.json()
-      if (!res.ok) { showToast(data.error || 'Parse failed', 'error'); return }
-      showToast(`Imported ${data.holdings_count} holdings`, 'success')
-      onUploaded()
-    } catch { showToast('Upload failed', 'error') }
-    finally { setUploading(false) }
-  }
 
   const BTN: React.CSSProperties = {
     padding: '0.35rem 0.85rem', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -257,10 +260,10 @@ function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
         Run <code>npm run seed:snap27</code> to load Snap 27 data, or upload a Syfe HTML export.
       </div>
       <div
-        onClick={() => fileRef.current?.click()}
+        onClick={() => panelFileRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDrag(true) }}
         onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+        onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFile(f) }}
         style={{
           border: `2px dashed ${drag ? T.orange : T.border}`, borderRadius: 10,
           padding: '2.5rem', cursor: 'pointer', marginBottom: 12,
@@ -268,13 +271,13 @@ function UploadPanel({ onUploaded }: { onUploaded: () => void }) {
         }}
       >
         <div style={{ color: drag ? T.orange : T.mid, fontSize: '0.9rem' }}>
-          {uploading ? 'Parsing…' : 'Drop HTML file here, or click to browse'}
+          {disabled ? 'Parsing…' : 'Drop HTML file here, or click to browse'}
         </div>
       </div>
-      <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-      <button style={BTN} onClick={() => fileRef.current?.click()} disabled={uploading}>
-        {uploading ? 'Importing…' : 'Choose File'}
+      <input ref={panelFileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
+      <button style={BTN} onClick={() => panelFileRef.current?.click()} disabled={disabled}>
+        {disabled ? 'Importing…' : 'Choose File'}
       </button>
     </div>
   )
@@ -952,6 +955,8 @@ export function PortfolioClient() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [tab, setTab] = useState<Tab>('holdings')
+  const [view, setView] = useState<'dashboard' | 'news'>('dashboard')
+  const [portfolioTickers, setPortfolioTickers] = useState<string[]>([])
   const [dark, setDark] = useState(() =>
     typeof document === 'undefined' ? true : document.documentElement.dataset.theme !== 'light'
   )
@@ -969,6 +974,7 @@ export function PortfolioClient() {
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/portfolio/snapshots')
+      if (!res.ok) { showToast('Failed to load portfolio', 'error'); return }
       const snap = await res.json()
       setSnapshot(snap)
     } catch { showToast('Failed to load portfolio', 'error') }
@@ -976,6 +982,12 @@ export function PortfolioClient() {
   }, [showToast])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    function onOpenUpload() { fileRef.current?.click() }
+    window.addEventListener('portfolio:open-upload', onOpenUpload)
+    return () => window.removeEventListener('portfolio:open-upload', onOpenUpload)
+  }, [])
 
   async function handleFile(file: File) {
     setUploading(true)
@@ -988,6 +1000,18 @@ export function PortfolioClient() {
       const data = await res.json()
       if (!res.ok) { showToast(data.error || 'Parse failed', 'error'); return }
       showToast(`Imported ${data.holdings_count} holdings`, 'success')
+
+      // Extract tickers for the News sub-view
+      try {
+        const form = new FormData()
+        form.append('file', file)
+        const tickerRes = await fetch('/api/news/upload', { method: 'POST', body: form })
+        if (tickerRes.ok) {
+          const { tickers } = await tickerRes.json() as { tickers: string[] }
+          setPortfolioTickers(tickers)
+        }
+      } catch { /* ticker extraction is best-effort */ }
+
       await load()
     } catch { showToast('Upload failed', 'error') }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
@@ -1012,33 +1036,12 @@ export function PortfolioClient() {
     </button>
   )
 
-  if (loading) {
-    return (
-      <ThemeCtx.Provider value={theme}>
-        <div style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}>
-          <div style={{ ...WRAP }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
-            <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
-          </div>
-        </div>
-      </ThemeCtx.Provider>
-    )
-  }
-
-  if (!snapshot) {
-    return (
-      <ThemeCtx.Provider value={theme}>
-        <div style={{ minHeight: '100vh', background: theme.bg, color: theme.pale, fontFamily: "'Sora', system-ui, sans-serif" }}>
-          <div style={WRAP}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 0' }}>{themeToggle}</div>
-            <UploadPanel onUploaded={load} />
-          </div>
-        </div>
-      </ThemeCtx.Provider>
-    )
-  }
-
-  const { holdings, total_value, unrealised_pnl, realised_pnl, cash } = snapshot
+  // Snapshot-dependent values (only used in dashboard view when snapshot exists)
+  const holdings = snapshot?.holdings ?? []
+  const total_value = snapshot?.total_value ?? 0
+  const unrealised_pnl = snapshot?.unrealised_pnl ?? null
+  const realised_pnl = snapshot?.realised_pnl ?? null
+  const cash = snapshot?.cash ?? null
   const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
   const pnlPct = unrealised_pnl !== null && total_value > 0
     ? (unrealised_pnl / (total_value - (unrealised_pnl ?? 0))) * 100 : null
@@ -1051,7 +1054,7 @@ export function PortfolioClient() {
       >
         <div style={WRAP}>
 
-          {/* Topbar */}
+          {/* Topbar — always visible */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: '14px 16px 10px', borderBottom: `1px solid ${theme.border}`,
@@ -1059,85 +1062,103 @@ export function PortfolioClient() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: '1rem', color: theme.pale }}>Portfolio</span>
-                {snapshot.snap_label && (
+                {snapshot?.snap_label && (
                   <span data-testid="snap-label" style={{ ...TAG, background: theme.orange + '22', color: theme.orange, fontSize: '0.72rem' }}>
                     {snapshot.snap_label}
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: '0.7rem', color: theme.mid, marginTop: 1 }}>
-                {snapshot.snap_time ?? snapshot.snapshot_date.slice(0, 10)} · {holdings.length} holdings
-              </div>
+              {snapshot && (
+                <div style={{ fontSize: '0.7rem', color: theme.mid, marginTop: 1 }}>
+                  {snapshot.snap_time ?? snapshot.snapshot_date.slice(0, 10)} · {holdings.length} holdings
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-              <button style={BTN_SEC} onClick={() => fileRef.current?.click()} disabled={uploading}>
-                {uploading ? 'Importing…' : 'Update Snapshot'}
-              </button>
+              {snapshot && (
+                <button style={BTN_SEC} onClick={() => fileRef.current?.click()} disabled={uploading}>
+                  {uploading ? 'Importing…' : 'Update Snapshot'}
+                </button>
+              )}
               {themeToggle}
             </div>
           </div>
 
-          {/* KPI row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 12px' }}>
-            {[
-              {
-                label: 'Value',
-                primary: `$${fmt(total_value)}`,
-                secondary: Math.abs(totalUSD - total_value) > 10 ? `~$${fmt(totalUSD)} USD` : null,
-                color: theme.pale,
-              },
-              {
-                label: 'Unrealised',
-                primary: unrealised_pnl !== null ? `${unrealised_pnl >= 0 ? '+' : ''}$${fmt(Math.abs(unrealised_pnl))}` : '—',
-                secondary: pnlPct !== null ? fmtPct(pnlPct) : null,
-                color: unrealised_pnl !== null ? pnlColor(unrealised_pnl, theme) : theme.mid,
-              },
-              {
-                label: 'Realised',
-                primary: realised_pnl !== null ? `${realised_pnl >= 0 ? '+' : ''}$${fmt(Math.abs(realised_pnl))}` : `${holdings.length} pos`,
-                secondary: cash !== null ? `Cash $${fmt(cash)}` : null,
-                color: realised_pnl !== null ? pnlColor(realised_pnl, theme) : theme.pale,
-              },
-            ].map(k => (
-              <div key={k.label} style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px' }}>
-                <div style={{ fontSize: '0.63rem', color: theme.mid, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{k.label}</div>
-                <div style={{ ...MONO, fontSize: '0.92rem', fontWeight: 700, color: k.color }}>{k.primary}</div>
-                {k.secondary && <div style={{ ...MONO, fontSize: '0.65rem', color: k.color, opacity: 0.75 }}>{k.secondary}</div>}
+          {/* Dashboard | News toggle — always visible */}
+          <ViewToggle view={view} onSwitch={setView} theme={theme} />
+
+          {/* Content */}
+          {view === 'news' ? (
+            <NewsClient sharedTickers={portfolioTickers} />
+          ) : loading ? (
+            <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
+          ) : !snapshot ? (
+            <UploadPanel onFile={handleFile} disabled={uploading} />
+          ) : (
+            <>
+              {/* KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 12px' }}>
+                {[
+                  {
+                    label: 'Value',
+                    primary: `$${fmt(total_value)}`,
+                    secondary: Math.abs(totalUSD - total_value) > 10 ? `~$${fmt(totalUSD)} USD` : null,
+                    color: theme.pale,
+                  },
+                  {
+                    label: 'Unrealised',
+                    primary: unrealised_pnl !== null ? `${unrealised_pnl >= 0 ? '+' : ''}$${fmt(Math.abs(unrealised_pnl))}` : '—',
+                    secondary: pnlPct !== null ? fmtPct(pnlPct) : null,
+                    color: unrealised_pnl !== null ? pnlColor(unrealised_pnl, theme) : theme.mid,
+                  },
+                  {
+                    label: 'Realised',
+                    primary: realised_pnl !== null ? `${realised_pnl >= 0 ? '+' : ''}$${fmt(Math.abs(realised_pnl))}` : `${holdings.length} pos`,
+                    secondary: cash !== null ? `Cash $${fmt(cash)}` : null,
+                    color: realised_pnl !== null ? pnlColor(realised_pnl, theme) : theme.pale,
+                  },
+                ].map(k => (
+                  <div key={k.label} style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontSize: '0.63rem', color: theme.mid, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{k.label}</div>
+                    <div style={{ ...MONO, fontSize: '0.92rem', fontWeight: 700, color: k.color }}>{k.primary}</div>
+                    {k.secondary && <div style={{ ...MONO, fontSize: '0.65rem', color: k.color, opacity: 0.75 }}>{k.secondary}</div>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Tab bar */}
-          <div style={{
-            display: 'flex', overflowX: 'auto', padding: '4px 12px 0',
-            borderBottom: `1px solid ${theme.border}`,
-            scrollbarWidth: 'none',
-          }}>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px',
-                fontSize: '0.78rem', fontWeight: tab === t.id ? 700 : 400, whiteSpace: 'nowrap',
-                color: tab === t.id ? theme.orange : theme.mid,
-                borderBottom: tab === t.id ? `2px solid ${theme.orange}` : '2px solid transparent',
-                transition: 'color 0.15s',
+              {/* Tab bar */}
+              <div style={{
+                display: 'flex', overflowX: 'auto', padding: '4px 12px 0',
+                borderBottom: `1px solid ${theme.border}`,
+                scrollbarWidth: 'none',
               }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+                {TABS.map(t => (
+                  <button key={t.id} onClick={() => setTab(t.id)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '8px 10px',
+                    fontSize: '0.78rem', fontWeight: tab === t.id ? 700 : 400, whiteSpace: 'nowrap',
+                    color: tab === t.id ? theme.orange : theme.mid,
+                    borderBottom: tab === t.id ? `2px solid ${theme.orange}` : '2px solid transparent',
+                    transition: 'color 0.15s',
+                  }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
 
-          {/* Tab content */}
-          <div style={{ paddingTop: 12 }}>
-            {tab === 'holdings' && <HoldingsTab holdings={holdings} />}
-            {tab === 'orders'   && <OrdersTab orders={snapshot.orders} snap={snapshot} />}
-            {tab === 'geo'      && <GeoTab holdings={holdings} />}
-            {tab === 'sector'   && <SectorTab holdings={holdings} />}
-            {tab === 'pnl'      && <PnlTab holdings={holdings} snap={snapshot} />}
-            {tab === 'whatif'   && <WhatIfTab holdings={holdings} />}
-            {tab === 'growth'   && <GrowthTab growth={snapshot.growth} milestones={snapshot.milestones} />}
-          </div>
+              {/* Tab content */}
+              <div style={{ paddingTop: 12 }}>
+                {tab === 'holdings' && <HoldingsTab holdings={holdings} />}
+                {tab === 'orders'   && <OrdersTab orders={snapshot.orders} snap={snapshot} />}
+                {tab === 'geo'      && <GeoTab holdings={holdings} />}
+                {tab === 'sector'   && <SectorTab holdings={holdings} />}
+                {tab === 'pnl'      && <PnlTab holdings={holdings} snap={snapshot} />}
+                {tab === 'whatif'   && <WhatIfTab holdings={holdings} />}
+                {tab === 'growth'   && <GrowthTab growth={snapshot.growth} milestones={snapshot.milestones} />}
+              </div>
+            </>
+          )}
 
         </div>
       </div>

@@ -57,6 +57,7 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_tx_account ON transactions(account_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions(type)`,
+    `CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(status)`,
     `CREATE TABLE IF NOT EXISTS portfolio_snapshots (
       id TEXT PRIMARY KEY,
       snapshot_date TEXT NOT NULL,
@@ -230,19 +231,40 @@ async function migrate() {
   try { await db.execute('ALTER TABLE portfolio_realised ADD COLUMN note TEXT') } catch { /* exists */ }
   try { await db.execute('ALTER TABLE portfolio_realised ADD COLUMN trade_date TEXT') } catch { /* exists */ }
 
-  // Phase 2: add day_high, day_low, prev_close to portfolio_holdings
+  // ── Portfolio V2 Phase 1: screenshot OCR pipeline columns ────────────────────
+
+  // portfolio_snapshots.source — tracks how this snapshot was created
+  try {
+    await db.execute("ALTER TABLE portfolio_snapshots ADD COLUMN source TEXT DEFAULT 'html_import'")
+  } catch { /* exists */ }
+
+  // portfolio_holdings — Phase 1 + Phase 2 extended detail columns
   const holdingsV2Cols: [string, string][] = [
     ['day_high',   'REAL'],
     ['day_low',    'REAL'],
     ['prev_close', 'REAL'],
+    ['weight',     'REAL'],
   ]
   for (const [col, type] of holdingsV2Cols) {
     try {
       await db.execute(`ALTER TABLE portfolio_holdings ADD COLUMN ${col} ${type}`)
-    } catch {
-      // Already exists
-    }
+    } catch { /* exists */ }
   }
+
+  // portfolio_transactions — new table for deposit/withdrawal/filled-order history
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS portfolio_transactions (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT REFERENCES portfolio_snapshots(id) ON DELETE CASCADE,
+      ticker TEXT,
+      type TEXT NOT NULL,
+      amount REAL,
+      currency TEXT NOT NULL DEFAULT 'SGD',
+      date TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
 
   console.log('Migrations complete.')
 }

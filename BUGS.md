@@ -9,6 +9,98 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-038 · Auto-generated snap_label has "(HTML import)" suffix and uses UTC date
+
+**Status:** Fixed
+**Reported:** 2026-04-23
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** When a portfolio snapshot is created via HTML upload without an explicit `snap_label`, the auto-generated label looks like `"22 Apr 2026 (HTML import)"` instead of the clean `"22 Apr 2026"`. Additionally, if the upload occurs late in the day (after 16:00 SGT / 08:00 UTC), the date can be off by one day because the label used UTC date methods while the user is in Singapore (UTC+8).
+
+**Root cause:** `autoLabel` was built with `getUTCDate()`, `getUTCMonth()`, `getUTCFullYear()` (UTC-based) and appended `(HTML import)` as a hardcoded suffix.
+
+**Fix:** Replaced UTC date methods with `Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', ... }).formatToParts()` to produce the correct calendar date in SGT. Removed the `(HTML import)` suffix entirely.
+
+**Regression tests:** `tests/regression/portfolio-snap-label.test.ts`
+
+**Follow-up (data migration):** The BUG-038 fix only applied to new uploads. Existing prod rows still had `"22 Apr 2026 (HTML import)"` labels with UTC-based dates. Two rows with `snapshot_date` at T23:33Z and T20:57Z were `23 Apr` SGT but mislabeled `22 Apr`. One row had `snap_label = NULL`. Fix: added `snap_label.strip_html_import` and `snap_label.backfill_nulls` migration steps to `POST /api/migrate`, plus a `GET /api/migrate` diagnostic endpoint. Run `/api/migrate` against prod to apply.
+
+**Data migration tests:** `tests/regression/portfolio-snap-label-migration.test.ts`
+
+---
+
+## BUG-037 · HTML upload snapshots show wrong total_value, realised_pnl, cash vs skill output
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** After uploading the skill's HTML report, all financial summary values are wrong:
+- `total_value` shows $14,229.64 instead of $14,369.02 (skill's total)
+- `realised_pnl` shows $430.88 instead of $469.50
+- `cash` shows $87.45 instead of $224.63
+- `unrealised_pnl` shows $405.39 instead of $411.38
+
+**Root cause 1 — total_value computed from equity sum only:** `parseHtml()` sums `market_value` across all holdings without FX conversion and without including cash. The skill's total_value is the true portfolio total (FX-adjusted, including cash). There is no way to derive this from the table alone.
+
+**Root cause 2 — carry-forward uses stale values:** When the caller doesn't provide `realised_pnl` and `cash`, the route carries them from the previous snapshot (`snap_label IS NOT NULL`). For Snap 28, the previous was Snap 27 ($430.88 / $87.45). Snap 28 updated those to $469.50 / $224.63 — but the HTML table contains neither.
+
+**Root cause 3 — unrealised_pnl never written on HTML upload:** `parseHtml()` returns `total_pnl` from the holdings sum, but the INSERT omits the `unrealised_pnl` column. The GET route backfills it live by summing `portfolio_holdings.pnl`. For non-USD holdings (WISE UK pnl in GBP, Z74 SG pnl in SGD), the stored value is in original currency but treated as USD — causing ~$6 undercount.
+
+**Fix:** Added `parseSummary(html)` which extracts a machine-readable `<script type="application/json" id="portfolio-summary">` block from the skill's HTML output. Values in this block take priority over all computed/carried-forward values. The skill embeds this block so the upload route reads exact numbers instead of approximating them.
+
+**Skill update:** Added the JSON summary block to the skill's HTML generation spec. Block includes: `total_value`, `unrealised_pnl`, `realised_pnl`, `cash`, `pending`.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts` — "BUG-037" describe block
+
+---
+
+## BUG-036 · HTML upload strips pnl from skill-generated reports (URZ P&L header not matched)
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** After uploading the syfe-portfolio skill's HTML report, all holdings have `pnl = null` and `avg_cost = null` in the database. The portfolio page shows "—" for unrealised P&L instead of the correct value.
+
+**Root cause:** Two independent failures in `parseHtml()`:
+
+1. **HTML entity encoding:** `stripTags()` strips HTML tags but does not decode HTML entities. The skill's HTML renders the pnl column header as `<th>URZ P&amp;L</th>`. After `stripTags()`, this becomes `"URZ P&amp;L"` (literal string), not `"URZ P&L"`. The pnl pattern `^p&l$` tests for a literal `&`, which can't match the 5-character sequence `&amp;`.
+
+2. **Over-anchored regex:** Even if the entity were decoded, `^p&l$` anchors require the header to be exactly `"p&l"` with nothing before or after. The actual header `"URZ P&L"` would fail the start anchor. Removing the anchors so the pattern reads `p&l` correctly matches any header containing `"p&l"` as a substring.
+
+**Fix:**
+- `stripTags()` now decodes common HTML entities (`&amp;`, `&lt;`, `&gt;`, `&nbsp;`, `&quot;`, `&#39;`) before returning.
+- `detectColumnMap` pnl pattern changed from `/^p&l$/i` to `/p&l/i` (substring match, no anchors).
+
+**Note:** `avg_cost` is not in the skill's HTML holdings table — the table only has Ticker, Price, 1D%, Value, URZ P&L, Qty, Weight. Adding avg_cost requires updating the skill's html-report-spec.md. Tracked separately.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts` — "BUG-036" describe block
+
+---
+
+## BUG-034 · Portfolio page shows "This page couldn't load" on mobile
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`, `app/api/portfolio/snapshots/route.ts`, `app/api/migrate/route.ts`
+
+**Symptom:** The portfolio page showed "This page couldn't load" on mobile immediately after loading.
+
+**Root cause 1 (client crash):** `PortfolioClient.load()` called `setSnapshot(snap)` without checking `res.ok`. When the API returned a 500 JSON error body (e.g. `{"error":"Database error"}`), `res.json()` succeeded and `setSnapshot` was called with the error object. Since the object is truthy, the component skipped the upload-panel branch and tried to destructure `holdings` from the error object — `undefined.reduce()` crashed React.
+
+**Root cause 2 (API 500):** The `/api/migrate` route never created the `portfolio_holdings` table. The `portfolio_realised` table was also wrongly created as `portfolio_realised_trades`. The `portfolio_growth` table was missing `label` and `next_text` columns. When the snapshots route queried `portfolio_holdings WHERE snapshot_id = ?`, it threw "no such table", causing all portfolio loads to 500.
+
+**Fix (client):** Added `if (!res.ok) { showToast('Failed to load portfolio', 'error'); return }` guard before `setSnapshot` — prevents setting truthy non-null state on API errors.
+
+**Fix (API):** Added `try/catch` to `GET /api/portfolio/snapshots` so it always returns JSON (never raw 500 HTML).
+
+**Fix (migration):** Added `portfolio_holdings` `CREATE TABLE IF NOT EXISTS`, added `portfolio_realised` with correct schema, and added `ALTER TABLE portfolio_growth ADD COLUMN` for `label` and `next_text` to `/api/migrate`.
+
+**Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-034" describe block
+
+---
+
 ## BUG-002 · News: `<cite>` tags render as visible text in card summaries
 
 **Status:** Fixed  
@@ -435,6 +527,22 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 
 ---
 
+## BUG-031 · Portfolio: UNREALISED P&L shows "--" when snapshot uploaded without unrealised_pnl
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** The UNREALISED KPI on the portfolio page showed "--" (double dash) even though all holdings had individual P&L values. Total VALUE was correct; only the aggregate unrealised figure was missing.
+
+**Root cause:** `GET /api/portfolio/snapshots` returned `snap.unrealised_pnl` directly from the DB column. Snapshots uploaded via the blessings-of-root-bless-this skill omit this field in the POST body, causing `unrealised_pnl ?? null` to store NULL. The handler had no fallback to compute the aggregate from the holdings' individual `pnl` values in `portfolio_holdings`.
+
+**Fix:** After loading holdings in the GET handler, if `snap.unrealised_pnl === null`, compute the aggregate by summing `pnl` from all holdings rows that have a non-null value. If no holdings have pnl values, `unrealised_pnl` remains null (renders "--" correctly). Explicit DB values are always respected and never overridden.
+
+**Regression test:** `tests/api/portfolio-snapshots.test.ts` — "BUG-031: backfills unrealised_pnl from holdings when snapshot has null unrealised_pnl" describe block
+
+---
+
 ## BUG-030 · OCR receipt: Date/Time field defaults to current timestamp instead of receipt date
 
 **Status:** Fixed
@@ -457,3 +565,161 @@ The `"` in `index="1-19,1-20"` terminates the JSON string early, making the enti
 **Fix (`app/api/receipts/process/route.ts`):** Added `isNaN(sgtDate.getTime())` guard so an unrecognised date format falls back to current time gracefully instead of throwing. Strengthened `RECEIPT_PROMPT` to explicitly tell Claude that dates appear on virtually all receipts and to output them in any format (converter handles the normalisation).
 
 **Regression tests:** `tests/parse-bless-this.test.ts` — six new date format cases; `tests/api/receipts.test.ts` — BUG-030 datetime extraction, fallback, and no-crash cases
+
+---
+
+## BUG-031 · Savings gauge SVG overflows on real Android phones (5th report — SVG removed)
+
+**Status:** Fixed (5th attempt — SVG removed entirely)
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/components/expense-dashboard.tsx`
+
+**Symptom:** The savings gauge arc was clipped or overflowing its card on real Android phones. PRs #64, #65, #66, #67 all deployed fixes that passed emulator tests but failed on physical devices.
+
+**Root cause:** SVG sizing is fundamentally unreliable on mobile browsers in flex containers. All four prior attempts (overflow:hidden, aspectRatio CSS, intrinsic width/height HTML attrs) failed on real Android. The SVG approach itself is the problem.
+
+**Fix:** Removed the entire SVG arc gauge. Replaced `SavingsGauge` with a plain-div horizontal progress bar: outer `div` with `overflow:hidden`/`border-radius` as the track, inner `div` with `width: ${progress}%` as the fill, and a text label below. No SVG, no arc geometry, no viewBox. Cannot overflow or collapse.
+
+**Regression test:** `tests/regression/gauge-overflow.test.tsx` — updated to assert no SVG present, bar div with overflow:hidden, and correct label text
+
+---
+
+## BUG-033 · Portfolio upload fails on prod: missing tables + no JSON error responses
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/migrate/route.ts`, `app/api/portfolio/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** On prod, uploading a portfolio HTML file shows "Upload failed" toast and the portfolio page shows "Failed to load portfolio". PR #66 (BUG-032 fix) deployed but did not resolve the prod errors.
+
+**Root cause (primary):** The `/api/migrate` route never created the `portfolio_holdings` table. When `POST /api/portfolio` (the HTML upload route) tried to `INSERT INTO portfolio_holdings`, it threw "no such table: portfolio_holdings". The route had no try-catch, so Next.js returned a 500 HTML error page. The client called `res.json()` on that HTML, which threw `SyntaxError`, landing in the outer `catch` → "Upload failed" toast.
+
+**Root cause (secondary):** The `/api/migrate` route created `portfolio_realised_trades` (wrong name) instead of `portfolio_realised`. The `GET /api/portfolio/snapshots` route (used to load the portfolio page) queries `portfolio_realised`. After an HTML upload, once a snapshot with `snap_label` existed, this SELECT failed → same 500 HTML path → "Failed to load portfolio".
+
+**Root cause (tertiary):** `portfolio_growth` was created by the migration with `next TEXT` instead of `next_text TEXT` and without a `label TEXT` column, diverging from the schema that `GET /api/portfolio/snapshots` expects.
+
+**Fix (migrate route):** Replaced the `portfolio_realised_trades` CREATE with the correct `portfolio_realised` table (columns: `id, snapshot_id, key, value, note, trade_date, created_at`). Added `portfolio_holdings` CREATE TABLE with all required columns. Fixed `portfolio_growth` schema (`label TEXT, next_text TEXT`). Added ALTER TABLE migrations to patch existing `portfolio_growth` tables with wrong column names. All table creations now tracked individually in the `migrations` response.
+
+**Fix (API routes):** Wrapped all DB operations in `POST /api/portfolio` and `GET /api/portfolio/snapshots` in try-catch. On DB failure, routes return `Response.json({ error: '...' }, { status: 500 })` instead of throwing — so `res.json()` never throws in the client, and the actual error message is surfaced.
+
+**Regression test:** `tests/regression/portfolio-migration.test.ts`
+
+---
+
+## BUG-031 · Dashboard: savings gauge SVG overflows card on mobile (3rd report)
+
+**Status:** Fixed
+**Reported:** 2026-04-21
+**Fixed in:** `app/(protected)/components/expense-dashboard.tsx`
+
+**Symptom:** On mobile (375px), the savings-rate semicircle arc extended well beyond the card boundaries — the arc top appeared above the "EXPENSE DASHBOARD" title and time-period pills (1D, 7D, 1M, 3M, Custom), the sides overflowed past the card edges, and the 3M pill was hidden behind the gauge. Reported three times; PR #61 was supposed to fix it but didn't.
+
+**Root cause (corrected after PR #64 regression):** The actual root cause is SVG height collapse on mobile. Without an explicit `aspectRatio`, mobile browsers (Safari/iOS, Chrome Android) collapse the SVG element's layout height to near-zero when inside certain block containers and the intrinsic height cannot be derived from CSS alone. Switching `overflow: 'visible'` → `overflow: 'hidden'` in PR #64 exposed this: `overflow: hidden` clips the SVG viewport, so a near-zero-height SVG clipped the arc into disconnected fragments rather than letting it overflow. `overflow: visible` masked the collapse by painting the arc outside bounds (as seen in the original bug — arc over the header). The fix is to prevent the height collapse, not just to clip the result.
+
+**Fix:** Added `aspectRatio: '200 / 120'` to the SVG element — this forces the browser to maintain the correct height relative to the SVG width, preventing collapse. Changed `overflow: 'visible'` → `overflow: 'hidden'` to prevent residual overflow. Reverted wrapper back to `textAlign: 'center'` with `overflow: 'hidden'` defense-in-depth. Arc geometry (viewBox, cy, cx, radius) unchanged.
+
+**Regression test:** `tests/regression/gauge-overflow.test.tsx`
+
+---
+
+## BUG-032 · Portfolio: HTML upload silently invisible after PR #63 refactor
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** Uploading a Syfe HTML export on the Portfolio page showed "Upload failed" toast (or succeeded silently) but the dashboard never reflected the uploaded data — the UploadPanel reappeared immediately after upload.
+
+**Root cause:** PR #63 refactored `portfolio-client.tsx` to use `GET /api/portfolio/snapshots` (v2 route) for display, which filters `WHERE snap_label IS NOT NULL`. However, `POST /api/portfolio` (the v1 upload route) continued inserting snapshots with `snap_label = null` and did not insert into the `portfolio_holdings` child table. Result: every HTML upload was structurally invisible to the v2 read path. Additionally, on fresh production deployments where `/api/migrate` had not been run, columns like `snap_label` might not exist, causing the INSERT to throw → 500 HTML response → `res.json()` throws SyntaxError → outer `catch` fires "Upload failed" toast.
+
+**Fix (`app/api/portfolio/route.ts` POST):**
+1. Auto-generate `snap_label` from the snapshot date (e.g. "22 Apr 2026 (HTML import)") so it is never null.
+2. After inserting into `portfolio_snapshots`, also insert each parsed holding into the `portfolio_holdings` table so the v2 GET can read them.
+3. Keep `holdings_json` populated for backward compatibility with the v1 GET route.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts`
+
+
+---
+
+## BUG-035 · Portfolio: HTML upload resets Realised, Cash, Net Invested to zero
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** After uploading a Syfe HTML export on the Portfolio page, the Realised KPI dropped from its correct value (e.g. +$430.88) to +$0.00, and Cash dropped from $87.45 to $0.00. The portfolio was visually "broken" even though holdings imported correctly.
+
+**Root cause:** `POST /api/portfolio` defaulted `realised_pnl`, `cash`, and related financial context to `0` / `null` when not provided in the request body. The UploadPanel only sends `{ html, snapshot_date }` — Syfe HTML exports do not contain realised P&L, cash balance, or net invested data. So every HTML upload silently overwrote the previous snapshot's financial context with zeros.
+
+**Fix (`app/api/portfolio/route.ts` POST):**
+Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from the request, fetch the most recent previous v2 snapshot and carry forward: `realised_pnl`, `cash`, `net_invested`, `net_deposited`, `dividends`, and sets `prior_*` fields from the previous snapshot so vs-prev comparisons continue to work. Explicit values in the request are always respected and never overridden.
+
+**Regression tests:** `tests/regression/portfolio-upload.test.ts` — BUG-035 describe block
+
+---
+
+## BUG-038 · Accounts page: credit_card accounts not displayed
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/accounts/page.tsx`
+
+**Symptom:** Credit card accounts (type `credit_card`) were invisible on the /accounts page — they did not appear under any section heading, and `credit_card` was absent from the Type dropdown when creating or editing an account.
+
+**Root cause:** `TYPE_ORDER` and `TYPE_LABEL` on lines 16–17 of the accounts page were missing `credit_card`. `groupByType` added credit_card accounts to the groups map, but `TYPE_ORDER.map(...)` never iterated over them, so they silently dropped from the render.
+
+**Fix:** Added `'credit_card'` to `TYPE_ORDER` (between `cash` and `fund`) and `credit_card: 'Credit Card'` to `TYPE_LABEL`.
+
+**Regression test:** `tests/components/accounts-page-credit-card.test.tsx`
+
+---
+
+## BUG-039 · Edit screens: switching type to Transfer shows no destination account picker
+
+**Status:** Fixed
+**Reported:** 2026-04-22
+**Fixed in:** `app/(protected)/components/drafts-card.tsx`, `app/(protected)/components/recent-transactions.tsx`
+
+**Symptom:** In the Dashboard edit screens (DraftsCard inline edit form and RecentTransactions inline edit form), switching a transaction's type to "Transfer" did not reveal a "To Account" destination account picker. The category picker was also still shown for transfer transactions in RecentTransactions, and `to_account_id` was never included in the PATCH body on save.
+
+**Root cause:** Both `DraftsCard` and `RecentTransactions` had incomplete `EditForm`/`EditRow` interfaces and edit form UIs. The working reference (`transactions/page.tsx`) had the pattern correct: `to_account_id` in the form state, a conditional "To Account" `<select>` when `type === 'transfer'`, hidden `CategoryPicker` for transfers, and `to_account_id` in the PATCH body. Neither dashboard component implemented any of this.
+
+**Fix:**
+- `DraftsCard`: Added `to_account_id` to `EditForm` interface and `txToForm()`, added conditional "To Account" select when `editForm.type === 'transfer'`, added `to_account_id` to `saveEdit()` PATCH body.
+- `RecentTransactions`: Added `toAccountId` to `EditRow` interface and `startEdit()`, added conditional "To Account" select when `tx.type === 'transfer'`, hidden `CategoryPicker` for transfers, added `to_account_id` to `saveEdit()` PATCH body.
+
+**Regression tests:** `tests/components/drafts-card.test.tsx` — BUG-039 describe block; `tests/components/recent-transactions.test.tsx` — BUG-039 describe block
+
+---
+
+## BUG-040 · News: "Upload Portfolio" button shown in sub-nav toolbar
+
+**Status:** Fixed
+**Reported:** 2026-04-23
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The sticky sub-nav toolbar on the News page contained an "Upload Portfolio" button alongside the section jump links and Refresh button. This was redundant — portfolio upload is already accessible via the (+) FAB in the bottom nav (which dispatches `news:open-upload` per BUG-021 fix). The button cluttered the toolbar.
+
+**Fix:** Removed the Upload Portfolio button from the sub-nav toolbar. The hidden `<input ref={fileRef}>` and `news:open-upload` event listener are retained so the FAB continues to work.
+
+**Regression test:** `tests/components/news-client-fab.test.tsx` — "Upload Portfolio button is NOT rendered in the sub-nav toolbar (BUG-040)"
+
+---
+
+## BUG-041 · News: Singapore Property shows gray skeleton cards every page load
+
+**Status:** Fixed
+**Reported:** 2026-04-23
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Every time the user navigated to the News page and expanded the Singapore Property section, 3 animated gray skeleton cards appeared for 10–30 seconds while an agentic API call was made — even when the DB already held a recent Property brief (empty or with stories).
+
+**Root cause:** `propFetchedRef` (the guard preventing repeated auto-fetches within a session) was only set to `true` by `handlePropOpen`. Neither `loadBrief` (which loads the DB brief on mount) nor `handleRefresh` (which refreshes all sections including Property) updated `propFetchedRef`. On every page load, `propFetchedRef.current = false`. If the Property section was expanded with `items.length === 0` (regardless of whether the DB had already been refreshed), `handlePropOpen` triggered, showing skeleton cards and making a redundant API call.
+
+**Fix:**
+- `loadBrief`: after successfully parsing DB data that contains a `prop` key, sets `propFetchedRef.current = true` — respects the DB result and skips auto-fetch.
+- `loadBrief`: changed `setNews(parsed)` to `setNews({ ...EMPTY_SECTIONS, ...parsed })` — prevents potential crash if DB data is from an older format that lacks some `QsBriefSections` keys.
+- `handleRefresh`: after finishing the `prop` section refresh, sets `propFetchedRef.current = true` — within the same session, no redundant auto-fetch after a manual Refresh.
+
+**Regression test:** `tests/components/news-property-auto-fetch.test.tsx` — "does NOT trigger a generate call when DB brief already has prop: [] (BUG-041)"
