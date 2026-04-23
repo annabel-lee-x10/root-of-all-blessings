@@ -426,3 +426,109 @@ describe('KPI row', () => {
     })
   })
 })
+
+// ── Phase 2 Feature 1: Day high/low + prev close in expanded holding ──────────
+describe('Holdings tab – day range and prev close (Phase 2)', () => {
+  const snapWithDayRange = {
+    ...SNAP,
+    holdings: BASE_HOLDINGS.map(h =>
+      h.ticker === 'MU'
+        ? { ...h, day_high: 330.50, day_low: 310.20, prev_close: 322.00 }
+        : h
+    ),
+  }
+
+  it('shows DAY RANGE section in expanded holding when day_high and day_low are present', async () => {
+    await renderDashboard(snapWithDayRange)
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => {
+      expect(screen.getByTestId('day-range-MU')).toBeInTheDocument()
+    })
+  })
+
+  it('displays day_high value in DAY RANGE section', async () => {
+    await renderDashboard(snapWithDayRange)
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => {
+      expect(screen.getByTestId('day-range-MU').textContent).toContain('330')
+    })
+  })
+
+  it('displays day_low value in DAY RANGE section', async () => {
+    await renderDashboard(snapWithDayRange)
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => {
+      expect(screen.getByTestId('day-range-MU').textContent).toContain('310')
+    })
+  })
+
+  it('shows PREV CLOSE section in expanded holding when prev_close is present', async () => {
+    await renderDashboard(snapWithDayRange)
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => {
+      expect(screen.getByTestId('prev-close-MU')).toBeInTheDocument()
+    })
+  })
+
+  it('displays prev_close value correctly', async () => {
+    await renderDashboard(snapWithDayRange)
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => {
+      expect(screen.getByTestId('prev-close-MU').textContent).toContain('322')
+    })
+  })
+
+  it('does not show DAY RANGE section when day_high and day_low are absent', async () => {
+    await renderDashboard() // BASE_HOLDINGS has no day_high/day_low
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => screen.getByTestId('holding-card-MU'))
+    expect(screen.queryByTestId('day-range-MU')).not.toBeInTheDocument()
+  })
+
+  it('does not show PREV CLOSE section when prev_close is absent', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByTestId('holding-card-MU'))
+    await waitFor(() => screen.getByTestId('holding-card-MU'))
+    expect(screen.queryByTestId('prev-close-MU')).not.toBeInTheDocument()
+  })
+})
+
+// ── Phase 2 Feature 2: Order status badge ─────────────────────────────────────
+describe('Orders tab – status badge (Phase 2)', () => {
+  const snapWithOrderStatus = {
+    ...SNAP,
+    orders: [
+      {
+        id: 'o1', snapshot_id: 'snap1',
+        ticker: 'ABBV', geo: 'US', type: 'SELL LIMIT',
+        price: 218, qty: 3, currency: 'USD',
+        placed: '07 Apr 20:44 SGT', current_price: 220,
+        note: '', new_flag: 0, status: 'open',
+      },
+      {
+        id: 'o2', snapshot_id: 'snap1',
+        ticker: 'AGIX', geo: 'US', type: 'BUY LIMIT',
+        price: 15.39, qty: 2, currency: 'USD',
+        placed: '08 Apr 01:17 SGT', current_price: 16.00,
+        note: '', new_flag: 0, status: 'open',
+      },
+    ],
+  }
+
+  it('shows status badge on each order in Orders tab', async () => {
+    await renderDashboard(snapWithOrderStatus)
+    fireEvent.click(screen.getByRole('button', { name: /^Orders$/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('order-status-ABBV')).toBeInTheDocument()
+      expect(screen.getByTestId('order-status-AGIX')).toBeInTheDocument()
+    })
+  })
+
+  it('status badge shows the order status value', async () => {
+    await renderDashboard(snapWithOrderStatus)
+    fireEvent.click(screen.getByRole('button', { name: /^Orders$/i }))
+    await waitFor(() => {
+      expect(screen.getByTestId('order-status-ABBV')).toHaveTextContent('open')
+    })
+  })
+})

@@ -230,6 +230,20 @@ async function migrate() {
   try { await db.execute('ALTER TABLE portfolio_realised ADD COLUMN note TEXT') } catch { /* exists */ }
   try { await db.execute('ALTER TABLE portfolio_realised ADD COLUMN trade_date TEXT') } catch { /* exists */ }
 
+  // Phase 2: add day_high, day_low, prev_close to portfolio_holdings
+  const holdingsV2Cols: [string, string][] = [
+    ['day_high',   'REAL'],
+    ['day_low',    'REAL'],
+    ['prev_close', 'REAL'],
+  ]
+  for (const [col, type] of holdingsV2Cols) {
+    try {
+      await db.execute(`ALTER TABLE portfolio_holdings ADD COLUMN ${col} ${type}`)
+    } catch {
+      // Already exists
+    }
+  }
+
   console.log('Migrations complete.')
 }
 
