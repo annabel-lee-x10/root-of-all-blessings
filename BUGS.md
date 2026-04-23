@@ -723,3 +723,19 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 - `handleRefresh`: after finishing the `prop` section refresh, sets `propFetchedRef.current = true` — within the same session, no redundant auto-fetch after a manual Refresh.
 
 **Regression test:** `tests/components/news-property-auto-fetch.test.tsx` — "does NOT trigger a generate call when DB brief already has prop: [] (BUG-041)"
+
+---
+
+## BUG-042 · Portfolio: screenshot UploadArea not visible when portfolio data exists
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** After PR #88 added the `UploadArea` OCR screenshot upload component, users who already had portfolio data could not see the upload UI. The page only showed a small "Downloads" button in the topbar with no way to upload new screenshots.
+
+**Root cause:** `UploadArea` was gated behind `!snapshot` — it only rendered when there was no portfolio data at all. Users with existing snapshots never saw it.
+
+**Fix:** Added `<UploadArea onUploaded={load} />` between the KPI row and the tab bar in the snapshot-exists branch of `PortfolioClient`, so it is always prominently visible regardless of whether snapshot data exists.
+
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload area visible when snapshot data exists"
