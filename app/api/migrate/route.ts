@@ -259,6 +259,7 @@ export async function POST() {
     { name: 'portfolio_growth.next_text', sql: 'ALTER TABLE portfolio_growth ADD COLUMN next_text TEXT' },
     { name: 'portfolio_snapshots.unrealised_pnl',   sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN unrealised_pnl REAL' },
     { name: 'portfolio_snapshots.drift_warning',    sql: 'ALTER TABLE portfolio_snapshots ADD COLUMN drift_warning TEXT' },
+    { name: 'transactions.idx_status', sql: 'CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(status)' },
     // Phase 1: screenshot OCR pipeline
     { name: 'portfolio_snapshots.source',           sql: "ALTER TABLE portfolio_snapshots ADD COLUMN source TEXT DEFAULT 'html_import'" },
     { name: 'portfolio_holdings.day_high',          sql: 'ALTER TABLE portfolio_holdings ADD COLUMN day_high REAL' },

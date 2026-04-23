@@ -71,14 +71,22 @@ function txToForm(tx: TransactionRow): EditForm {
   }
 }
 
-export function DraftsCard() {
+export function DraftsCard({
+  accounts: initialAccounts,
+  categories: initialCategories,
+  tags: initialTags,
+}: {
+  accounts?: Account[]
+  categories?: Category[]
+  tags?: Tag[]
+} = {}) {
   const { showToast } = useToast()
   const [open, setOpen] = useState(false)
   const [drafts, setDrafts] = useState<TransactionRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
+  const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
+  const [categories, setCategories] = useState<Category[]>(initialCategories ?? [])
+  const [tags, setTags] = useState<Tag[]>(initialTags ?? [])
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
@@ -100,17 +108,19 @@ export function DraftsCard() {
   }, [])
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/accounts').then((r) => r.json()),
-      fetch('/api/categories').then((r) => r.json()),
-      fetch('/api/tags').then((r) => r.json()),
-    ]).then(([accts, cats, tgs]) => {
-      setAccounts(accts)
-      setCategories(cats)
-      setTags(tgs)
-    })
+    if (!initialAccounts) {
+      Promise.all([
+        fetch('/api/accounts').then((r) => r.json()),
+        fetch('/api/categories').then((r) => r.json()),
+        fetch('/api/tags').then((r) => r.json()),
+      ]).then(([accts, cats, tgs]) => {
+        setAccounts(accts)
+        setCategories(cats)
+        setTags(tgs)
+      })
+    }
     loadDrafts()
-  }, [loadDrafts])
+  }, [loadDrafts, initialAccounts])
 
   useEffect(() => {
     const handler = () => loadDrafts()

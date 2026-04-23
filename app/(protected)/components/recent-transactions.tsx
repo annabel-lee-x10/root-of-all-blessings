@@ -63,12 +63,20 @@ interface EditRow {
   tagIds: string[]
 }
 
-export function RecentTransactions() {
+export function RecentTransactions({
+  accounts: initialAccounts,
+  categories: initialCategories,
+  tags: initialTags,
+}: {
+  accounts?: Account[]
+  categories?: Category[]
+  tags?: Tag[]
+} = {}) {
   const { showToast } = useToast()
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
+  const [accounts, setAccounts] = useState<Account[]>(initialAccounts ?? [])
+  const [categories, setCategories] = useState<Category[]>(initialCategories ?? [])
+  const [tags, setTags] = useState<Tag[]>(initialTags ?? [])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -90,9 +98,11 @@ export function RecentTransactions() {
 
   useEffect(() => {
     load()
-    fetch('/api/accounts').then((r) => r.json()).then(setAccounts).catch(() => {})
-    fetch('/api/categories').then((r) => r.json()).then(setCategories).catch(() => {})
-    fetch('/api/tags').then((r) => r.json()).then(setTags).catch(() => {})
+    if (!initialAccounts) {
+      fetch('/api/accounts').then((r) => r.json()).then(setAccounts).catch(() => {})
+      fetch('/api/categories').then((r) => r.json()).then(setCategories).catch(() => {})
+      fetch('/api/tags').then((r) => r.json()).then(setTags).catch(() => {})
+    }
     const handler = () => load()
     window.addEventListener('transaction-saved', handler)
     return () => window.removeEventListener('transaction-saved', handler)

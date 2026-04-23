@@ -8,7 +8,9 @@ export async function GET(request: NextRequest) {
     : 'SELECT * FROM categories ORDER BY type, sort_order, name'
   const args = type ? [type] : []
   const result = await db.execute({ sql, args })
-  return Response.json(result.rows)
+  return Response.json(result.rows, {
+    headers: { 'Cache-Control': 'private, max-age=30' },
+  })
 }
 
 export async function POST(request: NextRequest) {

@@ -57,6 +57,7 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_tx_account ON transactions(account_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id)`,
     `CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions(type)`,
+    `CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(status)`,
     `CREATE TABLE IF NOT EXISTS portfolio_snapshots (
       id TEXT PRIMARY KEY,
       snapshot_date TEXT NOT NULL,
