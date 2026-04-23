@@ -3,7 +3,9 @@ import { db } from '@/lib/db'
 
 export async function GET() {
   const result = await db.execute('SELECT * FROM tags ORDER BY name')
-  return Response.json(result.rows)
+  return Response.json(result.rows, {
+    headers: { 'Cache-Control': 'private, max-age=30' },
+  })
 }
 
 export async function POST(request: NextRequest) {

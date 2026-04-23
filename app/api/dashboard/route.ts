@@ -362,5 +362,5 @@ export async function GET(request: NextRequest) {
     range,
     start_date: startDate,
     end_date: endDate,
-  })
+  }, { headers: { 'Cache-Control': 'private, max-age=30' } })
 }
