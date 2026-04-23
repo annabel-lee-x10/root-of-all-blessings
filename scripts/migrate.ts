@@ -238,7 +238,7 @@ async function migrate() {
     await db.execute("ALTER TABLE portfolio_snapshots ADD COLUMN source TEXT DEFAULT 'html_import'")
   } catch { /* exists */ }
 
-  // portfolio_holdings — extended detail columns from individual stock views
+  // portfolio_holdings — Phase 1 + Phase 2 extended detail columns
   const holdingsV2Cols: [string, string][] = [
     ['day_high',   'REAL'],
     ['day_low',    'REAL'],

@@ -387,6 +387,9 @@ export function seedPortfolioHolding(
     note?: string | null
     dividend_amount?: number | null
     dividend_date?: string | null
+    day_high?: number | null
+    day_low?: number | null
+    prev_close?: number | null
   } = {}
 ) {
   const n = new Date().toISOString()
@@ -397,16 +400,19 @@ export function seedPortfolioHolding(
     sell_limit = null, buy_limit = null, target = null,
     change_1d = null, value_usd = null, is_new = false, approx = false,
     note = null, dividend_amount = null, dividend_date = null,
+    day_high = null, day_low = null, prev_close = null,
   } = opts
   testDb.prepare(
     `INSERT INTO portfolio_holdings
       (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
        value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
-       is_new, approx, note, dividend_amount, dividend_date, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       is_new, approx, note, dividend_amount, dividend_date,
+       day_high, day_low, prev_close, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, snapId, ticker, name, geo, sector, currency, price, change_1d,
     value, pnl, qty, value_usd, target, sell_limit, buy_limit,
-    is_new ? 1 : 0, approx ? 1 : 0, note, dividend_amount, dividend_date, n)
+    is_new ? 1 : 0, approx ? 1 : 0, note, dividend_amount, dividend_date,
+    day_high, day_low, prev_close, n)
 }
 
 // Unified order seeder. Use snapshot_id in opts for snapshot-linked orders;

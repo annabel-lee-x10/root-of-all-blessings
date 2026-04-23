@@ -72,6 +72,9 @@ interface ExtHolding extends Holding {
   note?: string | null
   dividend_amount?: number | null
   dividend_date?: string | null
+  day_high?: number | null
+  day_low?: number | null
+  prev_close?: number | null
 }
 
 interface PortfolioOrder {
@@ -86,6 +89,7 @@ interface PortfolioOrder {
   current_price: number | null
   note: string | null
   new_flag: number
+  status?: string | null
 }
 
 interface RealisedTrade {
@@ -394,6 +398,20 @@ function HoldingsTab({ holdings }: { holdings: ExtHolding[] }) {
                     <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>{sym}{fmt(h.current_price)}</div>
                   </div>
                 )}
+                {h.day_high != null && h.day_low != null && (
+                  <div data-testid={`day-range-${h.ticker}`} style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: '0.65rem', color: T.mid, marginBottom: 2 }}>DAY RANGE</div>
+                    <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>
+                      {sym}{fmt(h.day_low)} – {sym}{fmt(h.day_high)}
+                    </div>
+                  </div>
+                )}
+                {h.prev_close != null && (
+                  <div data-testid={`prev-close-${h.ticker}`}>
+                    <div style={{ fontSize: '0.65rem', color: T.mid, marginBottom: 2 }}>PREV CLOSE</div>
+                    <div style={{ ...MONO, fontSize: '0.82rem', color: T.pale }}>{sym}{fmt(h.prev_close)}</div>
+                  </div>
+                )}
                 {h.sell_limit != null && (
                   <div>
                     <div style={{ fontSize: '0.65rem', color: C.red, marginBottom: 2 }}>SELL LIMIT</div>
@@ -499,6 +517,10 @@ function OrdersTab({ orders, snap }: { orders: PortfolioOrder[]; snap: SnapRespo
                   {o.geo && <span style={{ ...TAG, background: gc + '22', color: gc }}>{o.geo}</span>}
                   <span data-testid={`order-type-${o.ticker}`} style={{ ...TAG, background: typeColor + '22', color: typeColor }}>{o.type}</span>
                   {o.new_flag === 1 && <span style={{ ...TAG, background: C.yellow + '22', color: C.yellow }}>NEW</span>}
+                  {o.status && (
+                    <span data-testid={`order-status-${o.ticker}`}
+                      style={{ ...TAG, background: T.border, color: T.mid }}>{o.status}</span>
+                  )}
                 </div>
                 <div style={{ fontSize: '0.72rem', color: T.mid, marginTop: 2 }}>
                   Qty {o.qty} · {o.placed}

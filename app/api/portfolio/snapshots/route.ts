@@ -47,6 +47,10 @@ function mapHolding(h: Record<string, unknown>, totalValueUSD: number) {
     note: h.note as string | null ?? null,
     dividend_amount: h.dividend_amount as number | null ?? null,
     dividend_date: h.dividend_date as string | null ?? null,
+    // Phase 2: intraday + prior-close fields
+    day_high: h.day_high as number | null ?? undefined,
+    day_low: h.day_low as number | null ?? undefined,
+    prev_close: h.prev_close as number | null ?? undefined,
   }
 }
 
@@ -66,7 +70,12 @@ export async function GET() {
   const [holdingsResult, ordersResult, realisedResult, growthResult, milestonesResult] =
     await Promise.all([
       db.execute({ sql: 'SELECT * FROM portfolio_holdings WHERE snapshot_id = ?', args: [snapId] }),
-      db.execute({ sql: 'SELECT * FROM portfolio_orders WHERE snapshot_id = ?', args: [snapId] }),
+      db.execute({
+        sql: `SELECT * FROM portfolio_orders
+              WHERE snapshot_id = ? OR (snapshot_id IS NULL AND status = 'open')
+              ORDER BY created_at DESC`,
+        args: [snapId],
+      }),
       db.execute({ sql: 'SELECT * FROM portfolio_realised WHERE snapshot_id = ?', args: [snapId] }),
       db.execute({ sql: 'SELECT * FROM portfolio_growth WHERE snapshot_id = ?', args: [snapId] }),
       db.execute({ sql: 'SELECT * FROM portfolio_milestones WHERE snapshot_id = ? ORDER BY sort_order', args: [snapId] }),
@@ -190,8 +199,9 @@ export async function POST(request: NextRequest) {
       sql: `INSERT INTO portfolio_holdings
         (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
          value, pnl, qty, value_usd, avg_cost, target, sell_limit, buy_limit,
-         is_new, approx, note, dividend_amount, dividend_date, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         is_new, approx, note, dividend_amount, dividend_date,
+         day_high, day_low, prev_close, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [
         crypto.randomUUID(), id,
         h.ticker ?? null, h.name, h.geo ?? null, h.sector ?? null, h.currency ?? null,
@@ -200,6 +210,7 @@ export async function POST(request: NextRequest) {
         h.target ?? null, h.sell_limit ?? null, h.buy_limit ?? null,
         h.is_new ? 1 : 0, h.approx ? 1 : 0,
         h.note ?? null, h.dividend_amount ?? null, h.dividend_date ?? null,
+        h.day_high ?? null, h.day_low ?? null, h.prev_close ?? null,
         now,
       ],
     })
