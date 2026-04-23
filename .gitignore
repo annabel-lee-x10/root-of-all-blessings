@@ -49,3 +49,8 @@ next-env.d.ts
 # personal data exports
 *.AndroMoney.csv
 AndroMoney.csv
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
