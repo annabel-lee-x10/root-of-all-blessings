@@ -1069,10 +1069,7 @@ export function PortfolioClient() {
 
           {/* Content */}
           {view === 'news' ? (
-            <NewsClient
-              sharedTickers={portfolioTickers}
-              onRequestUpload={() => fileRef.current?.click()}
-            />
+            <NewsClient sharedTickers={portfolioTickers} />
           ) : loading ? (
             <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
           ) : !snapshot ? (

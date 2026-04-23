@@ -686,3 +686,36 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 - `RecentTransactions`: Added `toAccountId` to `EditRow` interface and `startEdit()`, added conditional "To Account" select when `tx.type === 'transfer'`, hidden `CategoryPicker` for transfers, added `to_account_id` to `saveEdit()` PATCH body.
 
 **Regression tests:** `tests/components/drafts-card.test.tsx` — BUG-039 describe block; `tests/components/recent-transactions.test.tsx` — BUG-039 describe block
+
+---
+
+## BUG-040 · News: "Upload Portfolio" button shown in sub-nav toolbar
+
+**Status:** Fixed
+**Reported:** 2026-04-23
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The sticky sub-nav toolbar on the News page contained an "Upload Portfolio" button alongside the section jump links and Refresh button. This was redundant — portfolio upload is already accessible via the (+) FAB in the bottom nav (which dispatches `news:open-upload` per BUG-021 fix). The button cluttered the toolbar.
+
+**Fix:** Removed the Upload Portfolio button from the sub-nav toolbar. The hidden `<input ref={fileRef}>` and `news:open-upload` event listener are retained so the FAB continues to work.
+
+**Regression test:** `tests/components/news-client-fab.test.tsx` — "Upload Portfolio button is NOT rendered in the sub-nav toolbar (BUG-040)"
+
+---
+
+## BUG-041 · News: Singapore Property shows gray skeleton cards every page load
+
+**Status:** Fixed
+**Reported:** 2026-04-23
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Every time the user navigated to the News page and expanded the Singapore Property section, 3 animated gray skeleton cards appeared for 10–30 seconds while an agentic API call was made — even when the DB already held a recent Property brief (empty or with stories).
+
+**Root cause:** `propFetchedRef` (the guard preventing repeated auto-fetches within a session) was only set to `true` by `handlePropOpen`. Neither `loadBrief` (which loads the DB brief on mount) nor `handleRefresh` (which refreshes all sections including Property) updated `propFetchedRef`. On every page load, `propFetchedRef.current = false`. If the Property section was expanded with `items.length === 0` (regardless of whether the DB had already been refreshed), `handlePropOpen` triggered, showing skeleton cards and making a redundant API call.
+
+**Fix:**
+- `loadBrief`: after successfully parsing DB data that contains a `prop` key, sets `propFetchedRef.current = true` — respects the DB result and skips auto-fetch.
+- `loadBrief`: changed `setNews(parsed)` to `setNews({ ...EMPTY_SECTIONS, ...parsed })` — prevents potential crash if DB data is from an older format that lacks some `QsBriefSections` keys.
+- `handleRefresh`: after finishing the `prop` section refresh, sets `propFetchedRef.current = true` — within the same session, no redundant auto-fetch after a manual Refresh.
+
+**Regression test:** `tests/components/news-property-auto-fetch.test.tsx` — "does NOT trigger a generate call when DB brief already has prop: [] (BUG-041)"

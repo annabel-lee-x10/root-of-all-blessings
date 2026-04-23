@@ -328,10 +328,8 @@ const NAV_ITEMS = [
 
 export function NewsClient({
   sharedTickers,
-  onRequestUpload,
 }: {
   sharedTickers?: string[]
-  onRequestUpload?: () => void
 } = {}) {
   const { showToast } = useToast()
   const [brief, setBrief] = useState<QsNewsBriefRow | null | undefined>(undefined)
@@ -356,7 +354,9 @@ export function NewsClient({
       if (data?.brief_json) {
         try {
           const parsed = JSON.parse(data.brief_json) as QsBriefSections
-          setNews(parsed)
+          setNews({ ...EMPTY_SECTIONS, ...parsed })
+          // DB already has a prop result (even empty) — no need to auto-fetch on expand
+          if ('prop' in parsed) propFetchedRef.current = true
           if (data.tickers) {
             setPortfolioTickers(JSON.parse(data.tickers) as string[])
           }
@@ -507,6 +507,8 @@ export function NewsClient({
         console.error(`Refresh error [${key}]:`, err)
       }
       setLoadingSections(p => ({ ...p, [key]: false }))
+      // Refresh covered prop — no auto-fetch needed if user opens it after this
+      if (key === 'prop') propFetchedRef.current = true
     }
 
     // Portfolio section
@@ -613,21 +615,6 @@ export function NewsClient({
           ))}
 
           <div style={{ flex: 1 }} />
-
-          {/* Upload button */}
-          <button
-            onClick={() => onRequestUpload ? onRequestUpload() : fileRef.current?.click()}
-            disabled={uploading}
-            style={{
-              background: uploading ? 'var(--bg-dim)' : 'var(--bg-dim)',
-              border: `1px solid ${BORDER}`, color: uploading ? MUTED : TEXT,
-              borderRadius: 6, padding: '3px 10px',
-              fontSize: 'calc(13px - 2px)', cursor: uploading ? 'not-allowed' : 'pointer',
-              whiteSpace: 'nowrap', fontFamily: 'system-ui, sans-serif', flexShrink: 0,
-            }}
-          >
-            {uploading ? 'Uploading...' : portfolioTickers.length > 0 ? `Portfolio (${portfolioTickers.length})` : 'Upload Portfolio'}
-          </button>
 
           {/* Refresh button */}
           <button
