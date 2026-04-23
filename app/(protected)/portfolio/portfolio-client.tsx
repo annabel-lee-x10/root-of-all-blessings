@@ -5,6 +5,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToast } from '../components/toast'
 import { NewsClient } from '../news/news-client'
 import type { Holding } from '@/lib/types'
+import { UploadArea } from './upload-area'
+import { DownloadsModal } from './downloads-modal'
 
 // ── Theme tokens ───────────────────────────────────────────────────────────────
 const DARK = {
@@ -239,48 +241,6 @@ function lb(col: string, T: Theme): React.CSSProperties {
     borderTop: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
     borderBottom: `1px solid ${T.border}`, borderLeft: `4px solid ${col}`,
   }
-}
-
-// ── Upload panel ──────────────────────────────────────────────────────────────
-function UploadPanel({ onFile, disabled }: { onFile: (file: File) => void; disabled?: boolean }) {
-  const T = useTheme()
-  const panelFileRef = useRef<HTMLInputElement>(null)
-  const [drag, setDrag] = useState(false)
-
-  const BTN: React.CSSProperties = {
-    padding: '0.35rem 0.85rem', borderRadius: 6, border: 'none', cursor: 'pointer',
-    fontSize: '0.8rem', fontWeight: 600, background: T.orange, color: '#fff',
-  }
-
-  return (
-    <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-      <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>
-      <div style={{ color: T.pale, fontSize: '1.1rem', fontWeight: 600, marginBottom: 8 }}>No portfolio data yet</div>
-      <div style={{ color: T.mid, fontSize: '0.85rem', marginBottom: 24, lineHeight: 1.6 }}>
-        Run <code>npm run seed:snap27</code> to load Snap 27 data, or upload a Syfe HTML export.
-      </div>
-      <div
-        onClick={() => panelFileRef.current?.click()}
-        onDragOver={e => { e.preventDefault(); setDrag(true) }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFile(f) }}
-        style={{
-          border: `2px dashed ${drag ? T.orange : T.border}`, borderRadius: 10,
-          padding: '2.5rem', cursor: 'pointer', marginBottom: 12,
-          background: drag ? 'rgba(232,82,10,0.05)' : 'transparent',
-        }}
-      >
-        <div style={{ color: drag ? T.orange : T.mid, fontSize: '0.9rem' }}>
-          {disabled ? 'Parsing…' : 'Drop HTML file here, or click to browse'}
-        </div>
-      </div>
-      <input ref={panelFileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
-      <button style={BTN} onClick={() => panelFileRef.current?.click()} disabled={disabled}>
-        {disabled ? 'Importing…' : 'Choose File'}
-      </button>
-    </div>
-  )
 }
 
 // ── Tab: Holdings ─────────────────────────────────────────────────────────────
@@ -957,6 +917,7 @@ export function PortfolioClient() {
   const [tab, setTab] = useState<Tab>('holdings')
   const [view, setView] = useState<'dashboard' | 'news'>('dashboard')
   const [portfolioTickers, setPortfolioTickers] = useState<string[]>([])
+  const [showDownloads, setShowDownloads] = useState(false)
   const [dark, setDark] = useState(() =>
     typeof document === 'undefined' ? true : document.documentElement.dataset.theme !== 'light'
   )
@@ -1077,11 +1038,9 @@ export function PortfolioClient() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-              {snapshot && (
-                <button style={BTN_SEC} onClick={() => fileRef.current?.click()} disabled={uploading}>
-                  {uploading ? 'Importing…' : 'Update Snapshot'}
-                </button>
-              )}
+              <button style={BTN_SEC} onClick={() => setShowDownloads(true)}>
+                Downloads
+              </button>
               {themeToggle}
             </div>
           </div>
@@ -1095,7 +1054,10 @@ export function PortfolioClient() {
           ) : loading ? (
             <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
           ) : !snapshot ? (
-            <UploadPanel onFile={handleFile} disabled={uploading} />
+            <div>
+              <div style={{ padding: '2rem 1.5rem 0', textAlign: 'center', color: theme.pale, fontWeight: 600, fontSize: '1.1rem' }}>No portfolio data yet</div>
+              <UploadArea onUploaded={load} />
+            </div>
           ) : (
             <>
               {/* KPI row */}
@@ -1162,6 +1124,7 @@ export function PortfolioClient() {
 
         </div>
       </div>
+      <DownloadsModal open={showDownloads} onClose={() => setShowDownloads(false)} />
     </ThemeCtx.Provider>
   )
 }
