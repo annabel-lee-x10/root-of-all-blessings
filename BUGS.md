@@ -9,6 +9,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-038 · Auto-generated snap_label has "(HTML import)" suffix and uses UTC date
+
+**Status:** Fixed
+**Reported:** 2026-04-23
+**Fixed in:** `app/api/portfolio/route.ts`
+
+**Symptom:** When a portfolio snapshot is created via HTML upload without an explicit `snap_label`, the auto-generated label looks like `"22 Apr 2026 (HTML import)"` instead of the clean `"22 Apr 2026"`. Additionally, if the upload occurs late in the day (after 16:00 SGT / 08:00 UTC), the date can be off by one day because the label used UTC date methods while the user is in Singapore (UTC+8).
+
+**Root cause:** `autoLabel` was built with `getUTCDate()`, `getUTCMonth()`, `getUTCFullYear()` (UTC-based) and appended `(HTML import)` as a hardcoded suffix.
+
+**Fix:** Replaced UTC date methods with `Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', ... }).formatToParts()` to produce the correct calendar date in SGT. Removed the `(HTML import)` suffix entirely.
+
+**Regression tests:** `tests/regression/portfolio-snap-label.test.ts`
+
+---
+
 ## BUG-037 · HTML upload snapshots show wrong total_value, realised_pnl, cash vs skill output
 
 **Status:** Fixed
