@@ -48,7 +48,7 @@ export function UploadArea({ onUploaded }: { onUploaded: () => void }) {
         setError((data.error as string) ?? 'Scan failed')
         return
       }
-      const r = data as ScanResult
+      const r = data as unknown as ScanResult
       setResult(r)
       showToast(`Imported ${r.holdings_count} holdings`, 'success')
       onUploaded()
