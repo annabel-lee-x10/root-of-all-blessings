@@ -42,15 +42,10 @@ describe('NewsClient — FAB upload trigger (BUG-021)', () => {
     expect(container.textContent).not.toContain('Portfolio News')
   })
 
-  it('Upload Portfolio button triggers file input click', async () => {
-    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+  it('Upload Portfolio button is NOT rendered in the sub-nav toolbar (BUG-040)', async () => {
     const { NewsClient } = await import('@/app/(protected)/news/news-client')
-    const { getByRole } = render(<NewsClient />)
+    const { queryByRole } = render(<NewsClient />)
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
-    // The sub-nav upload button should also work
-    const uploadBtn = getByRole('button', { name: /upload portfolio/i })
-    uploadBtn.click()
-    expect(clickSpy).toHaveBeenCalledTimes(1)
-    clickSpy.mockRestore()
+    expect(queryByRole('button', { name: /upload portfolio/i })).not.toBeInTheDocument()
   })
 })

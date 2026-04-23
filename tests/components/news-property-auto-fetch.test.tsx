@@ -92,6 +92,42 @@ describe('NewsClient – Singapore Property auto-fetch on expand (BUG-012)', () 
     expect(callsAfter).toBe(callsBefore)
   })
 
+  it('does NOT trigger a generate call when DB brief already has prop: [] (BUG-041)', async () => {
+    // DB brief contains prop: [] — a previous Refresh already ran for property.
+    // Opening the section should show "No stories yet" immediately, not skeleton + fetch.
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/news') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'brief-1',
+            generated_at: new Date().toISOString(),
+            brief_json: JSON.stringify({
+              world: [], sg: [], prop: [], jobsGlobal: [], jobsSg: [], port: [],
+            }),
+            tickers: null,
+          }),
+        })
+      }
+      if (url === '/api/news/generate') return Promise.resolve(endTurnResponse())
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    const { NewsClient } = await import('@/app/(protected)/news/news-client')
+    render(<NewsClient />)
+    await waitFor(() => expect(screen.getByText('Singapore Property')).toBeInTheDocument())
+
+    const callsBefore = fetchMock.mock.calls.filter(c => c[0] === '/api/news/generate').length
+
+    // Expand the collapsed Property section — DB already has prop (empty), so no re-fetch
+    fireEvent.click(screen.getByText('Singapore Property'))
+
+    await new Promise(r => setTimeout(r, 150))
+
+    const callsAfter = fetchMock.mock.calls.filter(c => c[0] === '/api/news/generate').length
+    expect(callsAfter).toBe(callsBefore)
+  })
+
   it('does not re-fetch when collapsing and re-expanding a Property section that now has stories', async () => {
     // First expand triggers a fetch that populates stories, second expand should not
     const { NewsClient } = await import('@/app/(protected)/news/news-client')

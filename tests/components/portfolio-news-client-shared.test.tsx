@@ -31,20 +31,10 @@ describe('NewsClient — sharedTickers prop', () => {
     expect(screen.getByText('Portfolio News')).toBeInTheDocument()
   })
 
-  it('calls onRequestUpload when Upload Portfolio button is clicked with onRequestUpload provided', async () => {
-    const onRequestUpload = vi.fn()
+  it('does not render an Upload Portfolio button in the sub-nav (BUG-040)', async () => {
     const { NewsClient } = await import('@/app/(protected)/news/news-client')
-    render(<NewsClient sharedTickers={[]} onRequestUpload={onRequestUpload} />)
+    const { queryByRole } = render(<NewsClient sharedTickers={[]} />)
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
-    const uploadBtn = screen.getByRole('button', { name: /upload portfolio/i })
-    uploadBtn.click()
-    expect(onRequestUpload).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows ticker count in upload button when sharedTickers has items', async () => {
-    const { NewsClient } = await import('@/app/(protected)/news/news-client')
-    render(<NewsClient sharedTickers={['NVDA', 'MU', 'AAPL']} onRequestUpload={vi.fn()} />)
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
-    expect(screen.getByRole('button', { name: /portfolio \(3\)/i })).toBeInTheDocument()
+    expect(queryByRole('button', { name: /upload portfolio/i })).not.toBeInTheDocument()
   })
 })
