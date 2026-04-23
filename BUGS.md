@@ -23,6 +23,10 @@ Track confirmed bugs here before they are fixed. Format:
 
 **Regression tests:** `tests/regression/portfolio-snap-label.test.ts`
 
+**Follow-up (data migration):** The BUG-038 fix only applied to new uploads. Existing prod rows still had `"22 Apr 2026 (HTML import)"` labels with UTC-based dates. Two rows with `snapshot_date` at T23:33Z and T20:57Z were `23 Apr` SGT but mislabeled `22 Apr`. One row had `snap_label = NULL`. Fix: added `snap_label.strip_html_import` and `snap_label.backfill_nulls` migration steps to `POST /api/migrate`, plus a `GET /api/migrate` diagnostic endpoint. Run `/api/migrate` against prod to apply.
+
+**Data migration tests:** `tests/regression/portfolio-snap-label-migration.test.ts`
+
 ---
 
 ## BUG-037 · HTML upload snapshots show wrong total_value, realised_pnl, cash vs skill output

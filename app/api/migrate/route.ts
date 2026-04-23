@@ -1,6 +1,27 @@
 import { verifySession } from '@/lib/session'
 import { db } from '@/lib/db'
 
+function sgtLabel(snapshotDate: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Singapore',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).formatToParts(new Date(snapshotDate))
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? ''
+  return `${get('day')} ${get('month')} ${get('year')}`
+}
+
+export async function GET() {
+  const valid = await verifySession()
+  if (!valid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const result = await db.execute(
+    'SELECT id, snapshot_date, snap_label, snap_time FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 10'
+  )
+  return Response.json({ snapshots: result.rows })
+}
+
 // ── Subcategory hierarchy ─────────────────────────────────────────────────────
 //
 // Defines which subcategory names belong under which parent name.
@@ -475,6 +496,46 @@ export async function POST() {
     results['remapped'] = `${totalRemapped} transactions`
   } catch (err) {
     results['remap_error'] = String(err)
+  }
+
+  // ── BUG-038: strip "(HTML import)" suffix + recalculate date in SGT ──────────
+  try {
+    const htmlImportRows = await db.execute(
+      "SELECT id, snapshot_date FROM portfolio_snapshots WHERE snap_label LIKE '% (HTML import)'"
+    )
+    let stripped = 0
+    for (const row of htmlImportRows.rows) {
+      const id = row.id as string
+      const snapshotDate = row.snapshot_date as string
+      await db.execute({
+        sql: 'UPDATE portfolio_snapshots SET snap_label = ? WHERE id = ?',
+        args: [sgtLabel(snapshotDate), id],
+      })
+      stripped++
+    }
+    results['snap_label.strip_html_import'] = `${stripped} rows updated`
+  } catch (err) {
+    results['snap_label.strip_html_import'] = `error: ${err}`
+  }
+
+  // ── BUG-038: backfill NULL snap_labels with SGT date ─────────────────────────
+  try {
+    const nullLabelRows = await db.execute(
+      'SELECT id, snapshot_date FROM portfolio_snapshots WHERE snap_label IS NULL'
+    )
+    let backfilled = 0
+    for (const row of nullLabelRows.rows) {
+      const id = row.id as string
+      const snapshotDate = row.snapshot_date as string
+      await db.execute({
+        sql: 'UPDATE portfolio_snapshots SET snap_label = ? WHERE id = ?',
+        args: [sgtLabel(snapshotDate), id],
+      })
+      backfilled++
+    }
+    results['snap_label.backfill_nulls'] = `${backfilled} rows updated`
+  } catch (err) {
+    results['snap_label.backfill_nulls'] = `error: ${err}`
   }
 
   return Response.json({ ok: true, migrations: results, remap_log: remapLog })
