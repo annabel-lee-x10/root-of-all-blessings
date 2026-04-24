@@ -213,10 +213,52 @@ describe('POST /api/portfolio/scan', () => {
   })
 
   it('returns 500 when Claude API fails', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({}) }))
 
     const { POST } = await import('@/app/api/portfolio/scan/route')
     const res = await POST(makeFormRequest([makeImageFile()]))
     expect(res.status).toBe(500)
+  })
+
+  describe('BUG-043 – scan returns JSON error when Anthropic fetch throws or returns error body', () => {
+    it('returns JSON 500 (not a crash) when fetch throws a network error', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network timeout')))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      // Must be parseable JSON — if the route crashes, res.json() would throw
+      const data = await res.json()
+      expect(typeof data.error).toBe('string')
+      expect(data.error.length).toBeGreaterThan(0)
+    })
+
+    it('surfaces Anthropic error detail when API returns 4xx with JSON body', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: 'Request too large for model' } }),
+      }))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(data.error).toContain('Request too large for model')
+    })
+
+    it('returns JSON 500 even when Anthropic error body is non-JSON', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        json: () => Promise.reject(new SyntaxError('not json')),
+      }))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(typeof data.error).toBe('string')
+    })
   })
 })
