@@ -5,6 +5,30 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-055 · Portfolio scan: empty OCR result silently overwrites snapshot with 0 holdings / $0 value
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `lib/portfolio/ocr.ts`
+
+**Symptom:** When Claude fails to parse a screenshot (returns `[]` or only non-holdings/non-summary types), the scan route happily creates or updates a portfolio snapshot with `total_value = 0` and zero holdings — destroying whatever good data existed for that day.
+
+**Root cause 1 — no guard on empty OCR output:** After the merge loop, `totalValue` falls through to `totalValue = totalValue ?? 0` and `holdings = []`. The route then proceeds to INSERT/UPDATE the snapshot and DELETE all existing holdings for that snapshot, replacing real data with nothing.
+
+**Root cause 2 — silent parse failures:** `parseOcrResponse` swallows all JSON parse errors with a bare `catch { return [] }`, giving no visibility into what Claude actually returned when extraction fails.
+
+**Root cause 3 — generic OCR prompt:** The original prompt gave no Syfe-specific context about what the Holdings tab looks like, making it harder for Claude to find the right data fields.
+
+**Fix 1:** Added guard after the merge loop: if `holdings.length === 0 && totalValue === null`, return 422 with a descriptive error instead of writing empty data to the DB.
+
+**Fix 2:** Added `console.error` in the `parseOcrResponse` catch block to log the raw text Claude returned. Also added a `console.log` at the top of the function logging raw length and first 200 chars for debugging.
+
+**Fix 3:** Replaced generic OCR prompt with a Syfe-specific prompt that describes the Holdings tab layout, geo badge semantics (US/SG/UK/HK), currency rules (USD for US/HK, SGD for SG, GBP for UK), the P&L-only view (not acceptable), and all expected field names (`change_1d`, `pnl`, etc.).
+
+**Regression tests:** `tests/regression/portfolio-ocr-guard.test.ts` — "BUG-055" describe block
+
+---
+
 **BUG-001** `PATCH /api/transactions/[id]` and `DELETE /api/transactions/[id]` do not call `verifySession()`, meaning authenticated endpoints are missing auth checks — discovered 2026-04-19, `app/api/transactions/[id]/route.ts`
 
 ---
