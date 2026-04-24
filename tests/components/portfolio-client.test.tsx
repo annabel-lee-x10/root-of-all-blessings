@@ -534,10 +534,38 @@ describe('Orders tab – status badge (Phase 2)', () => {
 })
 
 // ── BUG-042: screenshot UploadArea hidden when portfolio data exists ───────────
-describe('BUG-042 – screenshot upload area visible when snapshot data exists', () => {
-  it('shows "Upload Syfe Screenshots" section when portfolio has data', async () => {
+// BUG-044 supersedes: UploadArea is now behind a + button modal, not inline.
+describe('BUG-042 – screenshot upload accessible when snapshot data exists', () => {
+  it('shows a + button in the topbar when portfolio has data', async () => {
     await renderDashboard()
-    expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^\+$/ })).toBeInTheDocument()
+  })
+})
+
+// ── BUG-044: UploadArea should be in a modal behind a + button ────────────────
+describe('BUG-044 – upload UI moved to modal behind + button', () => {
+  it('does not render the inline UploadArea between KPI and tab bar', async () => {
+    await renderDashboard()
+    // "Upload Syfe Screenshots" should NOT be visible before clicking +
+    expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
+  })
+
+  it('opens upload modal with "Upload Screenshots" title when + is clicked', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^\+$/ }))
+    await waitFor(() =>
+      expect(screen.getByText('Upload Screenshots')).toBeInTheDocument()
+    )
+  })
+
+  it('closes the modal when close button is clicked', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^\+$/ }))
+    await waitFor(() => expect(screen.getByText('Upload Screenshots')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() =>
+      expect(screen.queryByText('Upload Screenshots')).not.toBeInTheDocument()
+    )
   })
 })
 

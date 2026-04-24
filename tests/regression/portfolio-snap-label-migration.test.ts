@@ -140,21 +140,13 @@ describe('BUG-038 · migrate backfills NULL snap_labels', () => {
   })
 })
 
-describe('BUG-038 · GET /api/migrate returns snapshot diagnostics', () => {
-  it('GET /api/migrate returns snapshots array with id, snapshot_date, snap_label', async () => {
-    seedPortfolioSnapshot('snap-1', [], {
-      snap_label: '22 Apr 2026',
-      snapshot_date: '2026-04-22T10:00:00.000Z',
-    })
+// BUG-043 fixed the GET handler — it now runs migrations (not returns snapshots).
+describe('BUG-043 · GET /api/migrate runs migrations (not snapshot diagnostics)', () => {
+  it('GET /api/migrate returns ok:true with a migrations object', async () => {
     const res = await callMigrateGet()
     const data = await res.json()
-    expect(data.snapshots).toBeDefined()
-    expect(Array.isArray(data.snapshots)).toBe(true)
-    expect(data.snapshots.length).toBeGreaterThan(0)
-    const snap = data.snapshots[0]
-    expect(snap).toHaveProperty('id')
-    expect(snap).toHaveProperty('snapshot_date')
-    expect(snap).toHaveProperty('snap_label')
+    expect(data.ok).toBe(true)
+    expect(typeof data.migrations).toBe('object')
   })
 
   it('GET /api/migrate returns 401 when not authenticated', async () => {

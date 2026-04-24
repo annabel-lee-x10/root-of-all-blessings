@@ -527,3 +527,31 @@ describe('category_remap response log', () => {
     expect(res.status).toBe(401)
   })
 })
+
+// ── BUG-043: GET /api/migrate should run migrations, not list snapshots ────────
+describe('BUG-043 – GET /api/migrate runs migrations', () => {
+  it('returns ok:true with a migrations object', async () => {
+    const { GET } = await import('@/app/api/migrate/route')
+    const res = await GET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.ok).toBe(true)
+    expect(data.migrations).toBeDefined()
+    expect(typeof data.migrations).toBe('object')
+  })
+
+  it('does not return a snapshots array (was the old broken GET behaviour)', async () => {
+    const { GET } = await import('@/app/api/migrate/route')
+    const res = await GET()
+    const data = await res.json()
+    expect(data.snapshots).toBeUndefined()
+  })
+
+  it('returns 401 when not authenticated', async () => {
+    const { verifySession } = await import('@/lib/session')
+    vi.mocked(verifySession).mockResolvedValueOnce(null)
+    const { GET } = await import('@/app/api/migrate/route')
+    const res = await GET()
+    expect(res.status).toBe(401)
+  })
+})
