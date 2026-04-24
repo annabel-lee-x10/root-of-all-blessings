@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server'
 
+export const maxDuration = 60
+
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
 /**
