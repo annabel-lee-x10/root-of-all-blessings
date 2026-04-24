@@ -45,7 +45,9 @@ export function UploadArea({ onUploaded }: { onUploaded: () => void }) {
       let data: Record<string, unknown>
       try { data = await res.json() } catch { data = {} }
       if (!res.ok) {
-        setError((data.error as string) ?? 'Scan failed')
+        const errMsg = (data.error as string) ?? `Scan failed (HTTP ${res.status})`
+        console.error('[upload-area] scan error', res.status, data)
+        setError(errMsg)
         return
       }
       const r = data as unknown as ScanResult

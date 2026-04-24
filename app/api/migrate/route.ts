@@ -15,11 +15,7 @@ function sgtLabel(snapshotDate: string): string {
 export async function GET() {
   const valid = await verifySession()
   if (!valid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const result = await db.execute(
-    'SELECT id, snapshot_date, snap_label, snap_time FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 10'
-  )
-  return Response.json({ snapshots: result.rows })
+  return runMigrations()
 }
 
 // ── Subcategory hierarchy ─────────────────────────────────────────────────────
@@ -175,12 +171,7 @@ const PAYEE_RULES: Array<{ pattern: string; subcategory: string }> = [
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
-export async function POST() {
-  const valid = await verifySession()
-  if (!valid) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+async function runMigrations() {
   const results: Record<string, string> = {}
   const remapLog: Array<{ rule: string; subcategory: string; count: number }> = []
   const now = new Date().toISOString()
@@ -559,4 +550,10 @@ export async function POST() {
   }
 
   return Response.json({ ok: true, migrations: results, remap_log: remapLog })
+}
+
+export async function POST() {
+  const valid = await verifySession()
+  if (!valid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  return runMigrations()
 }

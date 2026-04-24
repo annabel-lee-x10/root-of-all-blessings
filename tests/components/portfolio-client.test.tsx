@@ -533,16 +533,43 @@ describe('Orders tab – status badge (Phase 2)', () => {
   })
 })
 
-// ── BUG-042: screenshot UploadArea hidden when portfolio data exists ───────────
-describe('BUG-042 – screenshot upload area visible when snapshot data exists', () => {
-  it('shows "Upload Syfe Screenshots" section when portfolio has data', async () => {
+// ── BUG-042: screenshot UploadArea accessible when snapshot data exists ─────────
+// BUG-046 supersedes inline placement: UploadArea is now behind a + button modal.
+describe('BUG-042 – screenshot upload accessible when snapshot data exists', () => {
+  it('shows a + button in the topbar when portfolio has data', async () => {
     await renderDashboard()
-    expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^\+$/ })).toBeInTheDocument()
   })
 })
 
-// ── BUG-045: FX/valueUSD logic removed ───────────────────────────────────────
-describe('BUG-045 – FX/valueUSD logic removed', () => {
+// ── BUG-046: UploadArea should be in a modal behind a + button ────────────────
+describe('BUG-046 – upload UI moved to modal behind + button', () => {
+  it('does not render the inline UploadArea between KPI and tab bar', async () => {
+    await renderDashboard()
+    expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
+  })
+
+  it('opens upload modal with "Upload Screenshots" title when + is clicked', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^\+$/ }))
+    await waitFor(() =>
+      expect(screen.getByText('Upload Screenshots')).toBeInTheDocument()
+    )
+  })
+
+  it('closes the modal when close button is clicked', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^\+$/ }))
+    await waitFor(() => expect(screen.getByText('Upload Screenshots')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() =>
+      expect(screen.queryByText('Upload Screenshots')).not.toBeInTheDocument()
+    )
+  })
+})
+
+// ── BUG-048: FX/valueUSD logic removed ───────────────────────────────────────
+describe('BUG-048 – FX/valueUSD logic removed', () => {
   it('Geo tab does not show "~$" FX-approximated prefix on geo values', async () => {
     await renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
@@ -558,15 +585,13 @@ describe('BUG-045 – FX/valueUSD logic removed', () => {
   })
 
   it('KPI row does not show a secondary "~$... USD" FX approximation', async () => {
-    // With total_value=10000 and holdings sum ~2875 (all USD), the old code would show
-    // "~$2,875.00 USD" as a secondary KPI line; after the fix, that line must be gone.
     await renderDashboard()
     expect(document.body.textContent).not.toMatch(/~\$.*USD/)
   })
 })
 
-// ── BUG-046: top HTML-upload button removed ────────────────────────────────────
-describe('BUG-046 – top HTML-upload file input removed from topbar', () => {
+// ── BUG-049: dead HTML-upload file input removed from topbar ──────────────────
+describe('BUG-049 – dead HTML-upload file input removed from topbar', () => {
   it('there is no hidden file input accepting .html/.htm files in the document', async () => {
     await renderDashboard()
     const htmlInput = document.querySelector('input[type="file"][accept*=".html"]')
@@ -575,18 +600,15 @@ describe('BUG-046 – top HTML-upload file input removed from topbar', () => {
 
   it('dispatching portfolio:open-upload event does not open a file picker (no fileRef)', async () => {
     await renderDashboard()
-    // If fileRef + hidden input were present, the click would throw or be trackable.
-    // After removal, the event listener should simply not exist — no error thrown.
     expect(() => {
       window.dispatchEvent(new CustomEvent('portfolio:open-upload'))
     }).not.toThrow()
-    // Confirm still no html input after the event fires
     expect(document.querySelector('input[type="file"][accept*=".html"]')).not.toBeInTheDocument()
   })
 })
 
-// ── BUG-047: Geo/Sector FX disclaimer text removed ────────────────────────────
-describe('BUG-047 – Geo/Sector FX disclaimers removed', () => {
+// ── BUG-050: Geo/Sector FX disclaimer text removed ────────────────────────────
+describe('BUG-050 – Geo/Sector FX disclaimers removed', () => {
   it('Geo tab does not show the "~USD totals · SGD≈0.74 · GBP≈1.29" disclaimer', async () => {
     await renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))

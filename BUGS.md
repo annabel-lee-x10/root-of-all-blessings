@@ -9,6 +9,28 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-047 · Vercel build fails: e2e/ and playwright.config.ts not excluded from tsconfig
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `tsconfig.json`
+
+**Symptom:** Every Vercel deployment since PR #82 (feat/playwright-e2e) fails with:
+
+```
+Type error: Cannot find module '@playwright/test' or its corresponding type declarations.
+```
+
+Because `next build` exits 1, Vercel does not promote the new build to production. The app has been serving the last successful pre-PR#82 build, causing login (and all subsequent features) to be invisible or broken on prod.
+
+**Root cause:** `e2e/` and `playwright.config.ts` both import from `@playwright/test`, which is a `devDependency`. Vercel does not install devDependencies during the build step, so TypeScript cannot resolve the module. The `tsconfig.json` `exclude` list already covers `tests/` (added in `47258b8`) and `scripts/` (added in `be9e4d7`) for exactly this reason, but `e2e/` was never added when PR #82 introduced Playwright.
+
+**Fix:** Added `"e2e"` and `"playwright.config.ts"` to the `exclude` array in `tsconfig.json`.
+
+**Regression test:** `tests/regression/tsconfig-e2e-exclude.test.ts` — "BUG-047" describe block
+
+---
+
 ## BUG-038 · Auto-generated snap_label has "(HTML import)" suffix and uses UTC date
 
 **Status:** Fixed
@@ -726,35 +748,35 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
-## BUG-047 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
+## BUG-050 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
 
 **Status:** Fixed
 **Reported:** 2026-04-24
 **Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
 
-**Symptom:** The Geo tab showed "~USD totals · SGD≈0.74 · GBP≈1.29" and the Sector tab showed "~USD totals · NON-USD APPROXIMATED" disclaimer footnotes. After FX conversion was removed (BUG-045), these disclaimers became misleading remnants.
+**Symptom:** The Geo tab showed "~USD totals · SGD≈0.74 · GBP≈1.29" and the Sector tab showed "~USD totals · NON-USD APPROXIMATED" disclaimer footnotes. After FX conversion was removed (BUG-048), these disclaimers became misleading remnants.
 
 **Fix:** Removed both disclaimer `<div>` elements from `GeoTab` and `SectorTab`.
 
-**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-047" describe block
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-050" describe block
 
 ---
 
-## BUG-046 · Portfolio: topbar contains dead HTML-upload file input after UploadArea added
+## BUG-049 · Portfolio: topbar contains dead HTML-upload file input after UploadArea added
 
 **Status:** Fixed
 **Reported:** 2026-04-24
 **Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
 
-**Symptom:** The topbar contained a hidden `<input type="file" accept=".html,.htm">` wired to the old `handleFile` HTML-upload flow. Now that `UploadArea` (screenshot OCR) is the primary upload UI and is always visible (BUG-042), the old HTML-upload button and its associated `fileRef`, `handleFile`, `uploading` state, `portfolioTickers` state, and `portfolio:open-upload` event listener are dead code.
+**Symptom:** The topbar contained a hidden `<input type="file" accept=".html,.htm">` wired to the old `handleFile` HTML-upload flow. Now that `UploadArea` (screenshot OCR) is behind the "+" modal (BUG-046), the old HTML-upload button and its associated `fileRef`, `handleFile`, `uploading` state, `portfolioTickers` state, and `portfolio:open-upload` event listener are dead code.
 
 **Fix:** Removed the hidden file input, `fileRef`, `handleFile`, `uploading` state, `portfolioTickers` state, and the `portfolio:open-upload` event listener from `PortfolioClient`. `NewsClient` receives `sharedTickers={[]}`.
 
-**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-046" describe block
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-049" describe block
 
 ---
 
-## BUG-045 · Portfolio: Geo/Sector/Holdings tabs apply FX conversion to market_value
+## BUG-048 · Portfolio: Geo/Sector/Holdings tabs apply FX conversion to market_value
 
 **Status:** Fixed
 **Reported:** 2026-04-24
@@ -764,7 +786,39 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 **Fix:** Removed the `FX` constant and `valueUSD` function. All tabs now use `h.market_value` directly for sorting, weighting, and totals. The `~$` approximate prefix and the KPI row's secondary "~$X USD" value were removed.
 
-**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-045" describe block
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-048" describe block
+
+---
+
+## BUG-046 · Portfolio: UploadArea should be in a modal behind a Plus button
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/upload-modal.tsx` (new), `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** The `UploadArea` OCR screenshot upload (added in BUG-042 fix) was rendered inline between the KPI row and the tab bar — always occupying screen real estate regardless of whether the user wants to upload.
+
+**Root cause:** BUG-042 fix placed `<UploadArea>` unconditionally in the snapshot-exists branch, causing it to always be visible.
+
+**Fix:** Created `UploadModal` (modelled after `DownloadsModal`) wrapping `UploadArea`. Added a "+" button in the topbar that opens the modal. Removed the inline `<UploadArea>` between KPI and tab bar. Empty state (`!snapshot`) retains the inline upload. On successful upload, the modal calls both `onUploaded` and `onClose`.
+
+**Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-046" describe block; BUG-042 describe block updated to assert "+" button in topbar.
+
+---
+
+## BUG-045 · /api/migrate GET handler returns snapshot list instead of running migrations
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/migrate/route.ts`
+
+**Symptom:** `GET /api/migrate` returned `{ snapshots: [...] }` — a diagnostic list of recent portfolio snapshots — instead of running the migration suite. Any tool or browser navigating to `/api/migrate` received useless data and migrations were not applied.
+
+**Root cause:** The GET handler body was a copy-paste from the portfolio snapshots route and was never updated. The migration logic lived only in POST.
+
+**Fix:** Extracted the POST body into an `async function runMigrations()`. Both GET and POST now call `return runMigrations()` after the auth check. The old snapshot-listing SELECT was removed.
+
+**Regression tests:** `tests/api/migrate-category-remap.test.ts` — "BUG-045" describe block.
 
 ---
 
@@ -780,4 +834,45 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 **Fix:** Added `<UploadArea onUploaded={load} />` between the KPI row and the tab bar in the snapshot-exists branch of `PortfolioClient`, so it is always prominently visible regardless of whether snapshot data exists.
 
-**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload area visible when snapshot data exists"
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload accessible when snapshot data exists"
+
+---
+
+## BUG-043 · Portfolio scan: "Scan failed" when Anthropic fetch throws or times out
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`
+
+**Symptom:** Clicking "Scan N screenshots" on the portfolio page shows "Scan failed" in red text. The upload UI works correctly (files are selected and submitted), but the POST /api/portfolio/scan endpoint silently fails.
+
+**Root cause 1 — No try/catch around Anthropic fetch:** The `fetch()` call to `https://api.anthropic.com/v1/messages` had no try/catch. If `fetch()` itself throws (network error, Vercel killing the function on timeout), the route handler throws an unhandled exception. Next.js returns a 500 response with an HTML error page instead of JSON. The client's `res.json()` call throws a SyntaxError, `data` is set to `{}`, and `data.error ?? 'Scan failed'` resolves to "Scan failed".
+
+**Root cause 2 — No maxDuration:** No `export const maxDuration` was set on the route. Vercel defaults to 10s (Hobby) or 15s (Pro) for serverless functions. OCR of 5 screenshots in a single Claude vision call can take 15–30 seconds, causing Vercel to kill the function mid-execution before a response is sent.
+
+**Root cause 3 — Anthropic error body swallowed:** When Anthropic returns a 4xx/5xx, the route returned `{ error: 'OCR failed' }` without reading the Anthropic error body. This makes it impossible to diagnose what specifically failed (too-large request, invalid model, rate limit, etc.).
+
+**Fix:** Added `export const maxDuration = 60` to extend the Vercel function timeout. Wrapped the Anthropic `fetch` call in a try/catch that returns a JSON error on network failure. When `!anthropicRes.ok`, the route now reads the Anthropic error body and surfaces it in the response.
+
+**Regression tests:** `tests/api/portfolio-scan.test.ts` — "BUG-043" describe block
+
+---
+
+## BUG-044 · Portfolio scan: "Scan failed" persists — DB crash + Vercel timeout on multi-image call
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`
+
+**Symptom:** Scan still returns "Scan failed" after BUG-043 fix. BUG-043 only added try/catch around the Anthropic `fetch()` call, but two additional crash paths remain unprotected.
+
+**Root cause 1 — No top-level try/catch:** DB operations (`INSERT INTO portfolio_holdings`, `INSERT INTO portfolio_snapshots`, etc.) have no error handling. If the production database schema is missing columns added by migrations (e.g. `day_high`, `day_low`, `prev_close` on `portfolio_holdings` — added as ALTER TABLE in PR #86 — when `/api/migrate` wasn't run after PR #86), these INSERTs throw an unhandled exception. Next.js returns an HTML 500 page instead of JSON. The client's `res.json()` fails, `data = {}`, and "Scan failed" appears.
+
+**Root cause 2 — Single Anthropic call for N images times out:** All images are sent in a single Claude API call. With 5 screenshots, this can take 15–30s. Vercel serverless functions are capped at 10s (Hobby) or 60s (Pro). When Vercel kills the function, the connection is dropped before any response is sent — this cannot be caught by try/catch inside the function. The client receives no response or a 504 HTML page → "Scan failed".
+
+**Fix:**
+1. Added a top-level `try/catch` around the entire `POST` handler body with `console.error` logging. Any unhandled exception now returns `{ error: "Scan error: <message>" }` instead of crashing silently.
+2. Extracted `scanOneImage()` — a helper that calls the Anthropic API for a single image and returns `{ results }` or `{ error }`. The route now processes images in parallel (one Claude call per image). Each call completes in 2–5s; 5 parallel calls finish in ~5s total — well within any Vercel timeout tier.
+3. Partial-success handling: if some images succeed and some fail, results from the successful images are used. The scan only returns an error if ALL images fail.
+
+**Regression tests:** `tests/api/portfolio-scan.test.ts` — "BUG-044" describe block
