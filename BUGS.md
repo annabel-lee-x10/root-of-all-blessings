@@ -922,3 +922,19 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Root cause:** After BUG-052, no client-side transformations remain. `market_value` is displayed directly; `pnl`, `pnl_pct`, and `change_1d_pct` are passed through `fmt()` / `fmtPct()` for locale formatting only (no value change).
 
 **Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-053 – holdings display values exactly as stored in DB"
+
+---
+
+## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** Snapshot inserts in the scan and manual-save flows used `NULL` for the `raw_html` column, which violates the `TEXT NOT NULL` constraint on the production Turso schema and causes the INSERT to fail.
+
+**Root cause:** Both INSERT statements explicitly passed `NULL` as the `raw_html` positional argument. The OCR scan flow never stores raw HTML, and the manual snapshot POST flow has no HTML either, but the column was created as NOT NULL.
+
+**Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
+
+**Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
