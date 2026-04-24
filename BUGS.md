@@ -9,6 +9,28 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-047 · Vercel build fails: e2e/ and playwright.config.ts not excluded from tsconfig
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `tsconfig.json`
+
+**Symptom:** Every Vercel deployment since PR #82 (feat/playwright-e2e) fails with:
+
+```
+Type error: Cannot find module '@playwright/test' or its corresponding type declarations.
+```
+
+Because `next build` exits 1, Vercel does not promote the new build to production. The app has been serving the last successful pre-PR#82 build, causing login (and all subsequent features) to be invisible or broken on prod.
+
+**Root cause:** `e2e/` and `playwright.config.ts` both import from `@playwright/test`, which is a `devDependency`. Vercel does not install devDependencies during the build step, so TypeScript cannot resolve the module. The `tsconfig.json` `exclude` list already covers `tests/` (added in `47258b8`) and `scripts/` (added in `be9e4d7`) for exactly this reason, but `e2e/` was never added when PR #82 introduced Playwright.
+
+**Fix:** Added `"e2e"` and `"playwright.config.ts"` to the `exclude` array in `tsconfig.json`.
+
+**Regression test:** `tests/regression/tsconfig-e2e-exclude.test.ts` — "BUG-047" describe block
+
+---
+
 ## BUG-038 · Auto-generated snap_label has "(HTML import)" suffix and uses UTC date
 
 **Status:** Fixed
