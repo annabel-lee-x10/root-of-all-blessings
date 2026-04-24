@@ -981,6 +981,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-057 · News: Singapore Headlines, Property, and Portfolio sections empty after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/news/generate/route.ts`
+
+**Symptom:** After hitting Refresh on the News tab, World Headlines and Jobs sections populate correctly, but Singapore Headlines, Singapore Property, and Portfolio News sections remain empty ("No stories yet").
+
+**Root cause:** `app/api/news/generate/route.ts` (the Anthropic API proxy used by the agentic news loop) had no `maxDuration` export. Vercel defaults to 10s for serverless functions. Broad queries (world headlines) complete within 10s, but niche `web_search` queries (Singapore news, property, portfolio tickers) routinely take >10s, causing the proxy to time out and return an empty response. Sections processed later in the sequential `handleRefresh()` loop were also more likely to hit cumulative rate-limit delays.
+
+**Fix:** Added `export const maxDuration = 60` to `app/api/news/generate/route.ts` — the same pattern used in `app/api/portfolio/scan/route.ts` (BUG-043) and the Excel download route.
+
+**Regression test:** `tests/regression/news-generate-timeout.test.ts` — "BUG-057" describe block
+
+---
+
 
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
