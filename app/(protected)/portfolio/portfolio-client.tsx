@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useContext, createContext } from 'react'
+import { useEffect, useState, useCallback, useContext, createContext } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useToast } from '../components/toast'
 import { NewsClient } from '../news/news-client'
@@ -60,7 +60,6 @@ const SECTOR_COLOR: Record<string, string> = {
 const GEO_COLOR: Record<string, string> = {
   US: '#4A6FA5', SG: '#E8520A', UK: '#3DD68C', HK: '#F5C842',
 }
-const FX: Record<string, number> = { USD: 1, SGD: 0.74, GBP: 1.29 }
 
 const DIM_LABEL: Record<string, string> = { K: 'Knowledge', S: 'Strategy', E: 'Execution' }
 const DIM_COLOR: Record<string, string> = { K: '#9B6DFF', S: '#E8520A', E: '#3DD68C' }
@@ -169,9 +168,6 @@ function fmtPct(n: number) { return (n >= 0 ? '+' : '') + fmt(n, 2) + '%' }
 function symFor(currency?: string | null) {
   return currency === 'SGD' ? 'S$' : currency === 'GBP' ? '£' : '$'
 }
-function valueUSD(h: ExtHolding): number {
-  return h.market_value * (FX[h.currency ?? 'USD'] ?? 1)
-}
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function hashStr(s: string): number {
@@ -248,8 +244,8 @@ function lb(col: string, T: Theme): React.CSSProperties {
 function HoldingsTab({ holdings }: { holdings: ExtHolding[] }) {
   const T = useTheme()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const sorted = [...holdings].sort((a, b) => valueUSD(b) - valueUSD(a))
-  const totalUSD = sorted.reduce((s, h) => s + valueUSD(h), 0)
+  const sorted = [...holdings].sort((a, b) => b.market_value - a.market_value)
+  const total = sorted.reduce((s, h) => s + h.market_value, 0)
 
   function toggle(key: string) {
     setExpanded(prev => {
@@ -267,7 +263,7 @@ function HoldingsTab({ holdings }: { holdings: ExtHolding[] }) {
         const sc = sectorColor(h.sector)
         const gc = geoColor(h.geo)
         const sym = symFor(h.currency)
-        const weightPct = totalUSD > 0 ? (valueUSD(h) / totalUSD) * 100 : 0
+        const weightPct = total > 0 ? (h.market_value / total) * 100 : 0
         const hasSell = h.sell_limit != null
         const hasBuy = h.buy_limit != null
 
@@ -518,12 +514,12 @@ function OrdersTab({ orders, snap }: { orders: PortfolioOrder[]; snap: SnapRespo
 function GeoTab({ holdings }: { holdings: ExtHolding[] }) {
   const T = useTheme()
   const geos = ['US', 'SG', 'UK', 'HK'] as const
-  const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
+  const total = holdings.reduce((s, h) => s + h.market_value, 0)
   const byGeo = geos
     .map(g => {
       const hs = holdings.filter(h => h.geo === g)
-      const val = hs.reduce((s, h) => s + valueUSD(h), 0)
-      return { geo: g, val, pct: totalUSD > 0 ? (val / totalUSD) * 100 : 0, count: hs.length }
+      const val = hs.reduce((s, h) => s + h.market_value, 0)
+      return { geo: g, val, pct: total > 0 ? (val / total) * 100 : 0, count: hs.length }
     })
     .filter(g => g.val > 0)
 
@@ -555,7 +551,7 @@ function GeoTab({ holdings }: { holdings: ExtHolding[] }) {
               <span style={{ color: T.mid, fontSize: '0.8rem' }}>{g.count} holding{g.count !== 1 ? 's' : ''}</span>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ ...MONO, color: T.pale, fontSize: '0.88rem', fontWeight: 600 }}>~${fmt(g.val)}</div>
+              <div style={{ ...MONO, color: T.pale, fontSize: '0.88rem', fontWeight: 600 }}>${fmt(g.val)}</div>
               <div style={{ ...MONO, fontSize: '0.75rem', color: T.mid }}>{g.pct.toFixed(1)}%</div>
             </div>
           </div>
@@ -564,9 +560,6 @@ function GeoTab({ holdings }: { holdings: ExtHolding[] }) {
           </div>
         </div>
       ))}
-      <div style={{ fontSize: '0.68rem', color: T.mid, textAlign: 'center', marginTop: 8 }}>
-        ~USD totals · SGD≈0.74 · GBP≈1.29
-      </div>
     </div>
   )
 }
@@ -574,15 +567,15 @@ function GeoTab({ holdings }: { holdings: ExtHolding[] }) {
 // ── Tab: Sector ───────────────────────────────────────────────────────────────
 function SectorTab({ holdings }: { holdings: ExtHolding[] }) {
   const T = useTheme()
-  const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
+  const total = holdings.reduce((s, h) => s + h.market_value, 0)
   const sectorMap = new Map<string, { val: number; count: number }>()
   for (const h of holdings) {
     const s = h.sector ?? 'Other'
     const prev = sectorMap.get(s) ?? { val: 0, count: 0 }
-    sectorMap.set(s, { val: prev.val + valueUSD(h), count: prev.count + 1 })
+    sectorMap.set(s, { val: prev.val + h.market_value, count: prev.count + 1 })
   }
   const sectors = [...sectorMap.entries()]
-    .map(([s, d]) => ({ sector: s, val: d.val, count: d.count, pct: totalUSD > 0 ? (d.val / totalUSD) * 100 : 0 }))
+    .map(([s, d]) => ({ sector: s, val: d.val, count: d.count, pct: total > 0 ? (d.val / total) * 100 : 0 }))
     .sort((a, b) => b.val - a.val)
 
   return (
@@ -595,7 +588,7 @@ function SectorTab({ holdings }: { holdings: ExtHolding[] }) {
               <span style={{ color: T.mid, fontSize: '0.72rem', marginLeft: 6 }}>{s.count} holding{s.count !== 1 ? 's' : ''}</span>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <span style={{ ...MONO, color: T.pale, fontSize: '0.85rem', fontWeight: 600 }}>~${fmt(s.val)}</span>
+              <span style={{ ...MONO, color: T.pale, fontSize: '0.85rem', fontWeight: 600 }}>${fmt(s.val)}</span>
               <span style={{ ...MONO, color: T.mid, fontSize: '0.75rem', marginLeft: 6 }}>{s.pct.toFixed(1)}%</span>
             </div>
           </div>
@@ -604,9 +597,6 @@ function SectorTab({ holdings }: { holdings: ExtHolding[] }) {
           </div>
         </div>
       ))}
-      <div style={{ fontSize: '0.68rem', color: T.mid, textAlign: 'center', marginTop: 8 }}>
-        ~USD totals · NON-USD APPROXIMATED
-      </div>
     </div>
   )
 }
@@ -706,7 +696,7 @@ function PnlTab({ holdings, snap }: { holdings: ExtHolding[]; snap: SnapResponse
 function WhatIfTab({ holdings }: { holdings: ExtHolding[] }) {
   const T = useTheme()
   const [prices, setPrices] = useState<Record<string, string>>({})
-  const sorted = [...holdings].sort((a, b) => valueUSD(b) - valueUSD(a))
+  const sorted = [...holdings].sort((a, b) => b.market_value - a.market_value)
   const totalBase = sorted.reduce((s, h) => s + h.market_value, 0)
 
   function hypotheticalValue(h: ExtHolding): number {
@@ -911,13 +901,10 @@ function GrowthTab({ growth, milestones }: { growth: GrowthScore[]; milestones: 
 // ── Main component ────────────────────────────────────────────────────────────
 export function PortfolioClient() {
   const { showToast } = useToast()
-  const fileRef = useRef<HTMLInputElement>(null)
   const [snapshot, setSnapshot] = useState<SnapResponse | null | undefined>(undefined)
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
   const [tab, setTab] = useState<Tab>('holdings')
   const [view, setView] = useState<'dashboard' | 'news'>('dashboard')
-  const [portfolioTickers, setPortfolioTickers] = useState<string[]>([])
   const [showDownloads, setShowDownloads] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [dark, setDark] = useState(() =>
@@ -946,39 +933,6 @@ export function PortfolioClient() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    function onOpenUpload() { fileRef.current?.click() }
-    window.addEventListener('portfolio:open-upload', onOpenUpload)
-    return () => window.removeEventListener('portfolio:open-upload', onOpenUpload)
-  }, [])
-
-  async function handleFile(file: File) {
-    setUploading(true)
-    try {
-      const html = await file.text()
-      const res = await fetch('/api/portfolio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, snapshot_date: new Date().toISOString() }),
-      })
-      const data = await res.json()
-      if (!res.ok) { showToast(data.error || 'Parse failed', 'error'); return }
-      showToast(`Imported ${data.holdings_count} holdings`, 'success')
-
-      // Extract tickers for the News sub-view
-      try {
-        const form = new FormData()
-        form.append('file', file)
-        const tickerRes = await fetch('/api/news/upload', { method: 'POST', body: form })
-        if (tickerRes.ok) {
-          const { tickers } = await tickerRes.json() as { tickers: string[] }
-          setPortfolioTickers(tickers)
-        }
-      } catch { /* ticker extraction is best-effort */ }
-
-      await load()
-    } catch { showToast('Upload failed', 'error') }
-    finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
-  }
 
   const BTN_SEC: React.CSSProperties = {
     padding: '0.35rem 0.85rem', borderRadius: 6, cursor: 'pointer',
@@ -1005,7 +959,6 @@ export function PortfolioClient() {
   const unrealised_pnl = snapshot?.unrealised_pnl ?? null
   const realised_pnl = snapshot?.realised_pnl ?? null
   const cash = snapshot?.cash ?? null
-  const totalUSD = holdings.reduce((s, h) => s + valueUSD(h), 0)
   const pnlPct = unrealised_pnl !== null && total_value > 0
     ? (unrealised_pnl / (total_value - (unrealised_pnl ?? 0))) * 100 : null
 
@@ -1038,8 +991,6 @@ export function PortfolioClient() {
               )}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
               <button style={BTN_SEC} onClick={() => setShowUpload(true)} aria-label="+">
                 +
               </button>
@@ -1055,7 +1006,7 @@ export function PortfolioClient() {
 
           {/* Content */}
           {view === 'news' ? (
-            <NewsClient sharedTickers={portfolioTickers} />
+            <NewsClient sharedTickers={[]} />
           ) : loading ? (
             <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: theme.mid }}>Loading…</div>
           ) : !snapshot ? (
@@ -1071,7 +1022,7 @@ export function PortfolioClient() {
                   {
                     label: 'Value',
                     primary: `$${fmt(total_value)}`,
-                    secondary: Math.abs(totalUSD - total_value) > 10 ? `~$${fmt(totalUSD)} USD` : null,
+                    secondary: null,
                     color: theme.pale,
                   },
                   {

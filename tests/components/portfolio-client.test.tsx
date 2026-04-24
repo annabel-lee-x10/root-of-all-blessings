@@ -533,8 +533,8 @@ describe('Orders tab – status badge (Phase 2)', () => {
   })
 })
 
-// ── BUG-042: screenshot UploadArea hidden when portfolio data exists ───────────
-// BUG-046 supersedes: UploadArea is now behind a + button modal, not inline.
+// ── BUG-042: screenshot UploadArea accessible when snapshot data exists ─────────
+// BUG-046 supersedes inline placement: UploadArea is now behind a + button modal.
 describe('BUG-042 – screenshot upload accessible when snapshot data exists', () => {
   it('shows a + button in the topbar when portfolio has data', async () => {
     await renderDashboard()
@@ -546,7 +546,6 @@ describe('BUG-042 – screenshot upload accessible when snapshot data exists', (
 describe('BUG-046 – upload UI moved to modal behind + button', () => {
   it('does not render the inline UploadArea between KPI and tab bar', async () => {
     await renderDashboard()
-    // "Upload Syfe Screenshots" should NOT be visible before clicking +
     expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
   })
 
@@ -566,6 +565,65 @@ describe('BUG-046 – upload UI moved to modal behind + button', () => {
     await waitFor(() =>
       expect(screen.queryByText('Upload Screenshots')).not.toBeInTheDocument()
     )
+  })
+})
+
+// ── BUG-048: FX/valueUSD logic removed ───────────────────────────────────────
+describe('BUG-048 – FX/valueUSD logic removed', () => {
+  it('Geo tab does not show "~$" FX-approximated prefix on geo values', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Geo$/i }))
+    expect(document.body.textContent).not.toContain('~$')
+  })
+
+  it('Sector tab does not show "~$" FX-approximated prefix on sector values', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Sector$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
+    expect(document.body.textContent).not.toContain('~$')
+  })
+
+  it('KPI row does not show a secondary "~$... USD" FX approximation', async () => {
+    await renderDashboard()
+    expect(document.body.textContent).not.toMatch(/~\$.*USD/)
+  })
+})
+
+// ── BUG-049: dead HTML-upload file input removed from topbar ──────────────────
+describe('BUG-049 – dead HTML-upload file input removed from topbar', () => {
+  it('there is no hidden file input accepting .html/.htm files in the document', async () => {
+    await renderDashboard()
+    const htmlInput = document.querySelector('input[type="file"][accept*=".html"]')
+    expect(htmlInput).not.toBeInTheDocument()
+  })
+
+  it('dispatching portfolio:open-upload event does not open a file picker (no fileRef)', async () => {
+    await renderDashboard()
+    expect(() => {
+      window.dispatchEvent(new CustomEvent('portfolio:open-upload'))
+    }).not.toThrow()
+    expect(document.querySelector('input[type="file"][accept*=".html"]')).not.toBeInTheDocument()
+  })
+})
+
+// ── BUG-050: Geo/Sector FX disclaimer text removed ────────────────────────────
+describe('BUG-050 – Geo/Sector FX disclaimers removed', () => {
+  it('Geo tab does not show the "~USD totals · SGD≈0.74 · GBP≈1.29" disclaimer', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Geo$/i }))
+    expect(document.body.textContent).not.toContain('SGD≈')
+    expect(document.body.textContent).not.toContain('GBP≈')
+    expect(document.body.textContent).not.toMatch(/~USD totals/)
+  })
+
+  it('Sector tab does not show "~USD totals · NON-USD APPROXIMATED" disclaimer', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Sector$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
+    expect(document.body.textContent).not.toContain('NON-USD APPROXIMATED')
+    expect(document.body.textContent).not.toMatch(/~USD totals/)
   })
 })
 
