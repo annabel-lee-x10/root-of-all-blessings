@@ -726,6 +726,48 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-047 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** The Geo tab showed "~USD totals · SGD≈0.74 · GBP≈1.29" and the Sector tab showed "~USD totals · NON-USD APPROXIMATED" disclaimer footnotes. After FX conversion was removed (BUG-045), these disclaimers became misleading remnants.
+
+**Fix:** Removed both disclaimer `<div>` elements from `GeoTab` and `SectorTab`.
+
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-047" describe block
+
+---
+
+## BUG-046 · Portfolio: topbar contains dead HTML-upload file input after UploadArea added
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** The topbar contained a hidden `<input type="file" accept=".html,.htm">` wired to the old `handleFile` HTML-upload flow. Now that `UploadArea` (screenshot OCR) is the primary upload UI and is always visible (BUG-042), the old HTML-upload button and its associated `fileRef`, `handleFile`, `uploading` state, `portfolioTickers` state, and `portfolio:open-upload` event listener are dead code.
+
+**Fix:** Removed the hidden file input, `fileRef`, `handleFile`, `uploading` state, `portfolioTickers` state, and the `portfolio:open-upload` event listener from `PortfolioClient`. `NewsClient` receives `sharedTickers={[]}`.
+
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-046" describe block
+
+---
+
+## BUG-045 · Portfolio: Geo/Sector/Holdings tabs apply FX conversion to market_value
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** `HoldingsTab`, `GeoTab`, `SectorTab`, and `WhatIfTab` all called `valueUSD(h)` which multiplied `market_value` by a hardcoded FX rate (`SGD×0.74`, `GBP×1.29`). This produced approximate USD-converted totals (displayed with `~$`) rather than the portfolio's authoritative `total_value` from the API. The conversion also caused incorrect sort order and weight percentages for non-USD holdings.
+
+**Fix:** Removed the `FX` constant and `valueUSD` function. All tabs now use `h.market_value` directly for sorting, weighting, and totals. The `~$` approximate prefix and the KPI row's secondary "~$X USD" value were removed.
+
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-045" describe block
+
+---
+
 ## BUG-042 · Portfolio: screenshot UploadArea not visible when portfolio data exists
 
 **Status:** Fixed

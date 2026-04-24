@@ -50,48 +50,13 @@ describe('PortfolioClient — Dashboard/News toggle', () => {
     expect(screen.queryByText(/no portfolio data yet/i)).not.toBeInTheDocument()
   })
 
-  it('portfolio:open-upload event triggers file input click', async () => {
-    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
-    const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
-    render(<PortfolioClient />)
-    await waitFor(() => screen.getByRole('button', { name: /^dashboard$/i }))
-    window.dispatchEvent(new CustomEvent('portfolio:open-upload'))
-    expect(clickSpy).toHaveBeenCalledTimes(1)
-    clickSpy.mockRestore()
-  })
-
-  it('passes portfolioTickers to NewsClient after successful upload', async () => {
-    const mockFetch = vi.fn().mockImplementation((url: string, opts?: RequestInit) => {
-      if (url === '/api/portfolio/snapshots') return Promise.resolve({ ok: true, json: async () => null })
-      if (url === '/api/portfolio' && opts?.method === 'POST') {
-        return Promise.resolve({ ok: true, json: async () => ({ holdings_count: 5 }) })
-      }
-      if (url === '/api/news/upload') {
-        return Promise.resolve({ ok: true, json: async () => ({ tickers: ['NVDA', 'MU'] }) })
-      }
-      return Promise.resolve({ ok: true, json: async () => null })
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
+  it('NewsClient receives empty sharedTickers (HTML upload flow removed in BUG-046)', async () => {
     const { PortfolioClient } = await import('@/app/(protected)/portfolio/portfolio-client')
     render(<PortfolioClient />)
     await waitFor(() => screen.getByRole('button', { name: /^news$/i }))
-
-    // Simulate file upload via the hidden input
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement
-    const file = new File(['<html><body>portfolio</body></html>'], 'portfolio.html', { type: 'text/html' })
-    Object.defineProperty(input, 'files', { value: [file], writable: false, configurable: true })
-    fireEvent.change(input)
-
-    // Wait for both API calls
-    await waitFor(() =>
-      expect(mockFetch.mock.calls.some((c: unknown[]) => c[0] === '/api/news/upload')).toBe(true)
-    )
-
-    // Switch to News view and check tickers are passed
     fireEvent.click(screen.getByRole('button', { name: /^news$/i }))
-    await waitFor(() =>
-      expect(screen.getByTestId('news-client').textContent).toContain('NVDA')
-    )
+    await waitFor(() => expect(screen.getByTestId('news-client')).toBeInTheDocument())
+    expect(screen.getByTestId('news-client').textContent).not.toContain('NVDA')
+    expect(screen.getByTestId('news-client').textContent).not.toContain('MU')
   })
 })

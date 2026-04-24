@@ -541,6 +541,70 @@ describe('BUG-042 – screenshot upload area visible when snapshot data exists',
   })
 })
 
+// ── BUG-045: FX/valueUSD logic removed ───────────────────────────────────────
+describe('BUG-045 – FX/valueUSD logic removed', () => {
+  it('Geo tab does not show "~$" FX-approximated prefix on geo values', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Geo$/i }))
+    expect(document.body.textContent).not.toContain('~$')
+  })
+
+  it('Sector tab does not show "~$" FX-approximated prefix on sector values', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Sector$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
+    expect(document.body.textContent).not.toContain('~$')
+  })
+
+  it('KPI row does not show a secondary "~$... USD" FX approximation', async () => {
+    // With total_value=10000 and holdings sum ~2875 (all USD), the old code would show
+    // "~$2,875.00 USD" as a secondary KPI line; after the fix, that line must be gone.
+    await renderDashboard()
+    expect(document.body.textContent).not.toMatch(/~\$.*USD/)
+  })
+})
+
+// ── BUG-046: top HTML-upload button removed ────────────────────────────────────
+describe('BUG-046 – top HTML-upload file input removed from topbar', () => {
+  it('there is no hidden file input accepting .html/.htm files in the document', async () => {
+    await renderDashboard()
+    const htmlInput = document.querySelector('input[type="file"][accept*=".html"]')
+    expect(htmlInput).not.toBeInTheDocument()
+  })
+
+  it('dispatching portfolio:open-upload event does not open a file picker (no fileRef)', async () => {
+    await renderDashboard()
+    // If fileRef + hidden input were present, the click would throw or be trackable.
+    // After removal, the event listener should simply not exist — no error thrown.
+    expect(() => {
+      window.dispatchEvent(new CustomEvent('portfolio:open-upload'))
+    }).not.toThrow()
+    // Confirm still no html input after the event fires
+    expect(document.querySelector('input[type="file"][accept*=".html"]')).not.toBeInTheDocument()
+  })
+})
+
+// ── BUG-047: Geo/Sector FX disclaimer text removed ────────────────────────────
+describe('BUG-047 – Geo/Sector FX disclaimers removed', () => {
+  it('Geo tab does not show the "~USD totals · SGD≈0.74 · GBP≈1.29" disclaimer', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Geo$/i }))
+    expect(document.body.textContent).not.toContain('SGD≈')
+    expect(document.body.textContent).not.toContain('GBP≈')
+    expect(document.body.textContent).not.toMatch(/~USD totals/)
+  })
+
+  it('Sector tab does not show "~USD totals · NON-USD APPROXIMATED" disclaimer', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Sector$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
+    expect(document.body.textContent).not.toContain('NON-USD APPROXIMATED')
+    expect(document.body.textContent).not.toMatch(/~USD totals/)
+  })
+})
+
 // ── BUG-034: non-ok API response must not crash the component ─────────────────
 describe('BUG-034 – API error does not crash component', () => {
   it('shows upload panel (not crash) when API returns 500 with JSON error body', async () => {
