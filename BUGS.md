@@ -938,3 +938,21 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
 
 **Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
+
+---
+
+## BUG-055 · Excel download route times out on Vercel: no maxDuration + N+1 holdings queries
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** The Excel download endpoint (`GET /api/portfolio/download/excel/[id]`) times out on Vercel for portfolios with many snapshots, returning a 504 or no response.
+
+**Root cause 1 — No maxDuration:** The route had no `export const maxDuration`, so Vercel applied its default 10s limit. The scan route already sets `maxDuration = 60`; this route was overlooked.
+
+**Root cause 2 — N+1 query pattern:** The route fetched all snapshots, then ran one `SELECT * FROM portfolio_holdings WHERE snapshot_id = ?` per snapshot inside a `Promise.all`. With N snapshots this issues N+1 DB round-trips, each incurring network latency to Turso.
+
+**Fix:** Added `export const maxDuration = 60`. Replaced the per-snapshot holdings query with a single `SELECT * FROM portfolio_holdings ORDER BY snapshot_id`, then grouped results by `snapshot_id` in JS before building the `ExcelSnapData[]` array.
+
+**Regression test:** `tests/api/portfolio-excel-download.test.ts` — "BUG-055" describe block
