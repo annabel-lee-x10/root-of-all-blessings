@@ -726,6 +726,38 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-046 · Portfolio: UploadArea should be in a modal behind a Plus button
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/upload-modal.tsx` (new), `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** The `UploadArea` OCR screenshot upload (added in BUG-042 fix) was rendered inline between the KPI row and the tab bar — always occupying screen real estate regardless of whether the user wants to upload.
+
+**Root cause:** BUG-042 fix placed `<UploadArea>` unconditionally in the snapshot-exists branch, causing it to always be visible.
+
+**Fix:** Created `UploadModal` (modelled after `DownloadsModal`) wrapping `UploadArea`. Added a "+" button in the topbar that opens the modal. Removed the inline `<UploadArea>` between KPI and tab bar. Empty state (`!snapshot`) retains the inline upload. On successful upload, the modal calls both `onUploaded` and `onClose`.
+
+**Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-046" describe block; BUG-042 describe block updated to assert "+" button in topbar.
+
+---
+
+## BUG-045 · /api/migrate GET handler returns snapshot list instead of running migrations
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/migrate/route.ts`
+
+**Symptom:** `GET /api/migrate` returned `{ snapshots: [...] }` — a diagnostic list of recent portfolio snapshots — instead of running the migration suite. Any tool or browser navigating to `/api/migrate` received useless data and migrations were not applied.
+
+**Root cause:** The GET handler body was a copy-paste from the portfolio snapshots route and was never updated. The migration logic lived only in POST.
+
+**Fix:** Extracted the POST body into an `async function runMigrations()`. Both GET and POST now call `return runMigrations()` after the auth check. The old snapshot-listing SELECT was removed.
+
+**Regression tests:** `tests/api/migrate-category-remap.test.ts` — "BUG-045" describe block.
+
+---
+
 ## BUG-042 · Portfolio: screenshot UploadArea not visible when portfolio data exists
 
 **Status:** Fixed
@@ -738,7 +770,7 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 **Fix:** Added `<UploadArea onUploaded={load} />` between the KPI row and the tab bar in the snapshot-exists branch of `PortfolioClient`, so it is always prominently visible regardless of whether snapshot data exists.
 
-**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload area visible when snapshot data exists"
+**Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload accessible when snapshot data exists"
 
 ---
 

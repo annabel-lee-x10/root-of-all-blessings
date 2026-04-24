@@ -7,6 +7,7 @@ import { NewsClient } from '../news/news-client'
 import type { Holding } from '@/lib/types'
 import { UploadArea } from './upload-area'
 import { DownloadsModal } from './downloads-modal'
+import { UploadModal } from './upload-modal'
 
 // ── Theme tokens ───────────────────────────────────────────────────────────────
 const DARK = {
@@ -918,6 +919,7 @@ export function PortfolioClient() {
   const [view, setView] = useState<'dashboard' | 'news'>('dashboard')
   const [portfolioTickers, setPortfolioTickers] = useState<string[]>([])
   const [showDownloads, setShowDownloads] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
   const [dark, setDark] = useState(() =>
     typeof document === 'undefined' ? true : document.documentElement.dataset.theme !== 'light'
   )
@@ -1038,6 +1040,9 @@ export function PortfolioClient() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input ref={fileRef} type="file" accept=".html,.htm" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+              <button style={BTN_SEC} onClick={() => setShowUpload(true)} aria-label="+">
+                +
+              </button>
               <button style={BTN_SEC} onClick={() => setShowDownloads(true)}>
                 Downloads
               </button>
@@ -1090,9 +1095,6 @@ export function PortfolioClient() {
                 ))}
               </div>
 
-              {/* Screenshot upload — always visible when data exists */}
-              <UploadArea onUploaded={load} />
-
               {/* Tab bar */}
               <div style={{
                 display: 'flex', overflowX: 'auto', padding: '4px 12px 0',
@@ -1128,6 +1130,7 @@ export function PortfolioClient() {
         </div>
       </div>
       <DownloadsModal open={showDownloads} onClose={() => setShowDownloads(false)} />
+      <UploadModal open={showUpload} onClose={() => setShowUpload(false)} onUploaded={load} />
     </ThemeCtx.Provider>
   )
 }
