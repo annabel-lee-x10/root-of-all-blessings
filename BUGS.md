@@ -33,6 +33,29 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-058 · News: Singapore Property section always shows "No stories yet" after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh, the Singapore Property section consistently showed "No stories yet — hit Refresh to generate" while World, Singapore Headlines, Jobs, and Portfolio all loaded correctly. The section remained empty for the rest of the session even if Refresh was hit again.
+
+**Root cause 1 — handleRefresh set propFetchedRef unconditionally:** `if (key === 'prop') propFetchedRef.current = true` ran outside the try/catch block, so it executed even when the prop agenticLoop returned 0 cards (empty JSON, prose, or parse failure). This permanently blocked `handlePropOpen` (the expand-to-fetch trigger) for the rest of the session via its `if (propFetchedRef.current) return` guard.
+
+**Root cause 2 — handlePropOpen never reset propFetchedRef on empty result:** `propFetchedRef.current = true` was set at the start of `handlePropOpen` to prevent concurrent calls. If the fetch succeeded but `parseArr` returned 0 cards (or the fetch threw), `propFetchedRef` stayed `true`, permanently blocking any retry via expand.
+
+**Root cause 3 — No retry when model returns prose instead of JSON:** The property query ("HDB, condo, landed, commercial...") intermittently causes the model to return a prose summary rather than a raw JSON array. `parseArr` returns `[]` silently. No retry was attempted, so the section stayed empty.
+
+**Fix:**
+1. Moved `propFetchedRef.current = true` inside the try block in `handleRefresh`, guarded by `cards.length > 0`. A Refresh that yields 0 prop cards no longer blocks future auto-fetches.
+2. In `handlePropOpen`, added `propFetchedRef.current = false` when `cards.length === 0` (after try) and in the catch block, allowing the next expand to retry.
+3. Added a one-time retry in both `handleRefresh` and `handlePropOpen`: when `parseArr(raw)` returns empty on a non-empty raw response that does not start with `[` (i.e., prose, not intentionally-empty `[]`), `agenticLoop` is called once more and the result used.
+
+**Regression tests:** `tests/components/news-property-auto-fetch.test.tsx` — "BUG-058" describe block (3 cases)
+
+---
+
 ## BUG-047 · Vercel build fails: e2e/ and playwright.config.ts not excluded from tsconfig
 
 **Status:** Fixed
@@ -996,7 +1019,6 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Regression test:** `tests/regression/news-generate-timeout.test.ts` — "BUG-057" describe block
 
 ---
-
 
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 

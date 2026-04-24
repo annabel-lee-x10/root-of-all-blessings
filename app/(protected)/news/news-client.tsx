@@ -442,12 +442,19 @@ export function NewsClient({
       })
       const q = `Search top 5 Singapore property market news today ${today}: HDB, condo, landed, commercial, launches, policy.`
       const raw = await agenticLoop(SEARCH_SYS, q)
-      const items = parseArr(raw)
+      let items = parseArr(raw)
+      if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
+        console.warn('[news:prop] empty parse on non-empty response, retrying. Preview:', raw.slice(0, 120))
+        const raw2 = await agenticLoop(SEARCH_SYS, q)
+        items = parseArr(raw2)
+      }
       const ts = nowSGT()
       const cards = items.slice(0, 5).map((it, i) => mapCard(it, 'prop', i, ts))
       setNews(p => ({ ...p, prop: cards }))
+      if (cards.length === 0) propFetchedRef.current = false
     } catch (err) {
       console.error('Property auto-fetch error:', err)
+      propFetchedRef.current = false
     }
     setLoadingSections(p => ({ ...p, prop: false }))
   }
@@ -518,17 +525,21 @@ export function NewsClient({
       setLoadingSections(p => ({ ...p, [key]: true }))
       try {
         const raw = await agenticLoop(SEARCH_SYS, q)
-        const items = parseArr(raw)
+        let items = parseArr(raw)
+        if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
+          console.warn(`[news:${key}] empty parse on non-empty response, retrying. Preview:`, raw.slice(0, 120))
+          const raw2 = await agenticLoop(SEARCH_SYS, q)
+          items = parseArr(raw2)
+        }
         const ts = nowSGT()
         const cards = items.slice(0, n).map((it, i) => mapCard(it, key, i, ts))
         fresh[key] = cards
         setNews(p => ({ ...p, [key]: cards }))
+        if (key === 'prop' && cards.length > 0) propFetchedRef.current = true
       } catch (err) {
         console.error(`Refresh error [${key}]:`, err)
       }
       setLoadingSections(p => ({ ...p, [key]: false }))
-      // Refresh covered prop — no auto-fetch needed if user opens it after this
-      if (key === 'prop') propFetchedRef.current = true
     }
 
     // Portfolio section
