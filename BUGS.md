@@ -5,6 +5,30 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-055 · Portfolio scan: empty OCR result silently overwrites snapshot with 0 holdings / $0 value
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `lib/portfolio/ocr.ts`
+
+**Symptom:** When Claude fails to parse a screenshot (returns `[]` or only non-holdings/non-summary types), the scan route happily creates or updates a portfolio snapshot with `total_value = 0` and zero holdings — destroying whatever good data existed for that day.
+
+**Root cause 1 — no guard on empty OCR output:** After the merge loop, `totalValue` falls through to `totalValue = totalValue ?? 0` and `holdings = []`. The route then proceeds to INSERT/UPDATE the snapshot and DELETE all existing holdings for that snapshot, replacing real data with nothing.
+
+**Root cause 2 — silent parse failures:** `parseOcrResponse` swallows all JSON parse errors with a bare `catch { return [] }`, giving no visibility into what Claude actually returned when extraction fails.
+
+**Root cause 3 — generic OCR prompt:** The original prompt gave no Syfe-specific context about what the Holdings tab looks like, making it harder for Claude to find the right data fields.
+
+**Fix 1:** Added guard after the merge loop: if `holdings.length === 0 && totalValue === null`, return 422 with a descriptive error instead of writing empty data to the DB.
+
+**Fix 2:** Added `console.error` in the `parseOcrResponse` catch block to log the raw text Claude returned. Also added a `console.log` at the top of the function logging raw length and first 200 chars for debugging.
+
+**Fix 3:** Replaced generic OCR prompt with a Syfe-specific prompt that describes the Holdings tab layout, geo badge semantics (US/SG/UK/HK), currency rules (USD for US/HK, SGD for SG, GBP for UK), the P&L-only view (not acceptable), and all expected field names (`change_1d`, `pnl`, etc.).
+
+**Regression tests:** `tests/regression/portfolio-ocr-guard.test.ts` — "BUG-055" describe block
+
+---
+
 **BUG-001** `PATCH /api/transactions/[id]` and `DELETE /api/transactions/[id]` do not call `verifySession()`, meaning authenticated endpoints are missing auth checks — discovered 2026-04-19, `app/api/transactions/[id]/route.ts`
 
 ---
@@ -748,6 +772,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-051 · scan and snapshots routes insert NULL for raw_html, violating NOT NULL constraint
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** On production, `POST /api/portfolio/scan` (screenshot OCR) and `POST /api/portfolio/snapshots` (skill upload) threw a SQLite/Turso constraint error: `NOT NULL constraint failed: portfolio_snapshots.raw_html`. The insert was silently caught and surfaced as an "Upload failed" toast.
+
+**Root cause:** Both routes hardcoded `NULL` as the literal SQL value for `raw_html` in their INSERT statements. `scripts/migrate.ts` defines `raw_html TEXT NOT NULL`, so this violates the column constraint in production. The test-DB schema in `tests/helpers.ts` declared `raw_html TEXT` (nullable), masking the violation in all automated tests.
+
+**Fix:** Changed the hardcoded `NULL` to `''` (empty string) for `raw_html` in both INSERT statements.
+
+**Regression tests:** `tests/regression/portfolio-raw-html.test.ts`
+
+---
+
 ## BUG-050 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
 
 **Status:** Fixed
@@ -925,7 +965,7 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
-## BUG-055 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
+## BUG-056 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
 
 **Status:** Fixed
 **Reported:** 2026-04-24
@@ -941,6 +981,7 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
 **Status:** Fixed
@@ -954,3 +995,21 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
 
 **Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
+
+---
+
+## BUG-055 · Excel download route times out on Vercel: no maxDuration + N+1 holdings queries
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** The Excel download endpoint (`GET /api/portfolio/download/excel/[id]`) times out on Vercel for portfolios with many snapshots, returning a 504 or no response.
+
+**Root cause 1 — No maxDuration:** The route had no `export const maxDuration`, so Vercel applied its default 10s limit. The scan route already sets `maxDuration = 60`; this route was overlooked.
+
+**Root cause 2 — N+1 query pattern:** The route fetched all snapshots, then ran one `SELECT * FROM portfolio_holdings WHERE snapshot_id = ?` per snapshot inside a `Promise.all`. With N snapshots this issues N+1 DB round-trips, each incurring network latency to Turso.
+
+**Fix:** Added `export const maxDuration = 60`. Replaced the per-snapshot holdings query with a single `SELECT * FROM portfolio_holdings ORDER BY snapshot_id`, then grouped results by `snapshot_id` in JS before building the `ExcelSnapData[]` array.
+
+**Regression test:** `tests/api/portfolio-excel-download.test.ts` — "BUG-055" describe block

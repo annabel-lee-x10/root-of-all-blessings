@@ -369,7 +369,7 @@ export function NewsClient({
 
   useEffect(() => { loadBrief() }, [loadBrief])
 
-  // BUG-055: populate tickers from the latest portfolio snapshot (OCR-uploaded holdings)
+  // BUG-056: populate tickers from the latest portfolio snapshot (OCR-uploaded holdings)
   // so the Portfolio News section is available without requiring an HTML file upload.
   useEffect(() => {
     async function loadTickers() {

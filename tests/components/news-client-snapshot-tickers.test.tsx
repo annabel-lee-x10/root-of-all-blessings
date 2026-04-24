@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Regression tests for BUG-055: Portfolio News section never shows content unless
+// Regression tests for BUG-056: Portfolio News section never shows content unless
 // user uploads an HTML file, because portfolioTickers is only set via handleUpload.
 // Users now add holdings via OCR screenshot scan, so the upload path is never hit.
 // After the fix, NewsClient fetches /api/portfolio/snapshots on mount and extracts
@@ -36,7 +36,7 @@ afterEach(() => {
   vi.resetModules()
 })
 
-describe('NewsClient – auto-load tickers from portfolio snapshot (BUG-055)', () => {
+describe('NewsClient – auto-load tickers from portfolio snapshot (BUG-056)', () => {
   it('fetches /api/portfolio/snapshots on mount', async () => {
     const { NewsClient } = await import('@/app/(protected)/news/news-client')
     render(<NewsClient />)
