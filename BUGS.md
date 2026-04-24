@@ -922,3 +922,19 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Root cause:** After BUG-052, no client-side transformations remain. `market_value` is displayed directly; `pnl`, `pnl_pct`, and `change_1d_pct` are passed through `fmt()` / `fmtPct()` for locale formatting only (no value change).
 
 **Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-053 – holdings display values exactly as stored in DB"
+
+---
+
+## BUG-054 · Portfolio scan route: NOT NULL constraint violation on raw_html
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`
+
+**Symptom:** `POST /api/portfolio/scan` fails with a NOT NULL constraint violation when inserting a new snapshot. The route returns a 500 and no snapshot is created.
+
+**Root cause:** The INSERT in the `else` branch (new-snapshot path) passed the SQL literal `NULL` for `raw_html`. The `portfolio_snapshots.raw_html` column carries a NOT NULL constraint in production, so the insert was rejected by the database.
+
+**Fix:** Replaced the SQL `NULL` literal with `''` (empty string) for the `raw_html` position in the INSERT VALUES clause.
+
+**Regression test:** `tests/api/portfolio-scan.test.ts` — "BUG-054: stores empty string (not null) for raw_html on new snapshot insert"
