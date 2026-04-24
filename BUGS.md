@@ -748,6 +748,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-051 · scan and snapshots routes insert NULL for raw_html, violating NOT NULL constraint
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** On production, `POST /api/portfolio/scan` (screenshot OCR) and `POST /api/portfolio/snapshots` (skill upload) threw a SQLite/Turso constraint error: `NOT NULL constraint failed: portfolio_snapshots.raw_html`. The insert was silently caught and surfaced as an "Upload failed" toast.
+
+**Root cause:** Both routes hardcoded `NULL` as the literal SQL value for `raw_html` in their INSERT statements. `scripts/migrate.ts` defines `raw_html TEXT NOT NULL`, so this violates the column constraint in production. The test-DB schema in `tests/helpers.ts` declared `raw_html TEXT` (nullable), masking the violation in all automated tests.
+
+**Fix:** Changed the hardcoded `NULL` to `''` (empty string) for `raw_html` in both INSERT statements.
+
+**Regression tests:** `tests/regression/portfolio-raw-html.test.ts`
+
+---
+
 ## BUG-050 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
 
 **Status:** Fixed
