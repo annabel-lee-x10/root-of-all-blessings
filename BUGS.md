@@ -739,3 +739,23 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Added `<UploadArea onUploaded={load} />` between the KPI row and the tab bar in the snapshot-exists branch of `PortfolioClient`, so it is always prominently visible regardless of whether snapshot data exists.
 
 **Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload area visible when snapshot data exists"
+
+---
+
+## BUG-043 · Portfolio scan: "Scan failed" when Anthropic fetch throws or times out
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`
+
+**Symptom:** Clicking "Scan N screenshots" on the portfolio page shows "Scan failed" in red text. The upload UI works correctly (files are selected and submitted), but the POST /api/portfolio/scan endpoint silently fails.
+
+**Root cause 1 — No try/catch around Anthropic fetch:** The `fetch()` call to `https://api.anthropic.com/v1/messages` had no try/catch. If `fetch()` itself throws (network error, Vercel killing the function on timeout), the route handler throws an unhandled exception. Next.js returns a 500 response with an HTML error page instead of JSON. The client's `res.json()` call throws a SyntaxError, `data` is set to `{}`, and `data.error ?? 'Scan failed'` resolves to "Scan failed".
+
+**Root cause 2 — No maxDuration:** No `export const maxDuration` was set on the route. Vercel defaults to 10s (Hobby) or 15s (Pro) for serverless functions. OCR of 5 screenshots in a single Claude vision call can take 15–30 seconds, causing Vercel to kill the function mid-execution before a response is sent.
+
+**Root cause 3 — Anthropic error body swallowed:** When Anthropic returns a 4xx/5xx, the route returned `{ error: 'OCR failed' }` without reading the Anthropic error body. This makes it impossible to diagnose what specifically failed (too-large request, invalid model, rate limit, etc.).
+
+**Fix:** Added `export const maxDuration = 60` to extend the Vercel function timeout. Wrapped the Anthropic `fetch` call in a try/catch that returns a JSON error on network failure. When `!anthropicRes.ok`, the route now reads the Anthropic error body and surfaces it in the response.
+
+**Regression tests:** `tests/api/portfolio-scan.test.ts` — "BUG-043" describe block

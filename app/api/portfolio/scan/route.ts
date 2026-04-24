@@ -5,6 +5,8 @@ import { buildOcrMessages, parseOcrResponse, type OcrResult } from '@/lib/portfo
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
+export const maxDuration = 60
+
 function todaySgtBounds(): { start: string; end: string } {
   const sgtDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())
   const start = new Date(`${sgtDate}T00:00:00+08:00`).toISOString()
@@ -65,21 +67,34 @@ export async function POST(request: NextRequest) {
   )
 
   // Call Claude vision API
-  const anthropicRes = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-      'x-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: buildOcrMessages(images),
-    }),
-  })
+  let anthropicRes: Response
+  try {
+    anthropicRes = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        messages: buildOcrMessages(images),
+      }),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Network error'
+    return Response.json({ error: `OCR failed: ${msg}` }, { status: 500 })
+  }
 
-  if (!anthropicRes.ok) return Response.json({ error: 'OCR failed' }, { status: 500 })
+  if (!anthropicRes.ok) {
+    let detail = String(anthropicRes.status)
+    try {
+      const errBody = await anthropicRes.json()
+      detail = errBody?.error?.message ?? JSON.stringify(errBody)
+    } catch { /* non-JSON error body — keep status code as detail */ }
+    return Response.json({ error: `OCR failed: ${detail}` }, { status: 500 })
+  }
 
   const anthropicData = await anthropicRes.json()
   const rawText: string = anthropicData.content?.[0]?.text ?? ''
