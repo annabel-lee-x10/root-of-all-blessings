@@ -726,6 +726,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-043 · Portfolio scan: raw_html stored as NULL instead of empty string
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`
+
+**Symptom:** When a new portfolio snapshot is created via the screenshot scan route (`POST /api/portfolio/scan`), the `raw_html` column is stored as `NULL` instead of an empty string `''`.
+
+**Root cause:** The INSERT at line 160 used the SQL literal `NULL` for the `raw_html` value rather than an empty string `''`. Screenshot-based snapshots have no HTML source — the column should default to `''` (consistent with other non-HTML snapshot paths).
+
+**Fix:** Changed `NULL` → `''` in the INSERT VALUES clause for `raw_html`.
+
+**Regression test:** `tests/api/portfolio-scan.test.ts` — "BUG-043: stores raw_html as empty string, not NULL"
+
+---
+
 ## BUG-042 · Portfolio: screenshot UploadArea not visible when portfolio data exists
 
 **Status:** Fixed

@@ -219,4 +219,21 @@ describe('POST /api/portfolio/scan', () => {
     const res = await POST(makeFormRequest([makeImageFile()]))
     expect(res.status).toBe(500)
   })
+
+  it('BUG-043: stores raw_html as empty string, not NULL', async () => {
+    mockClaudeOcr(JSON.stringify([
+      { type: 'summary', data: { total_value: 50000 } },
+    ]))
+
+    const { POST } = await import('@/app/api/portfolio/scan/route')
+    const res = await POST(makeFormRequest([makeImageFile()]))
+    const { snapshot_id } = await res.json()
+
+    const snap = (await db.execute({
+      sql: 'SELECT raw_html FROM portfolio_snapshots WHERE id = ?',
+      args: [snapshot_id],
+    })).rows[0]
+
+    expect(snap.raw_html).toBe('')
+  })
 })
