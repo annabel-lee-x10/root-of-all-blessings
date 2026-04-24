@@ -876,3 +876,49 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 3. Partial-success handling: if some images succeed and some fail, results from the successful images are used. The scan only returns an error if ALL images fail.
 
 **Regression tests:** `tests/api/portfolio-scan.test.ts` — "BUG-044" describe block
+
+---
+
+## BUG-051 · Portfolio: FAB opens HTML file picker instead of screenshot upload modal
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** Tapping the orange FAB ("+") button in the bottom nav while on the Portfolio page opened the OS file picker filtered to `.html/.htm` files (the old HTML-snapshot import mechanism) instead of the screenshot upload area.
+
+**Root cause:** The `portfolio:open-upload` event listener called `fileRef.current?.click()`, which triggered a hidden `<input type="file" accept=".html,.htm">` in the topbar — a leftover from the old HTML-import flow. The new upload mechanism is `UploadArea` (screenshot OCR), which has its own internal file ref. The FAB never connected to it.
+
+**Fix:** Removed the hidden HTML file input from the topbar and the associated `handleFile` / `fileRef` / `uploading` state. The `portfolio:open-upload` listener now calls `setShowUpload(true)`, which renders `UploadArea` in an `<UploadModal>` overlay. The modal closes when the upload completes or the user dismisses it.
+
+**Regression tests:** `tests/components/portfolio-client-news-tab.test.tsx` — "portfolio:open-upload event opens the screenshot upload modal when snapshot exists (BUG-051)"
+
+---
+
+## BUG-052 · Portfolio: Value KPI shows FX-approximated ~USD secondary value
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`
+
+**Symptom:** The Value KPI displayed a secondary line `~$XX USD` computed from hardcoded FX rates (`SGD≈0.74`, `GBP≈1.29`). The Geo and Sector tabs showed `~USD totals · SGD≈0.74 · GBP≈1.29` and `~USD totals · NON-USD APPROXIMATED` disclaimers. Holdings were sorted and weighted by this FX-converted estimate rather than their stored `market_value`.
+
+**Root cause:** A `FX: Record<string, number>` constant and a `valueUSD(h)` helper were used throughout the component to convert non-USD holdings to approximate USD totals for sorting, weighting, and display. This produced inaccurate displayed values that diverged from the DB-stored `market_value`.
+
+**Fix:** Removed the `FX` constant and `valueUSD()` function. All sorting, weighting, and display now use `h.market_value` directly. Removed the `~$XX USD` secondary value from the Value KPI. Removed the FX footnotes and "NON-USD APPROXIMATED" disclaimers from Geo and Sector tabs.
+
+**Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-052 – Value KPI shows no FX-approximated USD value"
+
+---
+
+## BUG-053 · Portfolio: holdings display values exactly as stored in DB
+
+**Status:** Fixed (verified — no client-side transformation found)
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx` (verified; BUG-052 fix removed the only transformation)
+
+**Symptom:** Concern that `market_value`, `pnl`, `pnl_pct`, and `change_1d_pct` might be transformed client-side before display.
+
+**Root cause:** After BUG-052, no client-side transformations remain. `market_value` is displayed directly; `pnl`, `pnl_pct`, and `change_1d_pct` are passed through `fmt()` / `fmtPct()` for locale formatting only (no value change).
+
+**Regression tests:** `tests/components/portfolio-client.test.tsx` — "BUG-053 – holdings display values exactly as stored in DB"

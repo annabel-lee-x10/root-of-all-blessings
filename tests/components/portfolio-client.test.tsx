@@ -533,38 +533,47 @@ describe('Orders tab – status badge (Phase 2)', () => {
   })
 })
 
-// ── BUG-042: screenshot UploadArea accessible when snapshot data exists ─────────
-// BUG-046 supersedes inline placement: UploadArea is now behind a + button modal.
-describe('BUG-042 – screenshot upload accessible when snapshot data exists', () => {
-  it('shows a + button in the topbar when portfolio has data', async () => {
-    await renderDashboard()
-    expect(screen.getByRole('button', { name: /^\+$/ })).toBeInTheDocument()
-  })
-})
-
-// ── BUG-046: UploadArea should be in a modal behind a + button ────────────────
-describe('BUG-046 – upload UI moved to modal behind + button', () => {
-  it('does not render the inline UploadArea between KPI and tab bar', async () => {
+// ── BUG-042 / BUG-051: screenshot upload accessible when snapshot data exists ──
+// BUG-042 confirmed the area must be reachable. BUG-051 moved it to a FAB modal.
+describe('BUG-042 / BUG-051 – screenshot upload area accessible when snapshot data exists', () => {
+  it('upload area is NOT shown inline by default when snapshot data exists', async () => {
     await renderDashboard()
     expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
   })
 
-  it('opens upload modal with "Upload Screenshots" title when + is clicked', async () => {
+  it('upload area becomes visible after portfolio:open-upload event is dispatched', async () => {
     await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /^\+$/ }))
-    await waitFor(() =>
-      expect(screen.getByText('Upload Screenshots')).toBeInTheDocument()
-    )
+    fireEvent(window, new CustomEvent('portfolio:open-upload'))
+    await waitFor(() => {
+      expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    })
+  })
+})
+
+// ── BUG-051: FAB opens screenshot upload modal (no topbar "+" button) ─────────
+describe('BUG-051 – portfolio:open-upload opens screenshot upload modal', () => {
+  it('topbar has no button with data-testid="upload-btn"', async () => {
+    await renderDashboard()
+    expect(screen.queryByTestId('upload-btn')).not.toBeInTheDocument()
   })
 
-  it('closes the modal when close button is clicked', async () => {
+  it('topbar has no hidden HTML file input accepting .html/.htm', async () => {
     await renderDashboard()
-    fireEvent.click(screen.getByRole('button', { name: /^\+$/ }))
-    await waitFor(() => expect(screen.getByText('Upload Screenshots')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /close/i }))
-    await waitFor(() =>
-      expect(screen.queryByText('Upload Screenshots')).not.toBeInTheDocument()
-    )
+    const htmlInputs = document.querySelectorAll('input[type="file"][accept*=".html"]')
+    expect(htmlInputs).toHaveLength(0)
+  })
+
+  it('upload modal is NOT visible before the FAB event fires', async () => {
+    await renderDashboard()
+    expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
+  })
+
+  it('upload modal IS visible after portfolio:open-upload fires', async () => {
+    await renderDashboard()
+    fireEvent(window, new CustomEvent('portfolio:open-upload'))
+    await waitFor(() => {
+      expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    })
   })
 })
 
@@ -624,6 +633,66 @@ describe('BUG-050 – Geo/Sector FX disclaimers removed', () => {
     await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
     expect(document.body.textContent).not.toContain('NON-USD APPROXIMATED')
     expect(document.body.textContent).not.toMatch(/~USD totals/)
+  })
+})
+
+// ── BUG-052: Holdings sorted by market_value (no FX conversion) ───────────────
+describe('BUG-052 – holdings sorted by market_value not FX-converted value', () => {
+  it('Holdings are sorted by market_value, not FX-converted value', async () => {
+    // SGD holding: market_value=2000 (SGD). FX-converted ≈ 1480 USD (< MU's 1600 USD).
+    // Without FX: 2000 > 1600 → SGD holding appears first.
+    // With FX: 1480 < 1600 → MU appears first. Test catches the FX regression.
+    const snapSorted = {
+      ...SNAP,
+      holdings: [
+        {
+          ticker: 'SGD_BIG', name: 'Big SGD Holding',
+          market_value: 2000, pnl: 0, pnl_pct: 0,
+          avg_cost: 400, current_price: 400, units: 5,
+          geo: 'SG', sector: 'ETF', currency: 'SGD',
+          target: null, sell_limit: null, buy_limit: null,
+          is_new: false, approx: false, note: null,
+          dividend_amount: null, dividend_date: null,
+        },
+        {
+          ticker: 'USD_SMALL', name: 'Small USD Holding',
+          market_value: 1600, pnl: 0, pnl_pct: 0,
+          avg_cost: 320, current_price: 320, units: 5,
+          geo: 'US', sector: 'Technology', currency: 'USD',
+          target: null, sell_limit: null, buy_limit: null,
+          is_new: false, approx: false, note: null,
+          dividend_amount: null, dividend_date: null,
+        },
+      ],
+    }
+    await renderDashboard(snapSorted)
+    const cards = screen.getAllByTestId(/^holding-card-/)
+    const sgdIdx = cards.findIndex(c => c.getAttribute('data-testid') === 'holding-card-SGD_BIG')
+    const usdIdx = cards.findIndex(c => c.getAttribute('data-testid') === 'holding-card-USD_SMALL')
+    expect(sgdIdx).toBeLessThan(usdIdx)
+  })
+})
+
+// ── BUG-053: Holdings display values exactly as stored in DB ──────────────────
+describe('BUG-053 – holdings display values exactly as stored in DB', () => {
+  it('market_value is displayed exactly as returned by API (no transformation)', async () => {
+    await renderDashboard()
+    const muCard = screen.getByTestId('holding-card-MU')
+    expect(muCard.textContent).toContain('1,600')
+  })
+
+  it('pnl magnitude is displayed exactly as returned by API', async () => {
+    await renderDashboard()
+    // MU pnl: -50 → displayed as "50" in the loss color
+    const muCard = screen.getByTestId('holding-card-MU')
+    expect(muCard.textContent).toMatch(/50\.00/)
+  })
+
+  it('pnl_pct is displayed exactly as returned by API', async () => {
+    await renderDashboard()
+    // MU pnl_pct: -3.0 → displayed as "-3.00%"
+    const muCard = screen.getByTestId('holding-card-MU')
+    expect(muCard.textContent).toContain('-3.00%')
   })
 })
 
