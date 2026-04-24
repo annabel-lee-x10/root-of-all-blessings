@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
        net_invested, net_deposited, dividends,
        prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings,
        drift_warning)
-     VALUES (?,?,?,NULL,'[]',NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,NULL,'[]','',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [
       id, date, total_value, now,
       snap_label ?? null, snap_time ?? null,
