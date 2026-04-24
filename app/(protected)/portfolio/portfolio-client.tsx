@@ -551,7 +551,7 @@ function GeoTab({ holdings }: { holdings: ExtHolding[] }) {
               <span style={{ color: T.mid, fontSize: '0.8rem' }}>{g.count} holding{g.count !== 1 ? 's' : ''}</span>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ ...MONO, color: T.pale, fontSize: '0.88rem', fontWeight: 600 }}>${fmt(g.val)}</div>
+              <div style={{ ...MONO, color: T.pale, fontSize: '0.88rem', fontWeight: 600 }}>{fmt(g.val)}</div>
               <div style={{ ...MONO, fontSize: '0.75rem', color: T.mid }}>{g.pct.toFixed(1)}%</div>
             </div>
           </div>
@@ -588,7 +588,7 @@ function SectorTab({ holdings }: { holdings: ExtHolding[] }) {
               <span style={{ color: T.mid, fontSize: '0.72rem', marginLeft: 6 }}>{s.count} holding{s.count !== 1 ? 's' : ''}</span>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <span style={{ ...MONO, color: T.pale, fontSize: '0.85rem', fontWeight: 600 }}>${fmt(s.val)}</span>
+              <span style={{ ...MONO, color: T.pale, fontSize: '0.85rem', fontWeight: 600 }}>{fmt(s.val)}</span>
               <span style={{ ...MONO, color: T.mid, fontSize: '0.75rem', marginLeft: 6 }}>{s.pct.toFixed(1)}%</span>
             </div>
           </div>
@@ -933,6 +933,11 @@ export function PortfolioClient() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    function onOpenUpload() { setShowUpload(true) }
+    window.addEventListener('portfolio:open-upload', onOpenUpload)
+    return () => window.removeEventListener('portfolio:open-upload', onOpenUpload)
+  }, [])
 
   const BTN_SEC: React.CSSProperties = {
     padding: '0.35rem 0.85rem', borderRadius: 6, cursor: 'pointer',
@@ -991,9 +996,6 @@ export function PortfolioClient() {
               )}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button style={BTN_SEC} onClick={() => setShowUpload(true)} aria-label="+">
-                +
-              </button>
               <button style={BTN_SEC} onClick={() => setShowDownloads(true)}>
                 Downloads
               </button>
