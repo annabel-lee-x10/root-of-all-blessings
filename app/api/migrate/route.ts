@@ -16,10 +16,8 @@ export async function GET() {
   const valid = await verifySession()
   if (!valid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const result = await db.execute(
-    'SELECT id, snapshot_date, snap_label, snap_time FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 10'
-  )
-  return Response.json({ snapshots: result.rows })
+  // Run the same migration logic as POST so visiting the URL in a browser works
+  return runMigrations()
 }
 
 // ── Subcategory hierarchy ─────────────────────────────────────────────────────
@@ -181,6 +179,10 @@ export async function POST() {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  return runMigrations()
+}
+
+async function runMigrations() {
   const results: Record<string, string> = {}
   const remapLog: Array<{ rule: string; subcategory: string; count: number }> = []
   const now = new Date().toISOString()

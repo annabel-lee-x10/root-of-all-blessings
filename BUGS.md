@@ -739,3 +739,47 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Added `<UploadArea onUploaded={load} />` between the KPI row and the tab bar in the snapshot-exists branch of `PortfolioClient`, so it is always prominently visible regardless of whether snapshot data exists.
 
 **Regression test:** `tests/components/portfolio-client.test.tsx` — "BUG-042 – screenshot upload area visible when snapshot data exists"
+
+---
+
+## BUG-043 · Migrate: GET /api/migrate returns snapshots instead of running migrations
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/migrate/route.ts`
+
+**Symptom:** Visiting `blessroot.quietbuild.ai/api/migrate` in a browser (GET request) returns a JSON list of portfolio snapshots instead of running the DDL migrations. The POST handler had all the migration logic but browsers send GET. This meant new columns (day_high, day_low, prev_close on portfolio_holdings) never got added to prod, causing the scan endpoint to crash.
+
+**Root cause:** The GET handler was a leftover diagnostic endpoint that queried portfolio_snapshots. The actual migration logic was only in the POST handler.
+
+**Fix:** Extracted migration logic into a shared `runMigrations()` function. Both GET and POST now call it, so visiting the URL in a browser triggers migrations correctly.
+
+---
+
+## BUG-044 · Portfolio: UploadArea shown inline instead of behind a button
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/portfolio/portfolio-client.tsx`, `app/(protected)/portfolio/upload-modal.tsx`
+
+**Symptom:** The screenshot upload UI (UploadArea) was always visible inline on the portfolio page between the KPI row and tab bar, taking up significant screen real estate even when not needed.
+
+**Root cause:** BUG-042 fix added the UploadArea inline to ensure visibility, but it should have been behind a UI trigger.
+
+**Fix:** Removed the inline UploadArea from the data-exists branch. Added a "+" button in the topbar. Created `UploadModal` component that wraps UploadArea in a modal overlay (matching DownloadsModal pattern). The empty-state inline UploadArea (no portfolio data) is preserved.
+
+---
+
+## BUG-051 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** Snapshot inserts in the scan and manual-save flows used `NULL` for the `raw_html` column, which violates the `TEXT NOT NULL` constraint on the production Turso schema and causes the INSERT to fail.
+
+**Root cause:** Both INSERT statements explicitly passed `NULL` as the `raw_html` positional argument. The OCR scan flow never stores raw HTML, and the manual snapshot POST flow has no HTML either, but the column was created as NOT NULL.
+
+**Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
+
+**Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-051 – raw_html stored as empty string not NULL"

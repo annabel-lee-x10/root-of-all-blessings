@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
       sql: `INSERT INTO portfolio_snapshots
         (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
          snap_label, snap_time, unrealised_pnl, realised_pnl, cash, pending, source)
-        VALUES (?,?,?,NULL,'[]',NULL,?,?,?,?,?,?,?,'screenshot')`,
+        VALUES (?,?,?,NULL,'[]','',?,?,?,?,?,?,?,'screenshot')`,
       args: [snapshotId, now, totalValue, now, sgtLabel(), sgtTime(),
              unrealisedPnl, realisedPnl, cash, pending],
     })

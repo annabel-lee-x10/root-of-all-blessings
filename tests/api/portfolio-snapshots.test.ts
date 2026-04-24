@@ -5,6 +5,7 @@ import {
   seedPortfolioSnapshotV2, seedPortfolioHolding, seedPortfolioOrder,
   seedPortfolioRealised, seedPortfolioGrowth, seedPortfolioMilestone,
 } from '../helpers'
+import { db } from '@/lib/db'
 
 beforeAll(() => initTestDb())
 afterAll(() => clearTestDb())
@@ -256,5 +257,19 @@ describe('POST /api/portfolio/snapshots', () => {
     const snap = await (await GET()).json()
     expect(snap.orders).toHaveLength(1)
     expect(snap.orders[0].ticker).toBe('NFLX')
+  })
+
+  it('BUG-051 – raw_html stored as empty string not NULL', async () => {
+    const { POST } = await import('@/app/api/portfolio/snapshots/route')
+    const body = { total_value: 5000, holdings: [], orders: [], realised: [], growth: [], milestones: [] }
+    const res = await POST(req('/api/portfolio/snapshots', 'POST', body))
+    const { id } = await res.json()
+
+    const row = (await db.execute({
+      sql: 'SELECT raw_html FROM portfolio_snapshots WHERE id = ?',
+      args: [id],
+    })).rows[0]
+
+    expect(row.raw_html).toBe('')
   })
 })
