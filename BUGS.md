@@ -759,3 +759,24 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Added `export const maxDuration = 60` to extend the Vercel function timeout. Wrapped the Anthropic `fetch` call in a try/catch that returns a JSON error on network failure. When `!anthropicRes.ok`, the route now reads the Anthropic error body and surfaces it in the response.
 
 **Regression tests:** `tests/api/portfolio-scan.test.ts` — "BUG-043" describe block
+
+---
+
+## BUG-044 · Portfolio scan: "Scan failed" persists — DB crash + Vercel timeout on multi-image call
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`
+
+**Symptom:** Scan still returns "Scan failed" after BUG-043 fix. BUG-043 only added try/catch around the Anthropic `fetch()` call, but two additional crash paths remain unprotected.
+
+**Root cause 1 — No top-level try/catch:** DB operations (`INSERT INTO portfolio_holdings`, `INSERT INTO portfolio_snapshots`, etc.) have no error handling. If the production database schema is missing columns added by migrations (e.g. `day_high`, `day_low`, `prev_close` on `portfolio_holdings` — added as ALTER TABLE in PR #86 — when `/api/migrate` wasn't run after PR #86), these INSERTs throw an unhandled exception. Next.js returns an HTML 500 page instead of JSON. The client's `res.json()` fails, `data = {}`, and "Scan failed" appears.
+
+**Root cause 2 — Single Anthropic call for N images times out:** All images are sent in a single Claude API call. With 5 screenshots, this can take 15–30s. Vercel serverless functions are capped at 10s (Hobby) or 60s (Pro). When Vercel kills the function, the connection is dropped before any response is sent — this cannot be caught by try/catch inside the function. The client receives no response or a 504 HTML page → "Scan failed".
+
+**Fix:**
+1. Added a top-level `try/catch` around the entire `POST` handler body with `console.error` logging. Any unhandled exception now returns `{ error: "Scan error: <message>" }` instead of crashing silently.
+2. Extracted `scanOneImage()` — a helper that calls the Anthropic API for a single image and returns `{ results }` or `{ error }`. The route now processes images in parallel (one Claude call per image). Each call completes in 2–5s; 5 parallel calls finish in ~5s total — well within any Vercel timeout tier.
+3. Partial-success handling: if some images succeed and some fail, results from the successful images are used. The scan only returns an error if ALL images fail.
+
+**Regression tests:** `tests/api/portfolio-scan.test.ts` — "BUG-044" describe block
