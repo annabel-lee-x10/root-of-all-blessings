@@ -533,11 +533,166 @@ describe('Orders tab – status badge (Phase 2)', () => {
   })
 })
 
-// ── BUG-042: screenshot UploadArea hidden when portfolio data exists ───────────
-describe('BUG-042 – screenshot upload area visible when snapshot data exists', () => {
-  it('shows "Upload Syfe Screenshots" section when portfolio has data', async () => {
+// ── BUG-042 / BUG-051: screenshot upload accessible when snapshot data exists ──
+// BUG-042 confirmed the area must be reachable. BUG-051 moved it to a FAB modal.
+describe('BUG-042 / BUG-051 – screenshot upload area accessible when snapshot data exists', () => {
+  it('upload area is NOT shown inline by default when snapshot data exists', async () => {
     await renderDashboard()
-    expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
+  })
+
+  it('upload area becomes visible after portfolio:open-upload event is dispatched', async () => {
+    await renderDashboard()
+    fireEvent(window, new CustomEvent('portfolio:open-upload'))
+    await waitFor(() => {
+      expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    })
+  })
+})
+
+// ── BUG-051: FAB opens screenshot upload modal (no topbar "+" button) ─────────
+describe('BUG-051 – portfolio:open-upload opens screenshot upload modal', () => {
+  it('topbar has no button with data-testid="upload-btn"', async () => {
+    await renderDashboard()
+    expect(screen.queryByTestId('upload-btn')).not.toBeInTheDocument()
+  })
+
+  it('topbar has no hidden HTML file input accepting .html/.htm', async () => {
+    await renderDashboard()
+    const htmlInputs = document.querySelectorAll('input[type="file"][accept*=".html"]')
+    expect(htmlInputs).toHaveLength(0)
+  })
+
+  it('upload modal is NOT visible before the FAB event fires', async () => {
+    await renderDashboard()
+    expect(screen.queryByText('Upload Syfe Screenshots')).not.toBeInTheDocument()
+  })
+
+  it('upload modal IS visible after portfolio:open-upload fires', async () => {
+    await renderDashboard()
+    fireEvent(window, new CustomEvent('portfolio:open-upload'))
+    await waitFor(() => {
+      expect(screen.getByText('Upload Syfe Screenshots')).toBeInTheDocument()
+    })
+  })
+})
+
+// ── BUG-048: FX/valueUSD logic removed ───────────────────────────────────────
+describe('BUG-048 – FX/valueUSD logic removed', () => {
+  it('Geo tab does not show "~$" FX-approximated prefix on geo values', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Geo$/i }))
+    expect(document.body.textContent).not.toContain('~$')
+  })
+
+  it('Sector tab does not show "~$" FX-approximated prefix on sector values', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Sector$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
+    expect(document.body.textContent).not.toContain('~$')
+  })
+
+  it('KPI row does not show a secondary "~$... USD" FX approximation', async () => {
+    await renderDashboard()
+    expect(document.body.textContent).not.toMatch(/~\$.*USD/)
+  })
+})
+
+// ── BUG-049: dead HTML-upload file input removed from topbar ──────────────────
+describe('BUG-049 – dead HTML-upload file input removed from topbar', () => {
+  it('there is no hidden file input accepting .html/.htm files in the document', async () => {
+    await renderDashboard()
+    const htmlInput = document.querySelector('input[type="file"][accept*=".html"]')
+    expect(htmlInput).not.toBeInTheDocument()
+  })
+
+  it('dispatching portfolio:open-upload event does not open a file picker (no fileRef)', async () => {
+    await renderDashboard()
+    expect(() => {
+      window.dispatchEvent(new CustomEvent('portfolio:open-upload'))
+    }).not.toThrow()
+    expect(document.querySelector('input[type="file"][accept*=".html"]')).not.toBeInTheDocument()
+  })
+})
+
+// ── BUG-050: Geo/Sector FX disclaimer text removed ────────────────────────────
+describe('BUG-050 – Geo/Sector FX disclaimers removed', () => {
+  it('Geo tab does not show the "~USD totals · SGD≈0.74 · GBP≈1.29" disclaimer', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Geo$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Geo$/i }))
+    expect(document.body.textContent).not.toContain('SGD≈')
+    expect(document.body.textContent).not.toContain('GBP≈')
+    expect(document.body.textContent).not.toMatch(/~USD totals/)
+  })
+
+  it('Sector tab does not show "~USD totals · NON-USD APPROXIMATED" disclaimer', async () => {
+    await renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: /^Sector$/i }))
+    await waitFor(() => screen.getByRole('button', { name: /^Sector$/i }))
+    expect(document.body.textContent).not.toContain('NON-USD APPROXIMATED')
+    expect(document.body.textContent).not.toMatch(/~USD totals/)
+  })
+})
+
+// ── BUG-052: Holdings sorted by market_value (no FX conversion) ───────────────
+describe('BUG-052 – holdings sorted by market_value not FX-converted value', () => {
+  it('Holdings are sorted by market_value, not FX-converted value', async () => {
+    // SGD holding: market_value=2000 (SGD). FX-converted ≈ 1480 USD (< MU's 1600 USD).
+    // Without FX: 2000 > 1600 → SGD holding appears first.
+    // With FX: 1480 < 1600 → MU appears first. Test catches the FX regression.
+    const snapSorted = {
+      ...SNAP,
+      holdings: [
+        {
+          ticker: 'SGD_BIG', name: 'Big SGD Holding',
+          market_value: 2000, pnl: 0, pnl_pct: 0,
+          avg_cost: 400, current_price: 400, units: 5,
+          geo: 'SG', sector: 'ETF', currency: 'SGD',
+          target: null, sell_limit: null, buy_limit: null,
+          is_new: false, approx: false, note: null,
+          dividend_amount: null, dividend_date: null,
+        },
+        {
+          ticker: 'USD_SMALL', name: 'Small USD Holding',
+          market_value: 1600, pnl: 0, pnl_pct: 0,
+          avg_cost: 320, current_price: 320, units: 5,
+          geo: 'US', sector: 'Technology', currency: 'USD',
+          target: null, sell_limit: null, buy_limit: null,
+          is_new: false, approx: false, note: null,
+          dividend_amount: null, dividend_date: null,
+        },
+      ],
+    }
+    await renderDashboard(snapSorted)
+    const cards = screen.getAllByTestId(/^holding-card-/)
+    const sgdIdx = cards.findIndex(c => c.getAttribute('data-testid') === 'holding-card-SGD_BIG')
+    const usdIdx = cards.findIndex(c => c.getAttribute('data-testid') === 'holding-card-USD_SMALL')
+    expect(sgdIdx).toBeLessThan(usdIdx)
+  })
+})
+
+// ── BUG-053: Holdings display values exactly as stored in DB ──────────────────
+describe('BUG-053 – holdings display values exactly as stored in DB', () => {
+  it('market_value is displayed exactly as returned by API (no transformation)', async () => {
+    await renderDashboard()
+    const muCard = screen.getByTestId('holding-card-MU')
+    expect(muCard.textContent).toContain('1,600')
+  })
+
+  it('pnl magnitude is displayed exactly as returned by API', async () => {
+    await renderDashboard()
+    // MU pnl: -50 → displayed as "50" in the loss color
+    const muCard = screen.getByTestId('holding-card-MU')
+    expect(muCard.textContent).toMatch(/50\.00/)
+  })
+
+  it('pnl_pct is displayed exactly as returned by API', async () => {
+    await renderDashboard()
+    // MU pnl_pct: -3.0 → displayed as "-3.00%"
+    const muCard = screen.getByTestId('holding-card-MU')
+    expect(muCard.textContent).toContain('-3.00%')
   })
 })
 

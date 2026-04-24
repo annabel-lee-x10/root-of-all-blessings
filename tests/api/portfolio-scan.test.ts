@@ -213,14 +213,135 @@ describe('POST /api/portfolio/scan', () => {
   })
 
   it('returns 500 when Claude API fails', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve({}) }))
 
     const { POST } = await import('@/app/api/portfolio/scan/route')
     const res = await POST(makeFormRequest([makeImageFile()]))
     expect(res.status).toBe(500)
   })
 
-  it('BUG-043: stores raw_html as empty string, not NULL', async () => {
+  describe('BUG-044 – parallel per-image calls + top-level catch always returns JSON', () => {
+    it('returns JSON 500 (not HTML crash) when a DB operation throws', async () => {
+      // Simulate the Claude call succeeding but a subsequent DB write failing
+      mockClaudeOcr(JSON.stringify([
+        { type: 'summary', data: { total_value: 10000 } },
+      ]))
+      // Break the DB so the INSERT into portfolio_snapshots fails
+      const { db } = await import('@/lib/db')
+      vi.spyOn(db, 'execute').mockRejectedValueOnce(new Error('no such column: snap_label'))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      // Must be JSON — old code crashed silently and returned HTML
+      const data = await res.json()
+      expect(typeof data.error).toBe('string')
+      expect(data.error.length).toBeGreaterThan(0)
+    })
+
+    it('processes multiple images in parallel and aggregates results', async () => {
+      // Each call returns results for one image
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ content: [{ text: JSON.stringify([
+            { type: 'summary', data: { total_value: 50000, cash: 1000 } },
+          ]) }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ content: [{ text: JSON.stringify([
+            { type: 'holdings', data: { holdings: [
+              { ticker: 'AAPL', name: 'Apple', geo: 'US', price: 175, change_1d: 1, value: 3500, pnl: 200, qty: 20 },
+            ] } },
+          ]) }] }),
+        })
+      )
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile('img1.jpg'), makeImageFile('img2.jpg')]))
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.holdings_count).toBe(1)
+    })
+
+    it('returns JSON 500 with first error when all images fail', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } }),
+      }))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile('a.jpg'), makeImageFile('b.jpg')]))
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(data.error).toContain('Rate limit exceeded')
+    })
+
+    it('returns partial results when only some images fail', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ content: [{ text: JSON.stringify([
+            { type: 'summary', data: { total_value: 45000 } },
+          ]) }] }),
+        })
+        .mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({}) })
+      )
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile('ok.jpg'), makeImageFile('fail.jpg')]))
+      // Should succeed with partial data from the one good image
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.snapshot_id).toBeTruthy()
+    })
+  })
+
+  describe('BUG-043 – scan returns JSON error when Anthropic fetch throws or returns error body', () => {
+    it('returns JSON 500 (not a crash) when fetch throws a network error', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network timeout')))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      // Must be parseable JSON — if the route crashes, res.json() would throw
+      const data = await res.json()
+      expect(typeof data.error).toBe('string')
+      expect(data.error.length).toBeGreaterThan(0)
+    })
+
+    it('surfaces Anthropic error detail when API returns 4xx with JSON body', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: 'Request too large for model' } }),
+      }))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(data.error).toContain('Request too large for model')
+    })
+
+    it('returns JSON 500 even when Anthropic error body is non-JSON', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        json: () => Promise.reject(new SyntaxError('not json')),
+      }))
+
+      const { POST } = await import('@/app/api/portfolio/scan/route')
+      const res = await POST(makeFormRequest([makeImageFile()]))
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(typeof data.error).toBe('string')
+    })
+  })
+
+  it('BUG-054: stores raw_html as empty string, not NULL', async () => {
     mockClaudeOcr(JSON.stringify([
       { type: 'summary', data: { total_value: 50000 } },
     ]))
