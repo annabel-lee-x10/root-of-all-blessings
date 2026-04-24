@@ -965,6 +965,23 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-056 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The Portfolio News section on the News tab stays hidden and never shows content, even after the user has uploaded a portfolio screenshot and holdings are saved in the DB. No tickers are ever populated, so the section condition `portfolioTickers.length > 0 || news.port.length > 0` is never met.
+
+**Root cause:** `portfolioTickers` was only populated by two paths: (1) `handleUpload` — user uploads an HTML file via the news FAB; (2) `loadBrief` — the saved brief JSON includes a `tickers` field from a previous Refresh with tickers. The `sharedTickers` prop from `PortfolioClient` was cleared in BUG-049 (now always `[]`). Since users switched to OCR screenshot scan to add holdings, `handleUpload` is never called, and tickers are never set.
+
+**Fix:** Added a `loadTickers` `useEffect` (runs once on mount) that fetches `/api/portfolio/snapshots`, extracts unique non-null tickers from `holdings`, and calls `setPortfolioTickers`. Does NOT auto-generate portfolio news — tickers are just made available for when the user clicks Refresh or the Portfolio tab is opened. HTML upload flow is preserved and overrides the auto-loaded tickers if the user uploads a new report.
+
+**Regression test:** `tests/components/news-client-snapshot-tickers.test.tsx`
+
+---
+
+
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
 **Status:** Fixed
