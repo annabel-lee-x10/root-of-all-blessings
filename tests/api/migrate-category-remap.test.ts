@@ -528,8 +528,8 @@ describe('category_remap response log', () => {
   })
 })
 
-// ── BUG-043: GET /api/migrate should run migrations, not list snapshots ────────
-describe('BUG-043 – GET /api/migrate runs migrations', () => {
+// ── BUG-045: GET /api/migrate should run migrations, not list snapshots ────────
+describe('BUG-045 – GET /api/migrate runs migrations', () => {
   it('returns ok:true with a migrations object', async () => {
     const { GET } = await import('@/app/api/migrate/route')
     const res = await GET()

@@ -534,7 +534,7 @@ describe('Orders tab – status badge (Phase 2)', () => {
 })
 
 // ── BUG-042: screenshot UploadArea hidden when portfolio data exists ───────────
-// BUG-044 supersedes: UploadArea is now behind a + button modal, not inline.
+// BUG-046 supersedes: UploadArea is now behind a + button modal, not inline.
 describe('BUG-042 – screenshot upload accessible when snapshot data exists', () => {
   it('shows a + button in the topbar when portfolio has data', async () => {
     await renderDashboard()
@@ -542,8 +542,8 @@ describe('BUG-042 – screenshot upload accessible when snapshot data exists', (
   })
 })
 
-// ── BUG-044: UploadArea should be in a modal behind a + button ────────────────
-describe('BUG-044 – upload UI moved to modal behind + button', () => {
+// ── BUG-046: UploadArea should be in a modal behind a + button ────────────────
+describe('BUG-046 – upload UI moved to modal behind + button', () => {
   it('does not render the inline UploadArea between KPI and tab bar', async () => {
     await renderDashboard()
     // "Upload Syfe Screenshots" should NOT be visible before clicking +

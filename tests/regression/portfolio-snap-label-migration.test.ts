@@ -140,8 +140,8 @@ describe('BUG-038 · migrate backfills NULL snap_labels', () => {
   })
 })
 
-// BUG-043 fixed the GET handler — it now runs migrations (not returns snapshots).
-describe('BUG-043 · GET /api/migrate runs migrations (not snapshot diagnostics)', () => {
+// BUG-045 fixed the GET handler — it now runs migrations (not returns snapshots).
+describe('BUG-045 · GET /api/migrate runs migrations (not snapshot diagnostics)', () => {
   it('GET /api/migrate returns ok:true with a migrations object', async () => {
     const res = await callMigrateGet()
     const data = await res.json()
