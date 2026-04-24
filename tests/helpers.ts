@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
   total_value REAL NOT NULL,
   total_pnl REAL,
   holdings_json TEXT NOT NULL DEFAULT '[]',
-  raw_html TEXT,
+  raw_html TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   snap_label TEXT,
   snap_time TEXT,
@@ -326,7 +326,7 @@ export function seedPortfolioSnapshot(
           snap_label, snap_time, cash, pending, net_invested, unrealised_pnl, realised_pnl,
           net_deposited, dividends,
           prior_value, prior_unrealised, prior_realised, prior_cash, prior_holdings, source)
-       VALUES (?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,'',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(id, snapshot_date, total_value, total_pnl, JSON.stringify(holdings), n,
          snap_label, snap_time, cash, pending, net_invested, unrealised_pnl, realised_pnl,
@@ -360,7 +360,7 @@ export function seedPortfolioSnapshotV2(
     `INSERT INTO portfolio_snapshots
       (id, snapshot_date, total_value, total_pnl, holdings_json, raw_html, created_at,
        snap_label, snap_time, unrealised_pnl, realised_pnl, cash, net_invested, net_deposited)
-     VALUES (?, ?, ?, NULL, '[]', NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, NULL, '[]', '', ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(id, snapshot_date, total_value, n, snap_label, snap_time, unrealised_pnl, realised_pnl, cash, net_invested, net_deposited)
 }
 

@@ -5,6 +5,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-051 · OCR scan fails with SQLITE_CONSTRAINT: NOT NULL on raw_html
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** `POST /api/portfolio/scan` (OCR screenshot upload) fails with `SQLITE_CONSTRAINT: NOT NULL constraint failed: portfolio_snapshots.raw_html`, preventing any new screenshot-based snapshot from being created. `POST /api/portfolio/snapshots` (skill-driven snapshot creation) has the same issue.
+
+**Root cause:** Both INSERT statements hardcode `NULL` for the `raw_html` column. The `portfolio_snapshots` table was created with `raw_html TEXT NOT NULL` (no default) in `scripts/migrate.ts`. Screenshot snapshots have no HTML to store; skill-driven snapshots store data in child tables rather than `raw_html`.
+
+**Fix:** Changed `NULL` to `''` (empty string) for `raw_html` in both INSERT statements. SQLite accepts `''` for a NOT NULL TEXT column. The column retains its NOT NULL constraint — `''` signals "no HTML for this snapshot type" without losing the constraint guarantee.
+
+**Regression tests:** `tests/regression/portfolio-scan-raw-html.test.ts`
+
+---
+
 **BUG-001** `PATCH /api/transactions/[id]` and `DELETE /api/transactions/[id]` do not call `verifySession()`, meaning authenticated endpoints are missing auth checks — discovered 2026-04-19, `app/api/transactions/[id]/route.ts`
 
 ---
