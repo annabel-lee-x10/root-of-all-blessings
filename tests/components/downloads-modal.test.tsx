@@ -48,7 +48,7 @@ describe('DownloadsModal', () => {
     expect(htmlLinks[0]).toHaveAttribute('href', '/api/portfolio/download/html/s5')
   })
 
-  describe('BUG-055: Excel download uses fetch+blob, not <a href> navigation', () => {
+  describe('BUG-061: Excel download uses fetch+blob, not <a href> navigation', () => {
     it('Excel button is not a navigation link (no href)', async () => {
       mockFetch()
       const DownloadsModal = await importDownloadsModal()

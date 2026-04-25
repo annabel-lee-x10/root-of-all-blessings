@@ -64,6 +64,43 @@ describe('GET /api/portfolio/download/html/[id]', () => {
   })
 })
 
+describe('BUG-060 – Excel response body must be Uint8Array, not raw Buffer', () => {
+  it('passes new Uint8Array(buf) to the Response constructor body (not a raw Buffer cast)', async () => {
+    seedPortfolioSnapshotV2('b60', { snap_label: 'Apr 2026', total_value: 7000 })
+    seedPortfolioHolding('b60', { ticker: 'MU', name: 'Micron', value: 2437 })
+
+    // Intercept every `new Response(body, init)` call in the route.
+    // With the bug (buf as unknown as BodyInit), body.constructor.name === 'Buffer'.
+    // With the fix (new Uint8Array(buf)),   body.constructor.name === 'Uint8Array'.
+    // Vercel's serverless runtime treats Buffer differently from Uint8Array, stripping
+    // Content-Disposition and never completing the body — producing UUID .txt downloads.
+    const capturedBodies: unknown[] = []
+    const OrigResponse = global.Response
+    global.Response = class extends OrigResponse {
+      constructor(body: BodyInit | null, init?: ResponseInit) {
+        capturedBodies.push(body)
+        super(body as BodyInit, init)
+      }
+    } as unknown as typeof Response
+
+    try {
+      const { GET } = await import('@/app/api/portfolio/download/excel/[id]/route')
+      const res = await GET(excelReq('b60'), { params: Promise.resolve({ id: 'b60' }) })
+      expect(res.status).toBe(200)
+
+      // Find the binary body (xlsx data) — filter out string bodies from Response.json() calls.
+      const binaryBody = capturedBodies.find(
+        (b) => b != null && typeof b === 'object' && (b instanceof Uint8Array || Buffer.isBuffer(b))
+      )
+      expect(binaryBody).toBeDefined()
+      // Must be exactly Uint8Array, NOT the Buffer subclass.
+      expect((binaryBody as Uint8Array).constructor.name).toBe('Uint8Array')
+    } finally {
+      global.Response = OrigResponse
+    }
+  })
+})
+
 describe('GET /api/portfolio/download/excel/[id]', () => {
   it('returns 401 without auth', async () => {
     const { verifySession } = await import('@/lib/session')

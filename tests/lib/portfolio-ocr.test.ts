@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { buildOcrMessages, parseOcrResponse } from '@/lib/portfolio/ocr'
 
 describe('buildOcrMessages', () => {
@@ -32,11 +32,11 @@ describe('buildOcrMessages', () => {
     expect(imgBlock.source.data).toBe('abc123')
   })
 
-  it('prompt text mentions portfolio data extractor', () => {
+  it('prompt identifies Syfe brokerage app', () => {
     const images = [{ base64: 'abc', mediaType: 'image/jpeg' }]
     const messages = buildOcrMessages(images)
     const textBlock = messages[0].content.find((c: { type: string }) => c.type === 'text')
-    expect(textBlock?.text).toMatch(/portfolio data extractor/i)
+    expect(textBlock?.text).toContain('Syfe brokerage app')
   })
 
   it('prompt text includes all known screenshot types', () => {
@@ -46,7 +46,23 @@ describe('buildOcrMessages', () => {
     expect(text).toContain('holdings')
     expect(text).toContain('summary')
     expect(text).toContain('orders')
-    expect(text).toContain('transactions')
+    expect(text).toContain('stock_detail')
+  })
+
+  it('prompt describes Holdings tab geo badge and currency rules', () => {
+    const images = [{ base64: 'abc', mediaType: 'image/jpeg' }]
+    const messages = buildOcrMessages(images)
+    const text = messages[0].content.find((c: { type: string }) => c.type === 'text')?.text ?? ''
+    expect(text).toContain('USD for US')
+    expect(text).toContain('SGD for SG')
+    expect(text).toContain('GBP for UK')
+  })
+
+  it('prompt mentions ~APPROX for unclear values', () => {
+    const images = [{ base64: 'abc', mediaType: 'image/jpeg' }]
+    const messages = buildOcrMessages(images)
+    const text = messages[0].content.find((c: { type: string }) => c.type === 'text')?.text ?? ''
+    expect(text).toContain('~APPROX')
   })
 })
 
@@ -164,5 +180,47 @@ describe('parseOcrResponse', () => {
     expect(result).toHaveLength(2)
     expect(result[0].type).toBe('summary')
     expect(result[1].type).toBe('holdings')
+  })
+
+  it('logs error to console.error when JSON parse fails', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    parseOcrResponse('definitely not json {{{')
+    expect(spy).toHaveBeenCalledWith(
+      '[portfolio-ocr] JSON parse failed. Raw text:',
+      expect.any(String)
+    )
+    spy.mockRestore()
+  })
+
+  it('logs raw text info to console.log at start of parsing', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    parseOcrResponse(JSON.stringify([{ type: 'summary', data: { total_value: 1000 } }]))
+    expect(spy).toHaveBeenCalledWith(
+      '[portfolio-ocr] raw length:',
+      expect.any(Number),
+      'first 200:',
+      expect.any(String)
+    )
+    spy.mockRestore()
+  })
+
+  it('parses valid Syfe Holdings-tab format with currency and geo', () => {
+    const raw = JSON.stringify([{
+      type: 'holdings',
+      data: {
+        holdings: [
+          { ticker: 'MU', name: 'Micron Technology', geo: 'US', currency: 'USD', price: 487.48, change_1d: 8.48, value: 2437.40, pnl: 751.40, qty: 5 },
+          { ticker: 'Z74', name: 'Singtel', geo: 'SG', currency: 'SGD', price: 2.91, change_1d: -0.34, value: 291.00, pnl: -7.00, qty: 100 },
+          { ticker: 'WISE', name: 'Wise PLC', geo: 'UK', currency: 'GBP', price: 9.12, change_1d: 1.23, value: 91.20, pnl: 1.70, qty: 10 },
+        ],
+      },
+    }])
+    const result = parseOcrResponse(raw)
+    expect(result).toHaveLength(1)
+    expect(result[0].data.holdings[0].currency).toBe('USD')
+    expect(result[0].data.holdings[1].currency).toBe('SGD')
+    expect(result[0].data.holdings[2].currency).toBe('GBP')
+    expect(result[0].data.holdings[0].change_1d).toBe(8.48)
+    expect(result[0].data.holdings[0].pnl).toBe(751.40)
   })
 })

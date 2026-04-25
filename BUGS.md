@@ -5,7 +5,88 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-055 · Portfolio scan: empty OCR result silently overwrites snapshot with 0 holdings / $0 value
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `lib/portfolio/ocr.ts`
+
+**Symptom:** When Claude fails to parse a screenshot (returns `[]` or only non-holdings/non-summary types), the scan route happily creates or updates a portfolio snapshot with `total_value = 0` and zero holdings — destroying whatever good data existed for that day.
+
+**Root cause 1 — no guard on empty OCR output:** After the merge loop, `totalValue` falls through to `totalValue = totalValue ?? 0` and `holdings = []`. The route then proceeds to INSERT/UPDATE the snapshot and DELETE all existing holdings for that snapshot, replacing real data with nothing.
+
+**Root cause 2 — silent parse failures:** `parseOcrResponse` swallows all JSON parse errors with a bare `catch { return [] }`, giving no visibility into what Claude actually returned when extraction fails.
+
+**Root cause 3 — generic OCR prompt:** The original prompt gave no Syfe-specific context about what the Holdings tab looks like, making it harder for Claude to find the right data fields.
+
+**Fix 1:** Added guard after the merge loop: if `holdings.length === 0 && totalValue === null`, return 422 with a descriptive error instead of writing empty data to the DB.
+
+**Fix 2:** Added `console.error` in the `parseOcrResponse` catch block to log the raw text Claude returned. Also added a `console.log` at the top of the function logging raw length and first 200 chars for debugging.
+
+**Fix 3:** Replaced generic OCR prompt with a Syfe-specific prompt that describes the Holdings tab layout, geo badge semantics (US/SG/UK/HK), currency rules (USD for US/HK, SGD for SG, GBP for UK), the P&L-only view (not acceptable), and all expected field names (`change_1d`, `pnl`, etc.).
+
+**Regression tests:** `tests/regression/portfolio-ocr-guard.test.ts` — "BUG-055" describe block
+
+---
+
 **BUG-001** `PATCH /api/transactions/[id]` and `DELETE /api/transactions/[id]` do not call `verifySession()`, meaning authenticated endpoints are missing auth checks — discovered 2026-04-19, `app/api/transactions/[id]/route.ts`
+
+---
+
+## BUG-060 · Excel download: response body corrupt — UUID .txt filename, "Download paused" in Chrome
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** Clicking the Excel download button produces a file named after the raw snapshot UUID (e.g. `287a29be-df91-43e9-8f....txt`) instead of `portfolio-{label}.xlsx`. Chrome shows "Download paused" and the download never completes. The `Content-Disposition` and `Content-Type` response headers are not visible to the browser.
+
+**Root cause:** `generateExcel()` returns a Node.js `Buffer`. The route passed it to `new Response()` via `buf as unknown as BodyInit` — a double type-cast that bypasses TypeScript. In Vercel's serverless runtime, passing a `Buffer` (Node.js subclass of `Uint8Array`) directly as `BodyInit` causes the runtime to fail to serialize the response body correctly: the response headers are stripped and the body stream never terminates. The correct approach — used by the transactions export route in the same codebase — is `new Response(new Uint8Array(buf), {...})`, which gives the Web API a plain `ArrayBufferView` it can reliably serialize.
+
+**Root cause 2 (already fixed in PR #104/BUG-055):** `maxDuration` was missing (Vercel 10 s limit) and an N+1 query pattern fetched one DB round-trip per snapshot. Both were resolved in PR #104 but the buffer encoding issue was left untouched.
+
+**Fix:** Replaced `buf as unknown as BodyInit` with `new Uint8Array(buf)` — the same pattern used in `app/api/transactions/export/route.ts`.
+
+**Regression test:** `tests/api/portfolio-download.test.ts` — "BUG-060 – Excel response body must be Uint8Array, not raw Buffer"
+
+---
+
+## BUG-059 · News: sections show "No stories yet" on transient API errors (429 / 5xx)
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh (or auto-expanding Singapore Property), individual news sections intermittently showed "No stories yet — hit Refresh to generate" instead of loading stories. The failure was random and retrying manually would usually succeed.
+
+**Root cause:** `anthropicTurn()` made a single call to `/api/news/generate` and immediately threw on any non-2xx response. Transient API-level failures — 429 rate-limit responses or 5xx server errors from the Anthropic proxy — caused the entire section to fail with no recovery. The existing retry logic (PR #107) only handled the case where the model returned prose instead of JSON; it had no coverage for HTTP-level failures.
+
+**Fix:** Added a single retry inside `anthropicTurn`. If the first `fetch('/api/news/generate')` call returns status 429 or any 5xx, the function waits 2 seconds then retries once. If the retry also fails, or if the status is a non-retriable 4xx (400, 401, 403), the error is thrown as before. No other function (`agenticLoop`, `handleRefresh`, `handlePropOpen`, `refreshPortfolioNews`) was changed.
+
+**Regression tests:** `tests/regression/news-api-retry.test.tsx` — "BUG-059" describe block
+
+---
+
+## BUG-058 · News: Singapore Property section always shows "No stories yet" after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh, the Singapore Property section consistently showed "No stories yet — hit Refresh to generate" while World, Singapore Headlines, Jobs, and Portfolio all loaded correctly. The section remained empty for the rest of the session even if Refresh was hit again.
+
+**Root cause 1 — handleRefresh set propFetchedRef unconditionally:** `if (key === 'prop') propFetchedRef.current = true` ran outside the try/catch block, so it executed even when the prop agenticLoop returned 0 cards (empty JSON, prose, or parse failure). This permanently blocked `handlePropOpen` (the expand-to-fetch trigger) for the rest of the session via its `if (propFetchedRef.current) return` guard.
+
+**Root cause 2 — handlePropOpen never reset propFetchedRef on empty result:** `propFetchedRef.current = true` was set at the start of `handlePropOpen` to prevent concurrent calls. If the fetch succeeded but `parseArr` returned 0 cards (or the fetch threw), `propFetchedRef` stayed `true`, permanently blocking any retry via expand.
+
+**Root cause 3 — No retry when model returns prose instead of JSON:** The property query ("HDB, condo, landed, commercial...") intermittently causes the model to return a prose summary rather than a raw JSON array. `parseArr` returns `[]` silently. No retry was attempted, so the section stayed empty.
+
+**Fix:**
+1. Moved `propFetchedRef.current = true` inside the try block in `handleRefresh`, guarded by `cards.length > 0`. A Refresh that yields 0 prop cards no longer blocks future auto-fetches.
+2. In `handlePropOpen`, added `propFetchedRef.current = false` when `cards.length === 0` (after try) and in the catch block, allowing the next expand to retry.
+3. Added a one-time retry in both `handleRefresh` and `handlePropOpen`: when `parseArr(raw)` returns empty on a non-empty raw response that does not start with `[` (i.e., prose, not intentionally-empty `[]`), `agenticLoop` is called once more and the result used.
+
+**Regression tests:** `tests/components/news-property-auto-fetch.test.tsx` — "BUG-058" describe block (3 cases)
 
 ---
 
@@ -748,6 +829,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-051 · scan and snapshots routes insert NULL for raw_html, violating NOT NULL constraint
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** On production, `POST /api/portfolio/scan` (screenshot OCR) and `POST /api/portfolio/snapshots` (skill upload) threw a SQLite/Turso constraint error: `NOT NULL constraint failed: portfolio_snapshots.raw_html`. The insert was silently caught and surfaced as an "Upload failed" toast.
+
+**Root cause:** Both routes hardcoded `NULL` as the literal SQL value for `raw_html` in their INSERT statements. `scripts/migrate.ts` defines `raw_html TEXT NOT NULL`, so this violates the column constraint in production. The test-DB schema in `tests/helpers.ts` declared `raw_html TEXT` (nullable), masking the violation in all automated tests.
+
+**Fix:** Changed the hardcoded `NULL` to `''` (empty string) for `raw_html` in both INSERT statements.
+
+**Regression tests:** `tests/regression/portfolio-raw-html.test.ts`
+
+---
+
 ## BUG-050 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
 
 **Status:** Fixed
@@ -925,7 +1022,7 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
-## BUG-055 · Portfolio: Excel download broken on mobile Chrome — "Download paused", UUID-named .txt file
+## BUG-061 · Portfolio: Excel download broken on mobile Chrome — "Download paused", UUID-named .txt file
 
 **Status:** Fixed
 **Reported:** 2026-04-25
@@ -937,7 +1034,39 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 **Fix:** Replaced the `<a href download>` Excel button with a `<button>` that calls `fetch()` + `.blob()` + `URL.createObjectURL()` + a programmatically-clicked temporary `<a>` element. This keeps the download request inside the page context where the session cookie is present, and gives full control over the filename. A per-row loading state prevents double-clicks.
 
-**Regression tests:** `tests/components/downloads-modal.test.tsx` — "BUG-055" describe block
+**Regression tests:** `tests/components/downloads-modal.test.tsx` — "BUG-061" describe block
+
+---
+
+## BUG-056 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The Portfolio News section on the News tab stays hidden and never shows content, even after the user has uploaded a portfolio screenshot and holdings are saved in the DB. No tickers are ever populated, so the section condition `portfolioTickers.length > 0 || news.port.length > 0` is never met.
+
+**Root cause:** `portfolioTickers` was only populated by two paths: (1) `handleUpload` — user uploads an HTML file via the news FAB; (2) `loadBrief` — the saved brief JSON includes a `tickers` field from a previous Refresh with tickers. The `sharedTickers` prop from `PortfolioClient` was cleared in BUG-049 (now always `[]`). Since users switched to OCR screenshot scan to add holdings, `handleUpload` is never called, and tickers are never set.
+
+**Fix:** Added a `loadTickers` `useEffect` (runs once on mount) that fetches `/api/portfolio/snapshots`, extracts unique non-null tickers from `holdings`, and calls `setPortfolioTickers`. Does NOT auto-generate portfolio news — tickers are just made available for when the user clicks Refresh or the Portfolio tab is opened. HTML upload flow is preserved and overrides the auto-loaded tickers if the user uploads a new report.
+
+**Regression test:** `tests/components/news-client-snapshot-tickers.test.tsx`
+
+---
+
+## BUG-057 · News: Singapore Headlines, Property, and Portfolio sections empty after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/news/generate/route.ts`
+
+**Symptom:** After hitting Refresh on the News tab, World Headlines and Jobs sections populate correctly, but Singapore Headlines, Singapore Property, and Portfolio News sections remain empty ("No stories yet").
+
+**Root cause:** `app/api/news/generate/route.ts` (the Anthropic API proxy used by the agentic news loop) had no `maxDuration` export. Vercel defaults to 10s for serverless functions. Broad queries (world headlines) complete within 10s, but niche `web_search` queries (Singapore news, property, portfolio tickers) routinely take >10s, causing the proxy to time out and return an empty response. Sections processed later in the sequential `handleRefresh()` loop were also more likely to hit cumulative rate-limit delays.
+
+**Fix:** Added `export const maxDuration = 60` to `app/api/news/generate/route.ts` — the same pattern used in `app/api/portfolio/scan/route.ts` (BUG-043) and the Excel download route.
+
+**Regression test:** `tests/regression/news-generate-timeout.test.ts` — "BUG-057" describe block
 
 ---
 
@@ -954,3 +1083,21 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
 
 **Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
+
+---
+
+## BUG-055 · Excel download route times out on Vercel: no maxDuration + N+1 holdings queries
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** The Excel download endpoint (`GET /api/portfolio/download/excel/[id]`) times out on Vercel for portfolios with many snapshots, returning a 504 or no response.
+
+**Root cause 1 — No maxDuration:** The route had no `export const maxDuration`, so Vercel applied its default 10s limit. The scan route already sets `maxDuration = 60`; this route was overlooked.
+
+**Root cause 2 — N+1 query pattern:** The route fetched all snapshots, then ran one `SELECT * FROM portfolio_holdings WHERE snapshot_id = ?` per snapshot inside a `Promise.all`. With N snapshots this issues N+1 DB round-trips, each incurring network latency to Turso.
+
+**Fix:** Added `export const maxDuration = 60`. Replaced the per-snapshot holdings query with a single `SELECT * FROM portfolio_holdings ORDER BY snapshot_id`, then grouped results by `snapshot_id` in JS before building the `ExcelSnapData[]` array.
+
+**Regression test:** `tests/api/portfolio-excel-download.test.ts` — "BUG-055" describe block

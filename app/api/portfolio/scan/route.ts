@@ -154,6 +154,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (holdings.length === 0 && totalValue === null) {
+      return Response.json(
+        { error: 'OCR could not extract any holdings from the screenshots. Please upload clear Holdings tab screenshots from the Syfe app.' },
+        { status: 422 }
+      )
+    }
+
     // Derive total_value from holdings sum if not in summary
     if (totalValue === null && holdings.length > 0) {
       totalValue = holdings.reduce((sum, h) => sum + (numOrNull(h.value) ?? 0), 0)

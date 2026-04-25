@@ -54,7 +54,7 @@ async function anthropicTurn(messages: AnthropicMsg[], system: string): Promise<
   stop_reason: string
   content: ContentBlock[]
 }> {
-  const res = await fetch('/api/news/generate', {
+  const opts = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -64,7 +64,12 @@ async function anthropicTurn(messages: AnthropicMsg[], system: string): Promise<
       system,
       messages,
     }),
-  })
+  }
+  let res = await fetch('/api/news/generate', opts)
+  if (!res.ok && (res.status === 429 || res.status >= 500)) {
+    await new Promise(r => setTimeout(r, 2000))
+    res = await fetch('/api/news/generate', opts)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { error?: string }).error ?? `API ${res.status}`)
@@ -369,6 +374,26 @@ export function NewsClient({
 
   useEffect(() => { loadBrief() }, [loadBrief])
 
+  // BUG-056: populate tickers from the latest portfolio snapshot (OCR-uploaded holdings)
+  // so the Portfolio News section is available without requiring an HTML file upload.
+  useEffect(() => {
+    async function loadTickers() {
+      try {
+        const res = await fetch('/api/portfolio/snapshots')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!data?.holdings?.length) return
+        const tickers = [...new Set(
+          (data.holdings as { ticker?: string | null }[])
+            .map(h => h.ticker)
+            .filter((t): t is string => typeof t === 'string' && t.length > 0)
+        )]
+        if (tickers.length > 0) setPortfolioTickers(tickers)
+      } catch { /* silent */ }
+    }
+    void loadTickers()
+  }, [])
+
   useEffect(() => {
     if (sharedTickers === undefined) return
     const key = sharedTickers.join(',')
@@ -422,12 +447,19 @@ export function NewsClient({
       })
       const q = `Search top 5 Singapore property market news today ${today}: HDB, condo, landed, commercial, launches, policy.`
       const raw = await agenticLoop(SEARCH_SYS, q)
-      const items = parseArr(raw)
+      let items = parseArr(raw)
+      if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
+        console.warn('[news:prop] empty parse on non-empty response, retrying. Preview:', raw.slice(0, 120))
+        const raw2 = await agenticLoop(SEARCH_SYS, q)
+        items = parseArr(raw2)
+      }
       const ts = nowSGT()
       const cards = items.slice(0, 5).map((it, i) => mapCard(it, 'prop', i, ts))
       setNews(p => ({ ...p, prop: cards }))
+      if (cards.length === 0) propFetchedRef.current = false
     } catch (err) {
       console.error('Property auto-fetch error:', err)
+      propFetchedRef.current = false
     }
     setLoadingSections(p => ({ ...p, prop: false }))
   }
@@ -498,17 +530,21 @@ export function NewsClient({
       setLoadingSections(p => ({ ...p, [key]: true }))
       try {
         const raw = await agenticLoop(SEARCH_SYS, q)
-        const items = parseArr(raw)
+        let items = parseArr(raw)
+        if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
+          console.warn(`[news:${key}] empty parse on non-empty response, retrying. Preview:`, raw.slice(0, 120))
+          const raw2 = await agenticLoop(SEARCH_SYS, q)
+          items = parseArr(raw2)
+        }
         const ts = nowSGT()
         const cards = items.slice(0, n).map((it, i) => mapCard(it, key, i, ts))
         fresh[key] = cards
         setNews(p => ({ ...p, [key]: cards }))
+        if (key === 'prop' && cards.length > 0) propFetchedRef.current = true
       } catch (err) {
         console.error(`Refresh error [${key}]:`, err)
       }
       setLoadingSections(p => ({ ...p, [key]: false }))
-      // Refresh covered prop — no auto-fetch needed if user opens it after this
-      if (key === 'prop') propFetchedRef.current = true
     }
 
     // Portfolio section
