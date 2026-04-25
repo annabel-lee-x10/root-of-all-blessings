@@ -925,6 +925,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-055 · Portfolio: Excel download broken on mobile Chrome — "Download paused", UUID-named .txt file
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/(protected)/portfolio/downloads-modal.tsx`
+
+**Symptom:** Tapping the Excel download button in the Downloads modal on mobile Chrome (Android) shows "Download paused" and saves a UUID-named `.txt` file instead of `portfolio-*.xlsx`.
+
+**Root cause:** The Excel button was `<a href="/api/portfolio/download/excel/${id}" download>`. On Android Chrome, clicking this hands the URL to the Android Download Manager. The Download Manager makes a fresh HTTP request **without the session cookie**, which either produces an unexpected response or loses the `Content-Disposition` filename — resulting in "Download paused" and a UUID-named temp file. The `download` attribute on `<a>` tags is unreliable for API-authenticated binary files on mobile browsers.
+
+**Fix:** Replaced the `<a href download>` Excel button with a `<button>` that calls `fetch()` + `.blob()` + `URL.createObjectURL()` + a programmatically-clicked temporary `<a>` element. This keeps the download request inside the page context where the session cookie is present, and gives full control over the filename. A per-row loading state prevents double-clicks.
+
+**Regression tests:** `tests/components/downloads-modal.test.tsx` — "BUG-055" describe block
+
+---
+
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
 **Status:** Fixed
