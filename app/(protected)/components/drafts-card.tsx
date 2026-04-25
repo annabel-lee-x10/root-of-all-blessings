@@ -38,21 +38,15 @@ const INPUT: React.CSSProperties = {
 const SELECT: React.CSSProperties = { ...INPUT, cursor: 'pointer' }
 const LABEL: React.CSSProperties = { color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginBottom: '3px' }
 
-const EPOCH_ISO = '1970-01-01T00:00:00.000Z'
-
-function isEpoch(iso: string) {
-  return new Date(iso).getTime() === 0
-}
-
 function toInputDt(iso: string) {
-  if (isEpoch(iso)) return ''
   const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 function fromInputDt(val: string) {
-  if (!val) return EPOCH_ISO
+  if (!val) return new Date().toISOString()
   return `${val}:00.000+08:00`
 }
 
@@ -347,10 +341,8 @@ export function DraftsCard({
                         {tx.payee ?? tx.category_name ?? '(unnamed)'}
                       </div>
                       <div style={{ display: 'flex', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
-                        <span style={{ color: isEpoch(tx.datetime as string) ? '#f0b429' : 'var(--text-dim)', fontSize: '12px' }}>
-                          {isEpoch(tx.datetime as string)
-                            ? 'Date?'
-                            : new Date(tx.datetime as string).toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })}
+                        <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>
+                          {new Date(tx.datetime as string).toLocaleDateString('en-SG', { month: 'short', day: 'numeric' })}
                         </span>
                         {tx.category_name && (
                           <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>{tx.category_name}</span>
@@ -478,12 +470,7 @@ export function DraftsCard({
                           <input style={INPUT} value={editForm.payee} onChange={(e) => ef('payee', e.target.value)} placeholder="Payee" />
                         </div>
                         <div>
-                          <label style={LABEL}>
-                            Date / Time
-                            {!editForm.datetime && (
-                              <span style={{ color: '#f0b429', marginLeft: '6px' }}>— not found, please set</span>
-                            )}
-                          </label>
+                          <label style={LABEL}>Date / Time</label>
                           <input type="datetime-local" style={INPUT} value={editForm.datetime} onChange={(e) => ef('datetime', e.target.value)} />
                         </div>
                       </div>
