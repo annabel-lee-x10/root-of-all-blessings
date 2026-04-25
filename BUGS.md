@@ -9,6 +9,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-059 · News: sections show "No stories yet" on transient API errors (429 / 5xx)
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh (or auto-expanding Singapore Property), individual news sections intermittently showed "No stories yet — hit Refresh to generate" instead of loading stories. The failure was random and retrying manually would usually succeed.
+
+**Root cause:** `anthropicTurn()` made a single call to `/api/news/generate` and immediately threw on any non-2xx response. Transient API-level failures — 429 rate-limit responses or 5xx server errors from the Anthropic proxy — caused the entire section to fail with no recovery. The existing retry logic (PR #107) only handled the case where the model returned prose instead of JSON; it had no coverage for HTTP-level failures.
+
+**Fix:** Added a single retry inside `anthropicTurn`. If the first `fetch('/api/news/generate')` call returns status 429 or any 5xx, the function waits 2 seconds then retries once. If the retry also fails, or if the status is a non-retriable 4xx (400, 401, 403), the error is thrown as before. No other function (`agenticLoop`, `handleRefresh`, `handlePropOpen`, `refreshPortfolioNews`) was changed.
+
+**Regression tests:** `tests/regression/news-api-retry.test.tsx` — "BUG-059" describe block
+
+---
+
 ## BUG-047 · Vercel build fails: e2e/ and playwright.config.ts not excluded from tsconfig
 
 **Status:** Fixed

@@ -54,7 +54,7 @@ async function anthropicTurn(messages: AnthropicMsg[], system: string): Promise<
   stop_reason: string
   content: ContentBlock[]
 }> {
-  const res = await fetch('/api/news/generate', {
+  const opts = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -64,7 +64,12 @@ async function anthropicTurn(messages: AnthropicMsg[], system: string): Promise<
       system,
       messages,
     }),
-  })
+  }
+  let res = await fetch('/api/news/generate', opts)
+  if (!res.ok && (res.status === 429 || res.status >= 500)) {
+    await new Promise(r => setTimeout(r, 2000))
+    res = await fetch('/api/news/generate', opts)
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { error?: string }).error ?? `API ${res.status}`)
