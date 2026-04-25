@@ -33,6 +33,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-059 · News: sections show "No stories yet" on transient API errors (429 / 5xx)
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh (or auto-expanding Singapore Property), individual news sections intermittently showed "No stories yet — hit Refresh to generate" instead of loading stories. The failure was random and retrying manually would usually succeed.
+
+**Root cause:** `anthropicTurn()` made a single call to `/api/news/generate` and immediately threw on any non-2xx response. Transient API-level failures — 429 rate-limit responses or 5xx server errors from the Anthropic proxy — caused the entire section to fail with no recovery. The existing retry logic (PR #107) only handled the case where the model returned prose instead of JSON; it had no coverage for HTTP-level failures.
+
+**Fix:** Added a single retry inside `anthropicTurn`. If the first `fetch('/api/news/generate')` call returns status 429 or any 5xx, the function waits 2 seconds then retries once. If the retry also fails, or if the status is a non-retriable 4xx (400, 401, 403), the error is thrown as before. No other function (`agenticLoop`, `handleRefresh`, `handlePropOpen`, `refreshPortfolioNews`) was changed.
+
+**Regression tests:** `tests/regression/news-api-retry.test.tsx` — "BUG-059" describe block
+
+---
+
 ## BUG-058 · News: Singapore Property section always shows "No stories yet" after Refresh
 
 **Status:** Fixed
@@ -988,6 +1004,8 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+<<<<<<< HEAD
+=======
 ## BUG-056 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
 
 **Status:** Fixed
@@ -1020,6 +1038,7 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+>>>>>>> origin/main
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
 **Status:** Fixed
@@ -1033,6 +1052,8 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
 
 **Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
+<<<<<<< HEAD
+=======
 
 ---
 
@@ -1051,3 +1072,4 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Added `export const maxDuration = 60`. Replaced the per-snapshot holdings query with a single `SELECT * FROM portfolio_holdings ORDER BY snapshot_id`, then grouped results by `snapshot_id` in JS before building the `ExcelSnapData[]` array.
 
 **Regression test:** `tests/api/portfolio-excel-download.test.ts` — "BUG-055" describe block
+>>>>>>> origin/main
