@@ -33,6 +33,24 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-060 · Excel download: response body corrupt — UUID .txt filename, "Download paused" in Chrome
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** Clicking the Excel download button produces a file named after the raw snapshot UUID (e.g. `287a29be-df91-43e9-8f....txt`) instead of `portfolio-{label}.xlsx`. Chrome shows "Download paused" and the download never completes. The `Content-Disposition` and `Content-Type` response headers are not visible to the browser.
+
+**Root cause:** `generateExcel()` returns a Node.js `Buffer`. The route passed it to `new Response()` via `buf as unknown as BodyInit` — a double type-cast that bypasses TypeScript. In Vercel's serverless runtime, passing a `Buffer` (Node.js subclass of `Uint8Array`) directly as `BodyInit` causes the runtime to fail to serialize the response body correctly: the response headers are stripped and the body stream never terminates. The correct approach — used by the transactions export route in the same codebase — is `new Response(new Uint8Array(buf), {...})`, which gives the Web API a plain `ArrayBufferView` it can reliably serialize.
+
+**Root cause 2 (already fixed in PR #104/BUG-055):** `maxDuration` was missing (Vercel 10 s limit) and an N+1 query pattern fetched one DB round-trip per snapshot. Both were resolved in PR #104 but the buffer encoding issue was left untouched.
+
+**Fix:** Replaced `buf as unknown as BodyInit` with `new Uint8Array(buf)` — the same pattern used in `app/api/transactions/export/route.ts`.
+
+**Regression test:** `tests/api/portfolio-download.test.ts` — "BUG-060 – Excel response body must be Uint8Array, not raw Buffer"
+
+---
+
 ## BUG-059 · News: sections show "No stories yet" on transient API errors (429 / 5xx)
 
 **Status:** Fixed
@@ -1004,8 +1022,6 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
-<<<<<<< HEAD
-=======
 ## BUG-056 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
 
 **Status:** Fixed
@@ -1038,7 +1054,6 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
->>>>>>> origin/main
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
 **Status:** Fixed
@@ -1052,8 +1067,6 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
 
 **Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
-<<<<<<< HEAD
-=======
 
 ---
 
@@ -1072,4 +1085,3 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Added `export const maxDuration = 60`. Replaced the per-snapshot holdings query with a single `SELECT * FROM portfolio_holdings ORDER BY snapshot_id`, then grouped results by `snapshot_id` in JS before building the `ExcelSnapData[]` array.
 
 **Regression test:** `tests/api/portfolio-excel-download.test.ts` — "BUG-055" describe block
->>>>>>> origin/main

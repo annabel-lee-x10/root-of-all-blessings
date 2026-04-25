@@ -67,7 +67,7 @@ export async function GET(
   const buf = generateExcel(snapshots)
   const label = ((snapshots[0]?.snap_label ?? snapshots[0]?.snapshot_date.slice(0, 10)) ?? 'portfolio').replace(/[^a-z0-9-]/gi, '-')
 
-  return new Response(buf as unknown as BodyInit, {
+  return new Response(new Uint8Array(buf), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="portfolio-${label}.xlsx"`,
