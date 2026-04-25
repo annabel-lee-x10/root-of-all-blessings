@@ -142,19 +142,15 @@ export async function POST(request: NextRequest) {
   // Build note: merchant description + parsed notes
   const noteText = [merchantNote, parsed.notes].filter(Boolean).join(' ') || null
 
-  // Build datetime from parsed date + time.
-  // Fallback: epoch sentinel (1970-01-01T00:00:00Z) signals "date not found" to the UI.
-  const EPOCH = '1970-01-01T00:00:00.000Z'
-  let datetime = EPOCH
-  let dateExtracted = false
+  // Build datetime from parsed date + time. Fallback: current timestamp.
+  // Receipts without a printed date are a normal case — default to now.
+  let datetime = new Date().toISOString()
   if (parsed.date) {
     const timePart = parsed.time ?? '00:00'
     const sgtDate = new Date(`${parsed.date}T${timePart}:00+08:00`)
     if (!isNaN(sgtDate.getTime())) {
       datetime = sgtDate.toISOString()
-      dateExtracted = true
     }
-    // else: normaliseDate returned an unrecognised format — keep epoch fallback
   }
 
   const draft = await insertDraftTransaction({
@@ -169,5 +165,5 @@ export async function POST(request: NextRequest) {
     tagIds,
   })
 
-  return Response.json({ draft, date_extracted: dateExtracted }, { status: 201 })
+  return Response.json({ draft }, { status: 201 })
 }

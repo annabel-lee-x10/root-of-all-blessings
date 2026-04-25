@@ -69,17 +69,14 @@ export function ReceiptDropzone({ collapsed = false, onToggle }: { collapsed?: b
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64, mediaType: item.file.type, merchantLookup, accountId }),
         })
-        let data: { draft?: { account_id?: string } | null; date_extracted?: boolean; error?: string } | null = null
+        let data: { draft?: { account_id?: string } | null; error?: string } | null = null
         try {
           data = await res.json()
         } catch {
           // Server returned a non-JSON body (HTML error page, empty body, etc.)
         }
         if (res.ok && data?.draft) {
-          const msg = data.date_extracted === false
-            ? 'Draft created — date not found, please set it manually'
-            : 'Draft created'
-          setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'done', error: msg } : f)))
+          setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: 'done', error: 'Draft created' } : f)))
           if (data.draft.account_id) localStorage.setItem('wmm_last_account', data.draft.account_id)
           window.dispatchEvent(new CustomEvent('drafts-updated'))
         } else {
@@ -280,7 +277,7 @@ export function ReceiptDropzone({ collapsed = false, onToggle }: { collapsed?: b
                   </svg>
                 )}
                 {item.status === 'done' && (
-                  <span style={{ color: item.error?.includes('date not found') ? '#f0b429' : '#3fb884', fontSize: '11px', flexShrink: 0 }}>
+                  <span style={{ color: '#3fb884', fontSize: '11px', flexShrink: 0 }}>
                     ✓ {item.error ?? 'Draft created'}
                   </span>
                 )}

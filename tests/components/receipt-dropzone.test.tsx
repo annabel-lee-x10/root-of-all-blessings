@@ -81,3 +81,31 @@ describe('ReceiptDropzone - error handling (BUG-006)', () => {
     })
   })
 })
+
+describe('ReceiptDropzone - BUG-062: no "date not found" warning when OCR misses date', () => {
+  it('shows plain "Draft created" (no warning text) regardless of date_extracted flag', async () => {
+    // Simulate the server returning a draft with date_extracted: false (legacy field, may still be present)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        draft: { id: 'd1', account_id: 'acc1' },
+        date_extracted: false,
+      }),
+    }))
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', { value: 'data:image/jpeg;base64,abc123' })
+      this.onload?.({ target: this } as ProgressEvent<FileReader>)
+    })
+
+    await dropFile(makeFile('no-date-receipt.jpg'))
+    fireEvent.click(screen.getByRole('button', { name: /process/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/draft created/i)).toBeInTheDocument()
+    })
+    // The yellow warning text must be gone
+    expect(screen.queryByText(/date not found/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/please set it manually/i)).not.toBeInTheDocument()
+  })
+})

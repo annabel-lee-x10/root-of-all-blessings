@@ -5,6 +5,27 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-062 · OCR no-date branch shows yellow "date not found, please set it manually" warning instead of defaulting to now
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/(protected)/components/receipt-dropzone.tsx`, `app/(protected)/components/drafts-card.tsx`
+
+**Symptom:** When a receipt photo has no printed date (or Claude OCR returns an unrecognised date format), the user saw a yellow toast `✓ Draft created — date not found, please set it manually` and the resulting draft's datetime field was empty. The drafts card row also rendered a yellow "Date?" pill, and the edit form labelled the Date/Time field with `— not found, please set`. Receipts genuinely without dates are a normal case, so treating it as a soft-failure surfaced friction the user did not need.
+
+**Root cause:** BUG-030's fix used a `1970-01-01T00:00:00.000Z` epoch sentinel as the "no date" fallback, paired with a `date_extracted: false` flag, and the UI branched on both to render warning text. The behaviour was deliberately added but turned out to be unwanted UX.
+
+**Fix:**
+- `app/api/receipts/process/route.ts` — When `parsed.date` is missing or unparseable, default `datetime` to `new Date().toISOString()` instead of the epoch sentinel. Removed the `date_extracted` field from the response.
+- `app/(protected)/components/receipt-dropzone.tsx` — Removed the `date_extracted === false` branch; the success toast is now always plain `✓ Draft created`. Removed the yellow colour conditional.
+- `app/(protected)/components/drafts-card.tsx` — Removed dead `EPOCH_ISO` constant, `isEpoch()` helper, the yellow "Date?" pill in the row summary, and the `— not found, please set` label suffix. `toInputDt` now treats any invalid date as empty; `fromInputDt` falls back to current time when the input is cleared.
+
+**Regression tests:**
+- `tests/api/receipts.test.ts` — `BUG-062: defaults datetime to current timestamp (not epoch) when Claude omits Date` and `BUG-062: defaults datetime to current timestamp when Claude returns an unrecognised date format` assert the fallback uses `now()` and never equals epoch.
+- `tests/components/receipt-dropzone.test.tsx` — `BUG-062: no "date not found" warning when OCR misses date` asserts the warning text is not rendered even if the server returns a `date_extracted: false` flag (forwards-compatible with stale server responses).
+
+---
+
 ## BUG-055 · Portfolio scan: empty OCR result silently overwrites snapshot with 0 holdings / $0 value
 
 **Status:** Fixed
