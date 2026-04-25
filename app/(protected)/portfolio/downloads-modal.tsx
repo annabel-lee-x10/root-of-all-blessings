@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 const DARK = {
   bg: '#0E1117', card: '#161C27', border: '#242C3A', pale: '#C8D0DC',
@@ -16,6 +16,26 @@ interface SnapEntry {
 export function DownloadsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [snaps, setSnaps] = useState<SnapEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState<string | null>(null)
+
+  const downloadExcel = useCallback(async (id: string, label: string) => {
+    setDownloading(id)
+    try {
+      const res = await fetch(`/api/portfolio/download/excel/${id}`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `portfolio-${label.replace(/[^a-z0-9-]/gi, '-')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(null)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -93,12 +113,12 @@ export function DownloadsModal({ open, onClose }: { open: boolean; onClose: () =
                     style={LINK}
                     aria-label="HTML"
                   >HTML</a>
-                  <a
-                    href={`/api/portfolio/download/excel/${s.id}`}
-                    download
-                    style={{ ...LINK, color: DARK.green, borderColor: DARK.green + '40' }}
+                  <button
+                    onClick={() => downloadExcel(s.id, label)}
+                    disabled={downloading === s.id}
+                    style={{ ...LINK, color: DARK.green, borderColor: DARK.green + '40', cursor: downloading === s.id ? 'wait' : 'pointer' }}
                     aria-label="Excel"
-                  >Excel</a>
+                  >{downloading === s.id ? '…' : 'Excel'}</button>
                 </div>
               </div>
             )
