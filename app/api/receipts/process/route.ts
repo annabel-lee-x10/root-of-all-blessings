@@ -7,7 +7,8 @@ import { resolveAccount, resolveTagIds, insertDraftTransaction } from '../_lib'
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
 
-const RECEIPT_PROMPT = `You are a receipt parser for a personal finance app. Extract all available expense information from this receipt image.
+function buildReceiptPrompt(categoryNames: string[]): string {
+  return `You are a receipt parser for a personal finance app. Extract all available expense information from this receipt image.
 
 Output EXACTLY in this format (omit lines you cannot determine):
 Amount: [total amount, numbers only]
@@ -15,16 +16,17 @@ Currency: [3-letter code, default SGD]
 Merchant/Payee: [store or vendor name]
 Date: [YYYY-MM-DD — convert whatever date format appears on the receipt]
 Time: [HH:MM 24h]
-Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
+Category: [one of: ${categoryNames.join(', ')}]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description of the purchase context]
 
 Rules:
 - Amount is the grand total (GST-inclusive if shown)
 - Date: virtually all receipts print a transaction date — look for it even if formatted as "21 Apr 2026", "21/04/2026", "Apr 21, 2026" etc. and convert to YYYY-MM-DD. Only omit if no date whatsoever is visible.
-- Category inferred from merchant type and line items
+- Category inferred from merchant type and line items — pick EXACTLY one from the list above
 - Tags: use item types, time of day, merchant type, spend amount as signals
 - If a field cannot be determined, omit that line entirely`
+}
 
 export async function POST(request: NextRequest) {
   const valid = await verifySession()
@@ -62,6 +64,14 @@ export async function POST(request: NextRequest) {
   })
   const derivedPaymentMethod = (accountRow.rows[0]?.type as string) ?? null
 
+  // Pull the real expense category names from the DB and inject them into the
+  // prompt, so the LLM picks a name that actually exists in this user's taxonomy.
+  const catResult = await db.execute({
+    sql: 'SELECT id, name FROM categories WHERE type = ?',
+    args: ['expense'],
+  })
+  const categoryNames = catResult.rows.map((r) => r.name as string)
+
   const anthropicRes = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -76,7 +86,7 @@ export async function POST(request: NextRequest) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-          { type: 'text', text: RECEIPT_PROMPT },
+          { type: 'text', text: buildReceiptPrompt(categoryNames) },
         ],
       }],
     }),
@@ -120,11 +130,7 @@ export async function POST(request: NextRequest) {
     } catch { /* non-fatal: skip merchant lookup on error */ }
   }
 
-  // Match category by name
-  const catResult = await db.execute({
-    sql: 'SELECT id, name FROM categories WHERE type = ?',
-    args: ['expense'],
-  })
+  // Match category by name (catResult fetched above for prompt injection).
   let categoryId: string | null = null
   if (parsed.category) {
     const match = catResult.rows.find(

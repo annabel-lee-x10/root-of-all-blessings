@@ -6,7 +6,7 @@ import { resolveAccount, resolveTagIds, insertDraftTransaction } from '../_lib'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
-function buildVoicePrompt(text: string): string {
+function buildVoicePrompt(text: string, categoryNames: string[]): string {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
   return `You are an expense parser for a personal finance app. The user described an expense in natural language (possibly transcribed from voice). Extract all available information.
 
@@ -15,7 +15,7 @@ Amount: [amount, numbers only]
 Currency: [3-letter code, default SGD]
 Merchant/Payee: [merchant or payee name]
 Date: [YYYY-MM-DD, default today: ${today}]
-Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
+Category: [one of: ${categoryNames.join(', ')}]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description]
 
@@ -48,6 +48,14 @@ export async function POST(request: NextRequest) {
   })
   const derivedPaymentMethod = (accountRow.rows[0]?.type as string) ?? null
 
+  // Pull the real expense category names from the DB and inject them into the
+  // prompt, so the LLM picks a name that actually exists in this user's taxonomy.
+  const catResult = await db.execute({
+    sql: 'SELECT id, name FROM categories WHERE type = ?',
+    args: ['expense'],
+  })
+  const categoryNames = catResult.rows.map((r) => r.name as string)
+
   const anthropicRes = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -58,7 +66,7 @@ export async function POST(request: NextRequest) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 512,
-      messages: [{ role: 'user', content: buildVoicePrompt(text) }],
+      messages: [{ role: 'user', content: buildVoicePrompt(text, categoryNames) }],
     }),
   })
 
@@ -68,10 +76,6 @@ export async function POST(request: NextRequest) {
   const rawText: string = anthropicData.content?.[0]?.text ?? ''
   const parsed = parseBlessThis(rawText)
 
-  const catResult = await db.execute({
-    sql: 'SELECT id, name FROM categories WHERE type = ?',
-    args: ['expense'],
-  })
   let categoryId: string | null = null
   if (parsed.category) {
     const match = catResult.rows.find(

@@ -298,4 +298,42 @@ describe('POST /api/receipts/process', () => {
     }))
     expect(res.status).toBe(500)
   })
+
+  it('BUG-063: populates category_id when DB category name differs from old hard-coded prompt list', async () => {
+    // The DB has a category called 'Food and Drink' — NOT one of the names that
+    // the old hard-coded prompt listed ('Food, Transport, Housing, Bills, Health,
+    // Entertainment, Subscriptions, Education, Pet, Other'). The fix queries the
+    // categories table first and injects the real names into the prompt, so the
+    // LLM picks something that actually exists in the DB.
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-food-drink', 'Food and Drink', 'expense')
+
+    // Simulate a real LLM: pick the first category name from the prompt's
+    // "Category: [one of: ...]" line. This makes the test sensitive to what
+    // the route puts INTO the prompt, not just to the static mock response.
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const reqBody = JSON.parse(init.body as string)
+      const promptText: string = reqBody.messages[0].content[1]?.text ?? ''
+      const m = promptText.match(/Category:\s*\[(?:one of|pick (?:EXACTLY )?one of):\s*([^\]]+)\]/i)
+      const choices = m ? m[1].split(',').map((s: string) => s.trim()) : []
+      const picked = choices[0] ?? 'Other'
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'text', text: `Amount: 5.00\nMerchant/Payee: Test\nCategory: ${picked}` }],
+        }),
+      } as Response)
+    }))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-food-drink')
+  })
 })
