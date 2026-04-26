@@ -299,6 +299,169 @@ describe('POST /api/receipts/process', () => {
     expect(res.status).toBe(500)
   })
 
+  it('BUG-064: prompt structures categories as Parent > Subcategories list', async () => {
+    // Set up a parent + child taxonomy and capture the prompt sent to Claude.
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-food', 'Food', 'expense')
+    seedCategory('cat-meals', 'Meals', 'expense', 'cat-food')
+    seedCategory('cat-coffee', 'Coffee', 'expense', 'cat-food')
+    seedCategory('cat-travel', 'Travel', 'expense')
+    seedCategory('cat-taxi', 'Taxi', 'expense', 'cat-travel')
+
+    let capturedPrompt = ''
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const reqBody = JSON.parse(init.body as string)
+      capturedPrompt = reqBody.messages[0].content[1]?.text ?? ''
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'text', text: 'Amount: 5\nCategory: Food > Meals' }],
+        }),
+      } as Response)
+    }))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+
+    // Hierarchy block lists each parent followed by its children
+    expect(capturedPrompt).toMatch(/Food\s*>\s*[^\n]*Coffee[^\n]*Meals|Food\s*>\s*[^\n]*Meals[^\n]*Coffee/)
+    expect(capturedPrompt).toMatch(/Travel\s*>\s*[^\n]*Taxi/)
+    // Output instruction asks for Parent > Subcategory format
+    expect(capturedPrompt).toMatch(/Parent\s*>\s*Subcategory/i)
+    // Disambiguation rules present
+    expect(capturedPrompt.toLowerCase()).toContain('grabfood')
+    expect(capturedPrompt.toLowerCase()).toContain('foodpanda')
+  })
+
+  it('BUG-064: GrabFood/Foodpanda food-delivery receipt resolves to Food > Meals (not Lifestyle > Delivery)', async () => {
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-food', 'Food', 'expense')
+    seedCategory('cat-meals', 'Meals', 'expense', 'cat-food')
+    seedCategory('cat-lifestyle', 'Lifestyle', 'expense')
+    seedCategory('cat-delivery', 'Delivery', 'expense', 'cat-lifestyle')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 18.50\nMerchant/Payee: Foodpanda\nCategory: Food > Meals' }],
+      }),
+    } as Response))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-meals')
+    expect(data.draft.category_name).toBe('Meals')
+  })
+
+  it('BUG-064: Grab ride receipt resolves to Travel > Taxi (subcategory preferred over parent)', async () => {
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-travel', 'Travel', 'expense')
+    seedCategory('cat-taxi', 'Taxi', 'expense', 'cat-travel')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 14.20\nMerchant/Payee: Grab\nCategory: Travel > Taxi' }],
+      }),
+    } as Response))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-taxi')
+  })
+
+  it('BUG-064: Amazon shipped electronics resolves to Lifestyle > Electronics', async () => {
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-lifestyle', 'Lifestyle', 'expense')
+    seedCategory('cat-electronics', 'Electronics', 'expense', 'cat-lifestyle')
+    seedCategory('cat-delivery', 'Delivery', 'expense', 'cat-lifestyle')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 89.00\nMerchant/Payee: Amazon\nCategory: Lifestyle > Electronics' }],
+      }),
+    } as Response))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-electronics')
+  })
+
+  it('BUG-064: falls back to parent when LLM returns Parent > UnknownChild', async () => {
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-food', 'Food', 'expense')
+    seedCategory('cat-meals', 'Meals', 'expense', 'cat-food')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 7.00\nCategory: Food > Banquet' }],
+      }),
+    } as Response))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-food')
+  })
+
+  it('BUG-064: resolves bare parent name when no subcategory is provided', async () => {
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-food', 'Food', 'expense')
+    seedCategory('cat-meals', 'Meals', 'expense', 'cat-food')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        content: [{ type: 'text', text: 'Amount: 7.00\nCategory: Food' }],
+      }),
+    } as Response))
+
+    const { POST } = await import('@/app/api/receipts/process/route')
+    const res = await POST(req('/api/receipts/process', 'POST', {
+      imageBase64: VALID_IMAGE_BASE64,
+      mediaType: 'image/png',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-food')
+  })
+
   it('BUG-063: populates category_id when DB category name differs from old hard-coded prompt list', async () => {
     // The DB has a category called 'Food and Drink' — NOT one of the names that
     // the old hard-coded prompt listed ('Food, Transport, Housing, Bills, Health,
@@ -309,15 +472,13 @@ describe('POST /api/receipts/process', () => {
     seedAccount('acc1', 'DBS', 'bank')
     seedCategory('cat-food-drink', 'Food and Drink', 'expense')
 
-    // Simulate a real LLM: pick the first category name from the prompt's
-    // "Category: [one of: ...]" line. This makes the test sensitive to what
-    // the route puts INTO the prompt, not just to the static mock response.
+    // Simulate a real LLM: confirm the prompt mentions 'Food and Drink' (the real
+    // DB name), then return it. This stays sensitive to the route injecting actual
+    // DB names — independent of how the categories block is formatted.
     vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init: RequestInit) => {
       const reqBody = JSON.parse(init.body as string)
       const promptText: string = reqBody.messages[0].content[1]?.text ?? ''
-      const m = promptText.match(/Category:\s*\[(?:one of|pick (?:EXACTLY )?one of):\s*([^\]]+)\]/i)
-      const choices = m ? m[1].split(',').map((s: string) => s.trim()) : []
-      const picked = choices[0] ?? 'Other'
+      const picked = promptText.includes('Food and Drink') ? 'Food and Drink' : 'Other'
       return Promise.resolve({
         ok: true,
         json: async () => ({

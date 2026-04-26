@@ -1,6 +1,54 @@
 import { db } from '@/lib/db'
 import type { TransactionRow } from '@/lib/types'
 
+export interface CategoryRow {
+  id: string
+  name: string
+  parent_id: string | null
+}
+
+// Render the categories taxonomy as a structured block for the LLM prompt.
+// Parents appear with their children inline, e.g. "  Food > Coffee, Meals".
+export function buildCategoryBlock(rows: CategoryRow[]): string {
+  const parents = rows.filter(r => r.parent_id == null)
+  const childrenByParent = new Map<string, string[]>()
+  for (const r of rows) {
+    if (r.parent_id) {
+      const arr = childrenByParent.get(r.parent_id) ?? []
+      arr.push(r.name)
+      childrenByParent.set(r.parent_id, arr)
+    }
+  }
+  return parents
+    .map(p => {
+      const kids = childrenByParent.get(p.id)
+      return kids && kids.length ? `  ${p.name} > ${kids.join(', ')}` : `  ${p.name}`
+    })
+    .join('\n')
+}
+
+// Resolve "Parent > Subcategory" output to a category id. Prefer the child
+// within the named parent; fall back to the parent; fall back to any name match.
+export function resolveCategoryId(
+  rows: CategoryRow[],
+  category: string | undefined,
+  subcategory: string | undefined
+): string | null {
+  if (!category) return null
+  const parent = rows.find(
+    r => r.parent_id == null && r.name.toLowerCase() === category.toLowerCase()
+  )
+  if (subcategory && parent) {
+    const child = rows.find(
+      r => r.parent_id === parent.id && r.name.toLowerCase() === subcategory.toLowerCase()
+    )
+    if (child) return child.id
+  }
+  if (parent) return parent.id
+  const any = rows.find(r => r.name.toLowerCase() === category.toLowerCase())
+  return any ? any.id : null
+}
+
 export async function resolveAccount(accountId?: string): Promise<string | null> {
   if (accountId) {
     const check = await db.execute({

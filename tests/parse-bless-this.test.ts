@@ -309,3 +309,37 @@ describe('key case insensitivity', () => {
     expect(parseBlessThis('merchant/payee: Watsons').payee).toBe('Watsons')
   })
 })
+
+// ── Hierarchical category (Parent > Subcategory) ──────────────────────────────
+
+describe('hierarchical category parsing (BUG-064)', () => {
+  it('splits "Parent > Subcategory" into category and subcategory', () => {
+    const result = parseBlessThis('Category: Food > Meals')
+    expect(result.category).toBe('Food')
+    expect(result.subcategory).toBe('Meals')
+  })
+
+  it('keeps plain "Parent" as category with no subcategory', () => {
+    const result = parseBlessThis('Category: Food')
+    expect(result.category).toBe('Food')
+    expect(result.subcategory).toBeUndefined()
+  })
+
+  it('trims whitespace around the separator', () => {
+    const result = parseBlessThis('Category:   Travel  >  Taxi  ')
+    expect(result.category).toBe('Travel')
+    expect(result.subcategory).toBe('Taxi')
+  })
+
+  it('handles multi-word parent and child names', () => {
+    const result = parseBlessThis('Category: Wellness and Health > Medical')
+    expect(result.category).toBe('Wellness and Health')
+    expect(result.subcategory).toBe('Medical')
+  })
+
+  it('ignores trailing empty subcategory ("Food >")', () => {
+    const result = parseBlessThis('Category: Food >')
+    expect(result.category).toBe('Food')
+    expect(result.subcategory).toBeUndefined()
+  })
+})
