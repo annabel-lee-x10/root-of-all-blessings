@@ -5,6 +5,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-063 · OCR/voice receipt drafts always have category_id = null because LLM picks from a hard-coded list that doesn't match the DB
+
+**Status:** Fixed
+**Reported:** 2026-04-26
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/api/receipts/voice/route.ts`
+
+**Symptom:** Every draft created from a receipt photo (`/api/receipts/process`) or voice/text input (`/api/receipts/voice`) had `category_id = null` in the database. The drafts card displayed an empty Category field even when the LLM clearly identified the merchant type from the receipt.
+
+**Root cause:** Both routes hard-coded the category list inside the LLM prompt as `Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]`. The actual `categories` table for this user — seeded by `app/api/migrate/route.ts` — uses different parent names (`Food`, `Living`, `Travel`, `Wellness and Health`, `Lifestyle`, `Business Education Work`, `Entertainment`, `Subscriptions`, `Pet`, `Other`). The LLM dutifully picked a name from the hard-coded list (e.g. "Transport"), but the post-LLM lookup in the categories table — which uses literal `.toLowerCase()` equality on `name` — could not find a row with that name (the DB has "Travel", not "Transport"). `categoryId` fell through to `null`.
+
+**Fix:** Both routes now query the categories table BEFORE the LLM call, pull the actual `name` values, and inject that real list into the prompt (`Category: [one of: ${names.join(', ')}]`). The downstream lookup is reused on the same `catResult` rows. The LLM picks from the user's actual taxonomy, so the existing match logic finds a row.
+
+**Regression tests:** `tests/api/receipts.test.ts` and `tests/api/receipts-voice.test.ts` — "BUG-063" cases. Tests seed a category named `Food and Drink` (intentionally not in the old hard-coded list), and the LLM mock simulates a real model by picking from the prompt's category list. Pre-fix: prompt lists "Food" → mock returns "Food" → DB lookup fails → `category_id = null`. Post-fix: prompt lists "Food and Drink" → mock returns "Food and Drink" → DB lookup succeeds → `category_id` populated.
+
+---
+
 ## BUG-062 · OCR no-date branch shows yellow "date not found, please set it manually" warning instead of defaulting to now
 
 **Status:** Fixed

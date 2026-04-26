@@ -120,4 +120,37 @@ describe('POST /api/receipts/voice', () => {
     const data = await res.json()
     expect(data.draft.account_id).toBe('acc1')
   })
+
+  it('BUG-063: populates category_id when DB category name differs from old hard-coded prompt list', async () => {
+    // Same fix as the OCR route: the voice route hard-coded a category list in
+    // its prompt. If the DB uses different names ('Food and Drink' vs 'Food'),
+    // the LLM picks something that doesn't exist and category_id stays null.
+    // The fix injects the actual DB names into the prompt.
+    resetTestDb()
+    seedAccount('acc1', 'DBS', 'bank')
+    seedCategory('cat-food-drink', 'Food and Drink', 'expense')
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const reqBody = JSON.parse(init.body as string)
+      const promptText: string = reqBody.messages[0].content ?? ''
+      const m = promptText.match(/Category:\s*\[(?:one of|pick (?:EXACTLY )?one of):\s*([^\]]+)\]/i)
+      const choices = m ? m[1].split(',').map((s: string) => s.trim()) : []
+      const picked = choices[0] ?? 'Other'
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'text', text: `Amount: 5.00\nMerchant/Payee: Test\nCategory: ${picked}` }],
+        }),
+      } as Response)
+    }))
+
+    const { POST } = await import('@/app/api/receipts/voice/route')
+    const res = await POST(req('/api/receipts/voice', 'POST', {
+      text: 'lunch 5 bucks',
+      accountId: 'acc1',
+    }))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.draft.category_id).toBe('cat-food-drink')
+  })
 })
