@@ -5,6 +5,27 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-064 · OCR/voice category picker misclassifies food-delivery receipts as Lifestyle > Delivery or Travel > Transport
+
+**Status:** Fixed
+**Reported:** 2026-04-26
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/api/receipts/voice/route.ts`, `app/api/receipts/_lib.ts`, `lib/parse-bless-this.ts`
+
+**Symptom:** A GrabFood / Foodpanda food-delivery receipt was routed to `Lifestyle > Delivery` (because the prompt mentioned "delivery") or `Travel > Transport` (because "Grab" suggested ride-share), instead of the correct `Food > Meals`. The LLM had no signal that `Delivery` lived under `Lifestyle` (non-food shipping) and `Transport` under `Travel` (moving people), nor that food delivery is still Food regardless of vendor.
+
+**Root cause:** The prompt sent every category as a flat comma-separated list, with no parent–child structure, no example of how to express the hierarchy in the answer, and no disambiguation rules. The LLM picked any superficially matching name; the post-LLM lookup only matched a single name and could not prefer a child within a chosen parent.
+
+**Fix:**
+- Categories are now queried with `parent_id` and rendered to the prompt as a structured block — `  Food > Coffee, Meals, ...` — so the model can see which children belong to which parent.
+- The output instruction asks the model to answer as `Parent > Subcategory` (or just `Parent` if no child fits).
+- Three disambiguation rules added to the prompt: food items always belong to Food, Delivery (under Lifestyle) is for non-food shipping, Transport (under Travel) is for moving people.
+- `parseBlessThis` now splits on `>` and exposes `category` (parent) and `subcategory` (child) separately.
+- A new shared resolver in `_lib.ts` (`resolveCategoryId`) prefers the named child within the named parent, falls back to the parent if the child is unknown, and falls back to a bare-name match otherwise.
+
+**Regression tests:** `tests/api/receipts.test.ts` and `tests/api/receipts-voice.test.ts` — `BUG-064` cases cover (a) the prompt structure (hierarchy block, output format, disambiguation rules), (b) GrabFood/Foodpanda → `Food > Meals`, (c) Grab ride → `Travel > Taxi`, (d) Amazon → `Lifestyle > Electronics`, (e) `Parent > UnknownChild` falls back to parent, (f) bare parent name still resolves. `tests/parse-bless-this.test.ts` covers the new `Parent > Subcategory` parser path.
+
+---
+
 ## BUG-063 · OCR/voice receipt drafts always have category_id = null because LLM picks from a hard-coded list that doesn't match the DB
 
 **Status:** Fixed

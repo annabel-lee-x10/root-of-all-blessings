@@ -22,6 +22,7 @@ export interface BlessThisData {
   date?: string   // YYYY-MM-DD
   time?: string   // HH:MM
   category?: string
+  subcategory?: string
   tags?: string[]
   payment_method?: string
   account?: string
@@ -73,9 +74,13 @@ export function parseBlessThis(text: string): BlessThisData {
         // Accept HH:MM or HHMM
         result.time = normaliseTime(value)
         break
-      case 'category':
-        result.category = value
+      case 'category': {
+        // Accept "Parent > Subcategory" hierarchy or a bare name.
+        const parts = value.split('>').map(s => s.trim()).filter(Boolean)
+        result.category = parts[0]
+        if (parts.length >= 2) result.subcategory = parts[1]
         break
+      }
       case 'tags':
       case 'tag':
         result.tags = value
