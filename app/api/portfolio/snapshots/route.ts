@@ -1,6 +1,30 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 
+// BUG-067: dedup holdings by ticker (or name fallback) — collapses duplicate
+// rows that the OCR ingest path historically wrote when the same ticker was
+// visible on more than one uploaded screenshot. Returns the row with the
+// largest positive value as the canonical one; any 0-value row for the same
+// ticker is treated as a misclassified OCR result and dropped.
+export function dedupHoldingRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  const byKey = new Map<string, T>()
+  for (const row of rows) {
+    const ticker = (row.ticker as string | null) ?? ''
+    const name = (row.name as string | null) ?? ''
+    const key = (ticker || name).trim().toLowerCase()
+    if (!key) continue
+    const existing = byKey.get(key)
+    if (!existing) {
+      byKey.set(key, row)
+      continue
+    }
+    const existingVal = (existing.value as number | null) ?? 0
+    const candidateVal = (row.value as number | null) ?? 0
+    if (candidateVal > existingVal) byKey.set(key, row)
+  }
+  return Array.from(byKey.values())
+}
+
 function computeDrift(label: string, referenceValue: number, computedValue: number): string | null {
   const diff = referenceValue - computedValue
   const threshold = Math.min(0.01 * Math.abs(referenceValue), 50)
@@ -14,7 +38,11 @@ function computeDrift(label: string, referenceValue: number, computedValue: numb
 function mapHolding(h: Record<string, unknown>, totalValueUSD: number) {
   const value = h.value as number
   const pnl = h.pnl as number | null
-  const pnl_pct = pnl !== null && value !== null && value - pnl > 0
+  // BUG-067: require value > 0. A zero-value row with negative pnl produces
+  // pnl_pct = pnl / -pnl * 100 = -100%, which the P&L tab then renders as a
+  // bogus full-loss line. PnlTab filters by `pnl_pct !== undefined`, so
+  // returning null here cleanly drops zero-value rows from the P&L list.
+  const pnl_pct = pnl !== null && value !== null && value > 0 && value - pnl > 0
     ? (pnl / (value - pnl)) * 100
     : null
 
@@ -81,22 +109,29 @@ export async function GET() {
       db.execute({ sql: 'SELECT * FROM portfolio_milestones WHERE snapshot_id = ? ORDER BY sort_order', args: [snapId] }),
     ])
 
+  // BUG-067: defensive dedup of portfolio_holdings rows by ticker (or name when
+  // ticker is null). The OCR ingest path historically wrote duplicate rows when
+  // the same ticker appeared on multiple uploaded screenshots; this read-side
+  // dedup cleans up existing prod data without requiring a re-upload. Tie-break:
+  // prefer the row with value > 0 (drop misclassified zero-value duplicates).
+  const dedupedRows = dedupHoldingRows(holdingsResult.rows as Record<string, unknown>[])
+
   const FX: Record<string, number> = { USD: 1, SGD: 0.74, GBP: 1.29 }
-  const totalValueUSD = (holdingsResult.rows as Record<string, unknown>[]).reduce((sum, h) => {
+  const totalValueUSD = dedupedRows.reduce((sum, h) => {
     const value = h.value as number
     const currency = (h.currency as string | null) ?? 'USD'
     const valueUSD = (h.value_usd as number | null) ?? value * (FX[currency] ?? 1)
     return sum + valueUSD
   }, 0)
 
-  const holdings = (holdingsResult.rows as Record<string, unknown>[]).map(h => mapHolding(h, totalValueUSD))
+  const holdings = dedupedRows.map(h => mapHolding(h, totalValueUSD))
 
   // BUG-031: backfill unrealised_pnl from holdings when DB value is null/undefined.
   // Use == null (not ===) to catch undefined, which occurs when the column doesn't
   // exist in prod yet and SELECT * omits it from the result row.
   let unrealised_pnl = (snap.unrealised_pnl ?? null) as number | null
   if (unrealised_pnl == null) {
-    const pnlValues = (holdingsResult.rows as Record<string, unknown>[])
+    const pnlValues = dedupedRows
       .map(h => h.pnl as number | null)
       .filter((v): v is number => v !== null)
     if (pnlValues.length > 0) {
