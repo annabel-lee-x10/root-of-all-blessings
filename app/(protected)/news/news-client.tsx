@@ -501,43 +501,60 @@ export function NewsClient({
 
     const sectionConfigs = [
       {
-        key: 'world' as const, n: 7,
+        key: 'world' as const, n: 7, system: SEARCH_SYS,
+        label: 'World',
         q: `Search top 7 world headlines today ${today}: geopolitics, macro, oil, trade, conflicts, major global events.`,
       },
       {
-        key: 'sg' as const, n: 5,
+        key: 'sg' as const, n: 5, system: SEARCH_SYS,
+        label: 'Singapore',
         q: `Search top 5 Singapore headlines today ${today}: MAS, economy, government, finance, policy, society.`,
       },
       {
-        key: 'prop' as const, n: 5,
+        key: 'prop' as const, n: 5, system: SEARCH_SYS,
+        label: 'Property',
         q: `Search top 5 Singapore property market news today ${today}: HDB, condo, landed, commercial, launches, policy.`,
       },
       {
-        key: 'jobsGlobal' as const, n: 2,
+        key: 'jobsGlobal' as const, n: 2, system: SEARCH_SYS,
+        label: 'Global Jobs',
         q: `Search 2 global tech layoff and AI workforce news stories today ${today}.`,
       },
       {
-        key: 'jobsSg' as const, n: 2,
+        key: 'jobsSg' as const, n: 2, system: SEARCH_SYS,
+        label: 'SG Jobs',
         q: `Search 2 Singapore tech employment and AI workforce news today ${today}.`,
+      },
+      {
+        key: 'port' as const, n: 20, system: PORT_SYS,
+        label: 'Portfolio',
+        q: `Search recent news for these portfolio tickers today ${today}: ${portfolioTickers.join(', ')}.`,
       },
     ]
 
-    const fresh: QsBriefSections = { ...EMPTY_SECTIONS, port: news.port }
+    const fresh: QsBriefSections = { ...EMPTY_SECTIONS }
 
-    for (const { key, n, q } of sectionConfigs) {
-      const label = { world: 'World', sg: 'Singapore', prop: 'Property', jobsGlobal: 'Global Jobs', jobsSg: 'SG Jobs' }[key]
+    for (const { key, n, system, label, q } of sectionConfigs) {
+      // Port participates in the unified loop, but skip the fetch when there are no tickers.
+      if (key === 'port' && portfolioTickers.length === 0) continue
       setRefreshMsg(`↻ Refreshing ${label}...`)
       setLoadingSections(p => ({ ...p, [key]: true }))
       try {
-        const raw = await agenticLoop(SEARCH_SYS, q)
+        const raw = await agenticLoop(system, q)
         let items = parseArr(raw)
         if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
           console.warn(`[news:${key}] empty parse on non-empty response, retrying. Preview:`, raw.slice(0, 120))
-          const raw2 = await agenticLoop(SEARCH_SYS, q)
+          const raw2 = await agenticLoop(system, q)
           items = parseArr(raw2)
         }
         const ts = nowSGT()
-        const cards = items.slice(0, n).map((it, i) => mapCard(it, key, i, ts))
+        const cards = items.slice(0, n).map((it, i) => {
+          if (key === 'port') {
+            const ticker = it.ticker ? String(it.ticker) : undefined
+            return mapCard(it, 'port', i, ts, ticker)
+          }
+          return mapCard(it, key, i, ts)
+        })
         fresh[key] = cards
         setNews(p => ({ ...p, [key]: cards }))
         if (key === 'prop' && cards.length > 0) propFetchedRef.current = true
@@ -545,27 +562,6 @@ export function NewsClient({
         console.error(`Refresh error [${key}]:`, err)
       }
       setLoadingSections(p => ({ ...p, [key]: false }))
-    }
-
-    // Portfolio section
-    if (portfolioTickers.length > 0) {
-      setRefreshMsg('↻ Refreshing Portfolio News...')
-      setLoadingSections(p => ({ ...p, port: true }))
-      try {
-        const q = `Search recent news for these portfolio tickers today ${today}: ${portfolioTickers.join(', ')}.`
-        const raw = await agenticLoop(PORT_SYS, q)
-        const items = parseArr(raw)
-        const ts = nowSGT()
-        const cards = items.slice(0, 20).map((it, i) => {
-          const ticker = it.ticker ? String(it.ticker) : undefined
-          return mapCard(it, 'port', i, ts, ticker)
-        })
-        fresh.port = cards
-        setNews(p => ({ ...p, port: cards }))
-      } catch (err) {
-        console.error('Portfolio refresh error:', err)
-      }
-      setLoadingSections(p => ({ ...p, port: false }))
     }
 
     // Persist to DB

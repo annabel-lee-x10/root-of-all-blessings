@@ -5,6 +5,30 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-068 · News refresh — Portfolio section is special-cased outside the main loop, leaving stale port cards in DB when tickers are absent or fetch fails
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The QS Daily Brief refresh button loops through five sections (`world`, `sg`, `prop`, `jobsGlobal`, `jobsSg`), then has a separate `if (portfolioTickers.length > 0)` block for Portfolio news. Two user-visible consequences:
+- (a) Refresh feels inconsistent: five sections cycle through their unified "Refreshing X..." label and skeleton, then Portfolio runs through its own block with its own status text (`↻ Refreshing Portfolio News...`).
+- (b) Stale per-card timestamps: when `portfolioTickers` is empty (or the Portfolio API call fails), the loop never updates `port`, but the persisted brief still carries the previous run's port cards because `fresh` was initialized as `{ ...EMPTY_SECTIONS, port: news.port }`. Those stale cards then re-load on every page mount and continue to display old timestamps (e.g. 25 Apr cards still showing when the user refreshes on 28 Apr).
+
+**Root cause:** `app/(protected)/news/news-client.tsx`'s `handleRefresh()` excluded `port` from the `sectionConfigs` array and instead handled it after the loop in a separate `if` block. The `fresh` accumulator was seeded with `port: news.port` so the persist call would have a value to send when Portfolio was skipped — but that meant the persisted DB row kept echoing the previous brief's port cards forever, even when their tickers were no longer in the user's portfolio.
+
+**Fix:** Added `port` to `sectionConfigs` with its own `system: PORT_SYS`, query, and `n: 20`. Reset `fresh` to `{ ...EMPTY_SECTIONS }` (no preserved port). Inside the loop, skip the fetch only when `key === 'port' && portfolioTickers.length === 0` (preserves the existing "no tickers, no work" guard). The mapCard call inside the loop branches on `key === 'port'` to forward the ticker. Removed the post-loop Portfolio block. Net effect: when Portfolio refreshes, fresh cards are persisted; when it doesn't, the persisted port is `[]` and the DB cleans itself up on the next refresh.
+
+**Regression tests:** `tests/components/news-refresh-portfolio-loop.test.tsx` — five cases:
+- (a) `portfolioTickers === 0` + DB has stale port cards → refresh persists `port: []` (not stale cards).
+- (b) Port refresh API call fails → refresh persists `port: []` (not stale cards).
+- (c) `portfolioTickers > 0` → refresh makes exactly one PORT_SYS-using `/api/news/generate` call.
+- (d) `portfolioTickers === 0` → refresh makes zero PORT_SYS calls.
+- (e) Successful refresh with tickers replaces stale port cards with fresh ones (timestamp differs, headline replaced) and the persisted `port` carries the fresh timestamp.
+Cases (a) and (b) fail on `main` and pass after the fix.
+
+---
+
 ## BUG-066 · Portfolio News tab shows stale date subtitle under "QS Daily Brief"
 
 **Status:** Fixed
