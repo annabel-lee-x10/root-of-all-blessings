@@ -605,14 +605,6 @@ export function NewsClient({
     ...news.jobsGlobal, ...news.jobsSg, ...news.port,
   ]
   const totalCards = allCards.length
-  const filteredCount = sentFilter === 'all' ? totalCards : allCards.filter(c => c.sentiment === sentFilter).length
-
-  const generatedAt = brief?.generated_at
-    ? new Date(brief.generated_at).toLocaleString('en-SG', {
-        day: 'numeric', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore',
-      }) + ' SGT'
-    : null
 
   if (brief === undefined) {
     return (
@@ -688,11 +680,6 @@ export function NewsClient({
               margin: 0, fontFamily: "Georgia, 'Times New Roman', serif",
               fontSize: '1.6rem', color: TEXT, fontWeight: 700, lineHeight: 1.2,
             }}>QS Daily Brief</h1>
-            <div style={{ fontSize: '0.75rem', color: MUTED, fontFamily: 'system-ui, sans-serif' }}>
-              {generatedAt
-                ? `${filteredCount} stories · ${generatedAt}`
-                : 'No brief yet — hit Refresh to generate your first brief'}
-            </div>
           </div>
 
           {/* Refresh status message */}
