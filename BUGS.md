@@ -5,6 +5,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-065 · Portfolio Sector tab shows 100% "Other" — every OCR-uploaded holding has sector = NULL
+
+**Status:** Fixed
+**Reported:** 2026-04-27
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `lib/portfolio/ticker-meta.ts`
+
+**Symptom:** On the Portfolio Sector tab, all 22 holdings ($16,930.12) were lumped under a single "Other" sector at 100%. Holdings count, total value, and P&L were all correct — only the sector classification was broken. Reproduced on prod mobile after the screenshot-OCR upload pipeline replaced the HTML upload as the user's actual upload path.
+
+**Root cause:** The Phase 1 OCR upload pipeline (PR #86, commit `737002d`/`50c341d`) introduced `/api/portfolio/scan` as a new write path that inserts directly into `portfolio_holdings`. The OCR prompt in `lib/portfolio/ocr.ts` only asks Claude for `ticker / name / geo / currency / price / change_1d / value / pnl / qty` — it never asks for `sector`. The scan route inserted `(h.sector as string) ?? null`, so every row landed with `sector = NULL`. The Sector tab in `portfolio-client.tsx` (line 573) buckets any holding without a sector under `'Other'`, so the entire portfolio collapsed to one bucket. The legacy `/api/portfolio` HTML upload route had a static `TICKER_META` lookup inline that filled this gap; the new OCR route did not reuse it.
+
+**Fix:** Extracted the existing ticker → `{geo, sector, currency}` taxonomy into `lib/portfolio/ticker-meta.ts` (no behaviour change for the HTML route — its inline copy is unchanged). The scan route now calls `resolveTickerMeta(h.ticker)` and uses the static sector as a fallback when the OCR-supplied `sector` is undefined. OCR-supplied sector values still win when present (forward-compat with a future prompt update), and unknown tickers stay NULL rather than being given a fabricated sector.
+
+**Regression tests:** `tests/regression/portfolio-sector-classification.test.ts` — three cases: (a) known tickers (NVDA/AAPL/D05/QQQ) get their static sectors when OCR omits sector, producing ≥2 distinct non-"Other" buckets; (b) OCR-supplied custom sector is preserved (not overwritten); (c) unknown tickers stay falsy so they remain clearly "unclassified" rather than fabricated.
+
+---
+
 ## BUG-064 · OCR/voice category picker misclassifies food-delivery receipts as Lifestyle > Delivery or Travel > Transport
 
 **Status:** Fixed

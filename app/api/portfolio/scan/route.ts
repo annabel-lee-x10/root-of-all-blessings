@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { verifySession } from '@/lib/session'
 import { db } from '@/lib/db'
 import { buildOcrMessages, parseOcrResponse, type OcrResult } from '@/lib/portfolio/ocr'
+import { resolveTickerMeta } from '@/lib/portfolio/ticker-meta'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
@@ -213,6 +214,12 @@ export async function POST(request: NextRequest) {
     for (const h of holdings) {
       const detail = stockDetails.get(h.ticker as string) ?? {}
       const id = crypto.randomUUID()
+      // BUG-065: the OCR prompt does not request a `sector` field, so OCR
+      // holdings arrive with sector = undefined. Fall back to the static
+      // ticker → sector taxonomy so the Sector tab can bucket holdings
+      // instead of dumping them all under "Other".
+      const meta = resolveTickerMeta(h.ticker as string | undefined)
+      const sector = (h.sector as string | undefined) ?? meta?.sector ?? null
       await db.execute({
         sql: `INSERT INTO portfolio_holdings
           (id, snapshot_id, ticker, name, geo, sector, currency, price, change_1d,
@@ -223,7 +230,7 @@ export async function POST(request: NextRequest) {
           (h.ticker as string) ?? null,
           (h.name as string) ?? 'Unknown',
           (h.geo as string) ?? null,
-          (h.sector as string) ?? null,
+          sector,
           (h.currency as string) ?? 'USD',
           numOrNull(h.price),
           numOrNull(h.change_1d),
