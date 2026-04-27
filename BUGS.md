@@ -5,6 +5,22 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-066 · Portfolio News tab shows stale date subtitle under "QS Daily Brief"
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Under the "QS Daily Brief" title, a subtitle line `{count} stories · {date}, {time} SGT` rendered the brief's `generated_at` timestamp. When users opened the News tab on a later day without hitting Refresh, the cached brief's old timestamp made the section appear current when it was actually stale (e.g. "23 stories · 25 Apr 2026, 08:23 am SGT" shown on 28 Apr).
+
+**Root cause:** The masthead in `news-client.tsx` rendered a `generatedAt` formatted from `brief?.generated_at` directly under the H1, with no recency check. Cached briefs from a previous day kept showing yesterday's timestamp until the user manually refreshed.
+
+**Fix:** Removed the entire subtitle div under the H1 (and its now-unused `generatedAt` and `filteredCount` locals). Title + sentiment filter pills + the rest of the page remain unchanged.
+
+**Regression test:** `tests/components/news-client-no-stale-date.test.tsx` — three cases: (a) a non-null `generated_at` no longer produces a `"{count} stories · …SGT"` subtitle, (b) the "QS Daily Brief" title still renders, (c) the All / Bullish / Bearish / Neutral filter pills still render.
+
+---
+
 ## BUG-065 · Portfolio Sector tab shows 100% "Other" — every OCR-uploaded holding has sector = NULL
 
 **Status:** Fixed
