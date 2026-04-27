@@ -155,7 +155,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (holdings.length === 0 && totalValue === null) {
+    // BUG-067: dedup by ticker (or name fallback) and skip zero-value rows.
+    // The OCR returns one `holdings` array per image; when the same ticker is
+    // visible on more than one screenshot, the merged list contains duplicates.
+    // A misclassified screenshot (e.g. a stock-detail page returned as a
+    // holding) can also have a missing `value` that the old
+    // `numOrNull(h.value) ?? 0` silently coerced to 0 — those rows then
+    // rendered as -100% in the P&L tab. Dedup here so total_value derivation,
+    // the empty-OCR guard, and the INSERT loop all see the canonical list.
+    const dedupedHoldings = (() => {
+      const byKey = new Map<string, Record<string, unknown>>()
+      for (const h of holdings) {
+        const v = numOrNull(h.value)
+        if (v === null || v <= 0) continue
+        const ticker = (h.ticker as string | null) ?? ''
+        const name = (h.name as string | null) ?? ''
+        const key = (ticker || name).trim().toLowerCase()
+        if (!key) continue
+        const existing = byKey.get(key)
+        if (!existing || (numOrNull(existing.value) ?? 0) < v) byKey.set(key, h)
+      }
+      return Array.from(byKey.values())
+    })()
+
+    // BUG-055 (existing): if OCR yielded nothing usable AND no summary was
+    // extracted, refuse rather than silently overwriting the snapshot with $0.
+    if (dedupedHoldings.length === 0 && totalValue === null) {
       return Response.json(
         { error: 'OCR could not extract any holdings from the screenshots. Please upload clear Holdings tab screenshots from the Syfe app.' },
         { status: 422 }
@@ -163,8 +188,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Derive total_value from holdings sum if not in summary
-    if (totalValue === null && holdings.length > 0) {
-      totalValue = holdings.reduce((sum, h) => sum + (numOrNull(h.value) ?? 0), 0)
+    if (totalValue === null && dedupedHoldings.length > 0) {
+      totalValue = dedupedHoldings.reduce((sum, h) => sum + (numOrNull(h.value) ?? 0), 0)
     }
     totalValue = totalValue ?? 0
 
@@ -211,7 +236,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert holdings
-    for (const h of holdings) {
+    for (const h of dedupedHoldings) {
       const detail = stockDetails.get(h.ticker as string) ?? {}
       const id = crypto.randomUUID()
       // BUG-065: the OCR prompt does not request a `sector` field, so OCR
@@ -267,7 +292,7 @@ export async function POST(request: NextRequest) {
 
     return Response.json({
       snapshot_id: snapshotId,
-      holdings_count: holdings.length,
+      holdings_count: dedupedHoldings.length,
       transactions_count: transactions.length,
       updated,
     })

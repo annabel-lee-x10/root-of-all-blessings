@@ -123,6 +123,29 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-067 · Portfolio P&L tab shows duplicate ticker rows and a bogus -100% line
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom (mobile prod, P&L tab):**
+- BUD appears twice — once mid-list at `$23.83 / -3.15%`, once at the bottom at `$23.83 / -100.00%`.
+- NFLX appears twice — both rows identical at `$21.41 / -3.24%`.
+
+**Root cause A — duplicate rows.** `POST /api/portfolio/scan` merges per-image OCR results with `holdings.push(...result.data.holdings)` and inserts every entry into `portfolio_holdings`. When the same ticker appears on more than one uploaded screenshot — whether because the holdings list spans multiple pages, or because a stock-detail page is OCR'd as a holdings entry — the same ticker is written twice. `GET /api/portfolio/snapshots` returns every row, and PnlTab renders each as its own line.
+
+**Root cause B — `-100%` line.** `POST /api/portfolio/scan` did `numOrNull(h.value) ?? 0` when inserting, silently coercing missing/unparseable values to 0. `GET /api/portfolio/snapshots`'s `mapHolding` then computed `pnl_pct` whenever `value - pnl > 0`, which is true for `value = 0, pnl < 0` (cost basis = `-pnl > 0`). The result `pnl / -pnl * 100 = -100%` rendered as a full-loss row in the P&L tab.
+
+**Fix:**
+- `mapHolding` (`app/api/portfolio/snapshots/route.ts`): tightened the pnl_pct guard to require `value > 0` in addition to `value - pnl > 0`. Zero-value rows now return `pnl_pct = null`, which `Response.json` strips, so PnlTab's `h.pnl_pct !== undefined` filter drops them.
+- `GET /api/portfolio/snapshots`: added `dedupHoldingRows()` — collapses duplicate ticker (or name fallback) rows from the DB at read time, preferring the row with the largest positive value. This fixes existing prod data without requiring a re-upload.
+- `POST /api/portfolio/scan`: dedups the merged OCR holdings list by ticker (or name fallback) and skips entries with missing/zero value before INSERT, so new uploads don't write the duplicate or zero-value rows in the first place. Also corrects the `holdings_count` returned in the response.
+
+**Regression tests:** `tests/regression/portfolio-pnl.test.ts` — "BUG-067" describe blocks (9 cases covering pnl_pct guard, GET dedup including BUD/NFLX scenarios, OCR ingest dedup, and zero-value skip).
+
+---
+
 ## BUG-060 · Excel download: response body corrupt — UUID .txt filename, "Download paused" in Chrome
 
 **Status:** Fixed
