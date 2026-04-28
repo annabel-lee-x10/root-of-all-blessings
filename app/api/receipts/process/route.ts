@@ -2,12 +2,17 @@ import { NextRequest } from 'next/server'
 import { verifySession } from '@/lib/session'
 import { db } from '@/lib/db'
 import { parseBlessThis } from '@/lib/parse-bless-this'
-import { resolveAccount, resolveTagIds, insertDraftTransaction } from '../_lib'
+import {
+  resolveAccount, resolveTagIds, insertDraftTransaction,
+  buildCategoryBlock, resolveCategoryId,
+  type CategoryRow,
+} from '../_lib'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
 
-const RECEIPT_PROMPT = `You are a receipt parser for a personal finance app. Extract all available expense information from this receipt image.
+function buildReceiptPrompt(categoryBlock: string): string {
+  return `You are a receipt parser for a personal finance app. Extract all available expense information from this receipt image.
 
 Output EXACTLY in this format (omit lines you cannot determine):
 Amount: [total amount, numbers only]
@@ -15,16 +20,26 @@ Currency: [3-letter code, default SGD]
 Merchant/Payee: [store or vendor name]
 Date: [YYYY-MM-DD — convert whatever date format appears on the receipt]
 Time: [HH:MM 24h]
-Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
+Category: [pick one as "Parent > Subcategory", or just "Parent" if no subcategory fits]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description of the purchase context]
+
+Available categories:
+${categoryBlock}
 
 Rules:
 - Amount is the grand total (GST-inclusive if shown)
 - Date: virtually all receipts print a transaction date — look for it even if formatted as "21 Apr 2026", "21/04/2026", "Apr 21, 2026" etc. and convert to YYYY-MM-DD. Only omit if no date whatsoever is visible.
-- Category inferred from merchant type and line items
+- Category inferred from merchant type and line items — pick EXACTLY one Parent (and optionally one Subcategory under it) from the list above
 - Tags: use item types, time of day, merchant type, spend amount as signals
-- If a field cannot be determined, omit that line entirely`
+- If a field cannot be determined, omit that line entirely
+
+Disambiguation:
+- If line items are food or drink, category is Food regardless of vendor or delivery method (GrabFood, Foodpanda → Food).
+- Delivery (under Lifestyle) is for non-food shipping (Amazon, Shopee, Lazada).
+- Transport (under Travel) is for moving people, not goods.`
+}
+
 
 export async function POST(request: NextRequest) {
   const valid = await verifySession()
@@ -62,6 +77,20 @@ export async function POST(request: NextRequest) {
   })
   const derivedPaymentMethod = (accountRow.rows[0]?.type as string) ?? null
 
+  // Pull expense categories *with hierarchy* so we can show the LLM how parents
+  // and children relate — that disambiguates cases like "food delivery" (Food >
+  // Meals) from "package delivery" (Lifestyle > Delivery).
+  const catResult = await db.execute({
+    sql: 'SELECT id, name, parent_id FROM categories WHERE type = ?',
+    args: ['expense'],
+  })
+  const categoryRows: CategoryRow[] = catResult.rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    parent_id: (r.parent_id as string | null) ?? null,
+  }))
+  const categoryBlock = buildCategoryBlock(categoryRows)
+
   const anthropicRes = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -76,7 +105,7 @@ export async function POST(request: NextRequest) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-          { type: 'text', text: RECEIPT_PROMPT },
+          { type: 'text', text: buildReceiptPrompt(categoryBlock) },
         ],
       }],
     }),
@@ -120,18 +149,9 @@ export async function POST(request: NextRequest) {
     } catch { /* non-fatal: skip merchant lookup on error */ }
   }
 
-  // Match category by name
-  const catResult = await db.execute({
-    sql: 'SELECT id, name FROM categories WHERE type = ?',
-    args: ['expense'],
-  })
-  let categoryId: string | null = null
-  if (parsed.category) {
-    const match = catResult.rows.find(
-      (c) => (c.name as string).toLowerCase() === parsed.category!.toLowerCase()
-    )
-    if (match) categoryId = match.id as string
-  }
+  // Resolve hierarchically: prefer child within the named parent, fall back to
+  // the parent, then to any name match.
+  const categoryId = resolveCategoryId(categoryRows, parsed.category, parsed.subcategory)
 
   const tagIds = parsed.tags ? await resolveTagIds(parsed.tags) : []
 
@@ -142,19 +162,15 @@ export async function POST(request: NextRequest) {
   // Build note: merchant description + parsed notes
   const noteText = [merchantNote, parsed.notes].filter(Boolean).join(' ') || null
 
-  // Build datetime from parsed date + time.
-  // Fallback: epoch sentinel (1970-01-01T00:00:00Z) signals "date not found" to the UI.
-  const EPOCH = '1970-01-01T00:00:00.000Z'
-  let datetime = EPOCH
-  let dateExtracted = false
+  // Build datetime from parsed date + time. Fallback: current timestamp.
+  // Receipts without a printed date are a normal case — default to now.
+  let datetime = new Date().toISOString()
   if (parsed.date) {
     const timePart = parsed.time ?? '00:00'
     const sgtDate = new Date(`${parsed.date}T${timePart}:00+08:00`)
     if (!isNaN(sgtDate.getTime())) {
       datetime = sgtDate.toISOString()
-      dateExtracted = true
     }
-    // else: normaliseDate returned an unrecognised format — keep epoch fallback
   }
 
   const draft = await insertDraftTransaction({
@@ -169,5 +185,5 @@ export async function POST(request: NextRequest) {
     tagIds,
   })
 
-  return Response.json({ draft, date_extracted: dateExtracted }, { status: 201 })
+  return Response.json({ draft }, { status: 201 })
 }

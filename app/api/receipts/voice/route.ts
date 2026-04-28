@@ -2,11 +2,15 @@ import { NextRequest } from 'next/server'
 import { verifySession } from '@/lib/session'
 import { db } from '@/lib/db'
 import { parseBlessThis } from '@/lib/parse-bless-this'
-import { resolveAccount, resolveTagIds, insertDraftTransaction } from '../_lib'
+import {
+  resolveAccount, resolveTagIds, insertDraftTransaction,
+  buildCategoryBlock, resolveCategoryId,
+  type CategoryRow,
+} from '../_lib'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
-function buildVoicePrompt(text: string): string {
+function buildVoicePrompt(text: string, categoryBlock: string): string {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
   return `You are an expense parser for a personal finance app. The user described an expense in natural language (possibly transcribed from voice). Extract all available information.
 
@@ -15,9 +19,17 @@ Amount: [amount, numbers only]
 Currency: [3-letter code, default SGD]
 Merchant/Payee: [merchant or payee name]
 Date: [YYYY-MM-DD, default today: ${today}]
-Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]
+Category: [pick one as "Parent > Subcategory", or just "Parent" if no subcategory fits]
 Tags: [3-5 lowercase comma-separated contextual tags]
 Description: [1-2 sentence description]
+
+Available categories:
+${categoryBlock}
+
+Disambiguation:
+- If line items are food or drink, category is Food regardless of vendor or delivery method (GrabFood, Foodpanda → Food).
+- Delivery (under Lifestyle) is for non-food shipping (Amazon, Shopee, Lazada).
+- Transport (under Travel) is for moving people, not goods.
 
 User input: "${text}"`
 }
@@ -48,6 +60,20 @@ export async function POST(request: NextRequest) {
   })
   const derivedPaymentMethod = (accountRow.rows[0]?.type as string) ?? null
 
+  // Pull expense categories *with hierarchy* so we can show the LLM how parents
+  // and children relate — that disambiguates cases like "food delivery" (Food >
+  // Meals) from "package delivery" (Lifestyle > Delivery).
+  const catResult = await db.execute({
+    sql: 'SELECT id, name, parent_id FROM categories WHERE type = ?',
+    args: ['expense'],
+  })
+  const categoryRows: CategoryRow[] = catResult.rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    parent_id: (r.parent_id as string | null) ?? null,
+  }))
+  const categoryBlock = buildCategoryBlock(categoryRows)
+
   const anthropicRes = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -58,7 +84,7 @@ export async function POST(request: NextRequest) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 512,
-      messages: [{ role: 'user', content: buildVoicePrompt(text) }],
+      messages: [{ role: 'user', content: buildVoicePrompt(text, categoryBlock) }],
     }),
   })
 
@@ -68,17 +94,7 @@ export async function POST(request: NextRequest) {
   const rawText: string = anthropicData.content?.[0]?.text ?? ''
   const parsed = parseBlessThis(rawText)
 
-  const catResult = await db.execute({
-    sql: 'SELECT id, name FROM categories WHERE type = ?',
-    args: ['expense'],
-  })
-  let categoryId: string | null = null
-  if (parsed.category) {
-    const match = catResult.rows.find(
-      (c) => (c.name as string).toLowerCase() === parsed.category!.toLowerCase()
-    )
-    if (match) categoryId = match.id as string
-  }
+  const categoryId = resolveCategoryId(categoryRows, parsed.category, parsed.subcategory)
 
   if (parsed.amount == null) {
     return Response.json({ error: 'Could not extract amount from transcript', parsed }, { status: 422 })

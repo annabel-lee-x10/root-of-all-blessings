@@ -5,7 +5,246 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-069 · News refresh — UI keeps showing stale section cards when refresh skips port (no tickers) or any section's API call fails
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh on QS Daily Brief, sections that hit a non-success path in the loop body kept rendering their previous-day cards (with old "25 Apr" timestamps) even after the refresh button finished and "✓ Brief generated" appeared. PR #118 (BUG-068) fixed DB persistence for the same paths, but the rendered React state was never updated, so the user saw a successful refresh while looking at stale data.
+
+**Root cause:** In `handleRefresh()`'s loop in `news-client.tsx`, two paths exited without ever calling `setNews` for the section in question:
+- (a) Skip path — `if (key === 'port' && portfolioTickers.length === 0) continue` skipped before any state update, leaving `news.port` at its mount-time value.
+- (b) Catch path — `catch (err) { console.error(...) }` swallowed the error and never cleared `news[key]`, so a network/API failure on any of the 6 sections (`world`, `sg`, `prop`, `jobsGlobal`, `jobsSg`, `port`) left that section's stale cards rendered.
+
+**Fix:** Added `setNews(p => ({ ...p, [key]: [] }))` on both paths — once before the `continue` in the skip branch, once inside the catch after `console.error`. Net change: 2 lines added. Successful refresh path is unchanged.
+
+**Regression tests:** `tests/components/news-refresh-clears-ui.test.tsx` — seven DOM-level cases driven by a parameterized helper:
+- (a) Skip path: mount with stale port card + `portfolioTickers === 0`, hit Refresh, assert stale card text is no longer in the DOM.
+- (b–g) Catch path × 6 sections: mount with a uniquely-headlined stale card in the section under test, mock `/api/news/generate` to fail for that section's request, hit Refresh, assert stale card text is no longer in the DOM.
+All 7 cases fail on `main` with messages like "expected document not to contain element, found <span>STALE WORLD CARD UNIQUE-AAAA</span>" and pass after the two `setNews` calls are added.
+
+---
+
+## BUG-068 · News refresh — Portfolio section is special-cased outside the main loop, leaving stale port cards in DB when tickers are absent or fetch fails
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The QS Daily Brief refresh button loops through five sections (`world`, `sg`, `prop`, `jobsGlobal`, `jobsSg`), then has a separate `if (portfolioTickers.length > 0)` block for Portfolio news. Two user-visible consequences:
+- (a) Refresh feels inconsistent: five sections cycle through their unified "Refreshing X..." label and skeleton, then Portfolio runs through its own block with its own status text (`↻ Refreshing Portfolio News...`).
+- (b) Stale per-card timestamps: when `portfolioTickers` is empty (or the Portfolio API call fails), the loop never updates `port`, but the persisted brief still carries the previous run's port cards because `fresh` was initialized as `{ ...EMPTY_SECTIONS, port: news.port }`. Those stale cards then re-load on every page mount and continue to display old timestamps (e.g. 25 Apr cards still showing when the user refreshes on 28 Apr).
+
+**Root cause:** `app/(protected)/news/news-client.tsx`'s `handleRefresh()` excluded `port` from the `sectionConfigs` array and instead handled it after the loop in a separate `if` block. The `fresh` accumulator was seeded with `port: news.port` so the persist call would have a value to send when Portfolio was skipped — but that meant the persisted DB row kept echoing the previous brief's port cards forever, even when their tickers were no longer in the user's portfolio.
+
+**Fix:** Added `port` to `sectionConfigs` with its own `system: PORT_SYS`, query, and `n: 20`. Reset `fresh` to `{ ...EMPTY_SECTIONS }` (no preserved port). Inside the loop, skip the fetch only when `key === 'port' && portfolioTickers.length === 0` (preserves the existing "no tickers, no work" guard). The mapCard call inside the loop branches on `key === 'port'` to forward the ticker. Removed the post-loop Portfolio block. Net effect: when Portfolio refreshes, fresh cards are persisted; when it doesn't, the persisted port is `[]` and the DB cleans itself up on the next refresh.
+
+**Regression tests:** `tests/components/news-refresh-portfolio-loop.test.tsx` — five cases:
+- (a) `portfolioTickers === 0` + DB has stale port cards → refresh persists `port: []` (not stale cards).
+- (b) Port refresh API call fails → refresh persists `port: []` (not stale cards).
+- (c) `portfolioTickers > 0` → refresh makes exactly one PORT_SYS-using `/api/news/generate` call.
+- (d) `portfolioTickers === 0` → refresh makes zero PORT_SYS calls.
+- (e) Successful refresh with tickers replaces stale port cards with fresh ones (timestamp differs, headline replaced) and the persisted `port` carries the fresh timestamp.
+Cases (a) and (b) fail on `main` and pass after the fix.
+
+---
+
+## BUG-066 · Portfolio News tab shows stale date subtitle under "QS Daily Brief"
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** Under the "QS Daily Brief" title, a subtitle line `{count} stories · {date}, {time} SGT` rendered the brief's `generated_at` timestamp. When users opened the News tab on a later day without hitting Refresh, the cached brief's old timestamp made the section appear current when it was actually stale (e.g. "23 stories · 25 Apr 2026, 08:23 am SGT" shown on 28 Apr).
+
+**Root cause:** The masthead in `news-client.tsx` rendered a `generatedAt` formatted from `brief?.generated_at` directly under the H1, with no recency check. Cached briefs from a previous day kept showing yesterday's timestamp until the user manually refreshed.
+
+**Fix:** Removed the entire subtitle div under the H1 (and its now-unused `generatedAt` and `filteredCount` locals). Title + sentiment filter pills + the rest of the page remain unchanged.
+
+**Regression test:** `tests/components/news-client-no-stale-date.test.tsx` — three cases: (a) a non-null `generated_at` no longer produces a `"{count} stories · …SGT"` subtitle, (b) the "QS Daily Brief" title still renders, (c) the All / Bullish / Bearish / Neutral filter pills still render.
+
+---
+
+## BUG-065 · Portfolio Sector tab shows 100% "Other" — every OCR-uploaded holding has sector = NULL
+
+**Status:** Fixed
+**Reported:** 2026-04-27
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `lib/portfolio/ticker-meta.ts`
+
+**Symptom:** On the Portfolio Sector tab, all 22 holdings ($16,930.12) were lumped under a single "Other" sector at 100%. Holdings count, total value, and P&L were all correct — only the sector classification was broken. Reproduced on prod mobile after the screenshot-OCR upload pipeline replaced the HTML upload as the user's actual upload path.
+
+**Root cause:** The Phase 1 OCR upload pipeline (PR #86, commit `737002d`/`50c341d`) introduced `/api/portfolio/scan` as a new write path that inserts directly into `portfolio_holdings`. The OCR prompt in `lib/portfolio/ocr.ts` only asks Claude for `ticker / name / geo / currency / price / change_1d / value / pnl / qty` — it never asks for `sector`. The scan route inserted `(h.sector as string) ?? null`, so every row landed with `sector = NULL`. The Sector tab in `portfolio-client.tsx` (line 573) buckets any holding without a sector under `'Other'`, so the entire portfolio collapsed to one bucket. The legacy `/api/portfolio` HTML upload route had a static `TICKER_META` lookup inline that filled this gap; the new OCR route did not reuse it.
+
+**Fix:** Extracted the existing ticker → `{geo, sector, currency}` taxonomy into `lib/portfolio/ticker-meta.ts` (no behaviour change for the HTML route — its inline copy is unchanged). The scan route now calls `resolveTickerMeta(h.ticker)` and uses the static sector as a fallback when the OCR-supplied `sector` is undefined. OCR-supplied sector values still win when present (forward-compat with a future prompt update), and unknown tickers stay NULL rather than being given a fabricated sector.
+
+**Regression tests:** `tests/regression/portfolio-sector-classification.test.ts` — three cases: (a) known tickers (NVDA/AAPL/D05/QQQ) get their static sectors when OCR omits sector, producing ≥2 distinct non-"Other" buckets; (b) OCR-supplied custom sector is preserved (not overwritten); (c) unknown tickers stay falsy so they remain clearly "unclassified" rather than fabricated.
+
+---
+
+## BUG-064 · OCR/voice category picker misclassifies food-delivery receipts as Lifestyle > Delivery or Travel > Transport
+
+**Status:** Fixed
+**Reported:** 2026-04-26
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/api/receipts/voice/route.ts`, `app/api/receipts/_lib.ts`, `lib/parse-bless-this.ts`
+
+**Symptom:** A GrabFood / Foodpanda food-delivery receipt was routed to `Lifestyle > Delivery` (because the prompt mentioned "delivery") or `Travel > Transport` (because "Grab" suggested ride-share), instead of the correct `Food > Meals`. The LLM had no signal that `Delivery` lived under `Lifestyle` (non-food shipping) and `Transport` under `Travel` (moving people), nor that food delivery is still Food regardless of vendor.
+
+**Root cause:** The prompt sent every category as a flat comma-separated list, with no parent–child structure, no example of how to express the hierarchy in the answer, and no disambiguation rules. The LLM picked any superficially matching name; the post-LLM lookup only matched a single name and could not prefer a child within a chosen parent.
+
+**Fix:**
+- Categories are now queried with `parent_id` and rendered to the prompt as a structured block — `  Food > Coffee, Meals, ...` — so the model can see which children belong to which parent.
+- The output instruction asks the model to answer as `Parent > Subcategory` (or just `Parent` if no child fits).
+- Three disambiguation rules added to the prompt: food items always belong to Food, Delivery (under Lifestyle) is for non-food shipping, Transport (under Travel) is for moving people.
+- `parseBlessThis` now splits on `>` and exposes `category` (parent) and `subcategory` (child) separately.
+- A new shared resolver in `_lib.ts` (`resolveCategoryId`) prefers the named child within the named parent, falls back to the parent if the child is unknown, and falls back to a bare-name match otherwise.
+
+**Regression tests:** `tests/api/receipts.test.ts` and `tests/api/receipts-voice.test.ts` — `BUG-064` cases cover (a) the prompt structure (hierarchy block, output format, disambiguation rules), (b) GrabFood/Foodpanda → `Food > Meals`, (c) Grab ride → `Travel > Taxi`, (d) Amazon → `Lifestyle > Electronics`, (e) `Parent > UnknownChild` falls back to parent, (f) bare parent name still resolves. `tests/parse-bless-this.test.ts` covers the new `Parent > Subcategory` parser path.
+
+---
+
+## BUG-063 · OCR/voice receipt drafts always have category_id = null because LLM picks from a hard-coded list that doesn't match the DB
+
+**Status:** Fixed
+**Reported:** 2026-04-26
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/api/receipts/voice/route.ts`
+
+**Symptom:** Every draft created from a receipt photo (`/api/receipts/process`) or voice/text input (`/api/receipts/voice`) had `category_id = null` in the database. The drafts card displayed an empty Category field even when the LLM clearly identified the merchant type from the receipt.
+
+**Root cause:** Both routes hard-coded the category list inside the LLM prompt as `Category: [one of: Food, Transport, Housing, Bills, Health, Entertainment, Subscriptions, Education, Pet, Other]`. The actual `categories` table for this user — seeded by `app/api/migrate/route.ts` — uses different parent names (`Food`, `Living`, `Travel`, `Wellness and Health`, `Lifestyle`, `Business Education Work`, `Entertainment`, `Subscriptions`, `Pet`, `Other`). The LLM dutifully picked a name from the hard-coded list (e.g. "Transport"), but the post-LLM lookup in the categories table — which uses literal `.toLowerCase()` equality on `name` — could not find a row with that name (the DB has "Travel", not "Transport"). `categoryId` fell through to `null`.
+
+**Fix:** Both routes now query the categories table BEFORE the LLM call, pull the actual `name` values, and inject that real list into the prompt (`Category: [one of: ${names.join(', ')}]`). The downstream lookup is reused on the same `catResult` rows. The LLM picks from the user's actual taxonomy, so the existing match logic finds a row.
+
+**Regression tests:** `tests/api/receipts.test.ts` and `tests/api/receipts-voice.test.ts` — "BUG-063" cases. Tests seed a category named `Food and Drink` (intentionally not in the old hard-coded list), and the LLM mock simulates a real model by picking from the prompt's category list. Pre-fix: prompt lists "Food" → mock returns "Food" → DB lookup fails → `category_id = null`. Post-fix: prompt lists "Food and Drink" → mock returns "Food and Drink" → DB lookup succeeds → `category_id` populated.
+
+---
+
+## BUG-062 · OCR no-date branch shows yellow "date not found, please set it manually" warning instead of defaulting to now
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/api/receipts/process/route.ts`, `app/(protected)/components/receipt-dropzone.tsx`, `app/(protected)/components/drafts-card.tsx`
+
+**Symptom:** When a receipt photo has no printed date (or Claude OCR returns an unrecognised date format), the user saw a yellow toast `✓ Draft created — date not found, please set it manually` and the resulting draft's datetime field was empty. The drafts card row also rendered a yellow "Date?" pill, and the edit form labelled the Date/Time field with `— not found, please set`. Receipts genuinely without dates are a normal case, so treating it as a soft-failure surfaced friction the user did not need.
+
+**Root cause:** BUG-030's fix used a `1970-01-01T00:00:00.000Z` epoch sentinel as the "no date" fallback, paired with a `date_extracted: false` flag, and the UI branched on both to render warning text. The behaviour was deliberately added but turned out to be unwanted UX.
+
+**Fix:**
+- `app/api/receipts/process/route.ts` — When `parsed.date` is missing or unparseable, default `datetime` to `new Date().toISOString()` instead of the epoch sentinel. Removed the `date_extracted` field from the response.
+- `app/(protected)/components/receipt-dropzone.tsx` — Removed the `date_extracted === false` branch; the success toast is now always plain `✓ Draft created`. Removed the yellow colour conditional.
+- `app/(protected)/components/drafts-card.tsx` — Removed dead `EPOCH_ISO` constant, `isEpoch()` helper, the yellow "Date?" pill in the row summary, and the `— not found, please set` label suffix. `toInputDt` now treats any invalid date as empty; `fromInputDt` falls back to current time when the input is cleared.
+
+**Regression tests:**
+- `tests/api/receipts.test.ts` — `BUG-062: defaults datetime to current timestamp (not epoch) when Claude omits Date` and `BUG-062: defaults datetime to current timestamp when Claude returns an unrecognised date format` assert the fallback uses `now()` and never equals epoch.
+- `tests/components/receipt-dropzone.test.tsx` — `BUG-062: no "date not found" warning when OCR misses date` asserts the warning text is not rendered even if the server returns a `date_extracted: false` flag (forwards-compatible with stale server responses).
+
+---
+
+## BUG-055 · Portfolio scan: empty OCR result silently overwrites snapshot with 0 holdings / $0 value
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `lib/portfolio/ocr.ts`
+
+**Symptom:** When Claude fails to parse a screenshot (returns `[]` or only non-holdings/non-summary types), the scan route happily creates or updates a portfolio snapshot with `total_value = 0` and zero holdings — destroying whatever good data existed for that day.
+
+**Root cause 1 — no guard on empty OCR output:** After the merge loop, `totalValue` falls through to `totalValue = totalValue ?? 0` and `holdings = []`. The route then proceeds to INSERT/UPDATE the snapshot and DELETE all existing holdings for that snapshot, replacing real data with nothing.
+
+**Root cause 2 — silent parse failures:** `parseOcrResponse` swallows all JSON parse errors with a bare `catch { return [] }`, giving no visibility into what Claude actually returned when extraction fails.
+
+**Root cause 3 — generic OCR prompt:** The original prompt gave no Syfe-specific context about what the Holdings tab looks like, making it harder for Claude to find the right data fields.
+
+**Fix 1:** Added guard after the merge loop: if `holdings.length === 0 && totalValue === null`, return 422 with a descriptive error instead of writing empty data to the DB.
+
+**Fix 2:** Added `console.error` in the `parseOcrResponse` catch block to log the raw text Claude returned. Also added a `console.log` at the top of the function logging raw length and first 200 chars for debugging.
+
+**Fix 3:** Replaced generic OCR prompt with a Syfe-specific prompt that describes the Holdings tab layout, geo badge semantics (US/SG/UK/HK), currency rules (USD for US/HK, SGD for SG, GBP for UK), the P&L-only view (not acceptable), and all expected field names (`change_1d`, `pnl`, etc.).
+
+**Regression tests:** `tests/regression/portfolio-ocr-guard.test.ts` — "BUG-055" describe block
+
+---
+
 **BUG-001** `PATCH /api/transactions/[id]` and `DELETE /api/transactions/[id]` do not call `verifySession()`, meaning authenticated endpoints are missing auth checks — discovered 2026-04-19, `app/api/transactions/[id]/route.ts`
+
+---
+
+## BUG-067 · Portfolio P&L tab shows duplicate ticker rows and a bogus -100% line
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom (mobile prod, P&L tab):**
+- BUD appears twice — once mid-list at `$23.83 / -3.15%`, once at the bottom at `$23.83 / -100.00%`.
+- NFLX appears twice — both rows identical at `$21.41 / -3.24%`.
+
+**Root cause A — duplicate rows.** `POST /api/portfolio/scan` merges per-image OCR results with `holdings.push(...result.data.holdings)` and inserts every entry into `portfolio_holdings`. When the same ticker appears on more than one uploaded screenshot — whether because the holdings list spans multiple pages, or because a stock-detail page is OCR'd as a holdings entry — the same ticker is written twice. `GET /api/portfolio/snapshots` returns every row, and PnlTab renders each as its own line.
+
+**Root cause B — `-100%` line.** `POST /api/portfolio/scan` did `numOrNull(h.value) ?? 0` when inserting, silently coercing missing/unparseable values to 0. `GET /api/portfolio/snapshots`'s `mapHolding` then computed `pnl_pct` whenever `value - pnl > 0`, which is true for `value = 0, pnl < 0` (cost basis = `-pnl > 0`). The result `pnl / -pnl * 100 = -100%` rendered as a full-loss row in the P&L tab.
+
+**Fix:**
+- `mapHolding` (`app/api/portfolio/snapshots/route.ts`): tightened the pnl_pct guard to require `value > 0` in addition to `value - pnl > 0`. Zero-value rows now return `pnl_pct = null`, which `Response.json` strips, so PnlTab's `h.pnl_pct !== undefined` filter drops them.
+- `GET /api/portfolio/snapshots`: added `dedupHoldingRows()` — collapses duplicate ticker (or name fallback) rows from the DB at read time, preferring the row with the largest positive value. This fixes existing prod data without requiring a re-upload.
+- `POST /api/portfolio/scan`: dedups the merged OCR holdings list by ticker (or name fallback) and skips entries with missing/zero value before INSERT, so new uploads don't write the duplicate or zero-value rows in the first place. Also corrects the `holdings_count` returned in the response.
+
+**Regression tests:** `tests/regression/portfolio-pnl.test.ts` — "BUG-067" describe blocks (9 cases covering pnl_pct guard, GET dedup including BUD/NFLX scenarios, OCR ingest dedup, and zero-value skip).
+
+---
+
+## BUG-060 · Excel download: response body corrupt — UUID .txt filename, "Download paused" in Chrome
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** Clicking the Excel download button produces a file named after the raw snapshot UUID (e.g. `287a29be-df91-43e9-8f....txt`) instead of `portfolio-{label}.xlsx`. Chrome shows "Download paused" and the download never completes. The `Content-Disposition` and `Content-Type` response headers are not visible to the browser.
+
+**Root cause:** `generateExcel()` returns a Node.js `Buffer`. The route passed it to `new Response()` via `buf as unknown as BodyInit` — a double type-cast that bypasses TypeScript. In Vercel's serverless runtime, passing a `Buffer` (Node.js subclass of `Uint8Array`) directly as `BodyInit` causes the runtime to fail to serialize the response body correctly: the response headers are stripped and the body stream never terminates. The correct approach — used by the transactions export route in the same codebase — is `new Response(new Uint8Array(buf), {...})`, which gives the Web API a plain `ArrayBufferView` it can reliably serialize.
+
+**Root cause 2 (already fixed in PR #104/BUG-055):** `maxDuration` was missing (Vercel 10 s limit) and an N+1 query pattern fetched one DB round-trip per snapshot. Both were resolved in PR #104 but the buffer encoding issue was left untouched.
+
+**Fix:** Replaced `buf as unknown as BodyInit` with `new Uint8Array(buf)` — the same pattern used in `app/api/transactions/export/route.ts`.
+
+**Regression test:** `tests/api/portfolio-download.test.ts` — "BUG-060 – Excel response body must be Uint8Array, not raw Buffer"
+
+---
+
+## BUG-059 · News: sections show "No stories yet" on transient API errors (429 / 5xx)
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh (or auto-expanding Singapore Property), individual news sections intermittently showed "No stories yet — hit Refresh to generate" instead of loading stories. The failure was random and retrying manually would usually succeed.
+
+**Root cause:** `anthropicTurn()` made a single call to `/api/news/generate` and immediately threw on any non-2xx response. Transient API-level failures — 429 rate-limit responses or 5xx server errors from the Anthropic proxy — caused the entire section to fail with no recovery. The existing retry logic (PR #107) only handled the case where the model returned prose instead of JSON; it had no coverage for HTTP-level failures.
+
+**Fix:** Added a single retry inside `anthropicTurn`. If the first `fetch('/api/news/generate')` call returns status 429 or any 5xx, the function waits 2 seconds then retries once. If the retry also fails, or if the status is a non-retriable 4xx (400, 401, 403), the error is thrown as before. No other function (`agenticLoop`, `handleRefresh`, `handlePropOpen`, `refreshPortfolioNews`) was changed.
+
+**Regression tests:** `tests/regression/news-api-retry.test.tsx` — "BUG-059" describe block
+
+---
+
+## BUG-058 · News: Singapore Property section always shows "No stories yet" after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh, the Singapore Property section consistently showed "No stories yet — hit Refresh to generate" while World, Singapore Headlines, Jobs, and Portfolio all loaded correctly. The section remained empty for the rest of the session even if Refresh was hit again.
+
+**Root cause 1 — handleRefresh set propFetchedRef unconditionally:** `if (key === 'prop') propFetchedRef.current = true` ran outside the try/catch block, so it executed even when the prop agenticLoop returned 0 cards (empty JSON, prose, or parse failure). This permanently blocked `handlePropOpen` (the expand-to-fetch trigger) for the rest of the session via its `if (propFetchedRef.current) return` guard.
+
+**Root cause 2 — handlePropOpen never reset propFetchedRef on empty result:** `propFetchedRef.current = true` was set at the start of `handlePropOpen` to prevent concurrent calls. If the fetch succeeded but `parseArr` returned 0 cards (or the fetch threw), `propFetchedRef` stayed `true`, permanently blocking any retry via expand.
+
+**Root cause 3 — No retry when model returns prose instead of JSON:** The property query ("HDB, condo, landed, commercial...") intermittently causes the model to return a prose summary rather than a raw JSON array. `parseArr` returns `[]` silently. No retry was attempted, so the section stayed empty.
+
+**Fix:**
+1. Moved `propFetchedRef.current = true` inside the try block in `handleRefresh`, guarded by `cards.length > 0`. A Refresh that yields 0 prop cards no longer blocks future auto-fetches.
+2. In `handlePropOpen`, added `propFetchedRef.current = false` when `cards.length === 0` (after try) and in the catch block, allowing the next expand to retry.
+3. Added a one-time retry in both `handleRefresh` and `handlePropOpen`: when `parseArr(raw)` returns empty on a non-empty raw response that does not start with `[` (i.e., prose, not intentionally-empty `[]`), `agenticLoop` is called once more and the result used.
+
+**Regression tests:** `tests/components/news-property-auto-fetch.test.tsx` — "BUG-058" describe block (3 cases)
 
 ---
 
@@ -748,6 +987,22 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-051 · scan and snapshots routes insert NULL for raw_html, violating NOT NULL constraint
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/scan/route.ts`, `app/api/portfolio/snapshots/route.ts`
+
+**Symptom:** On production, `POST /api/portfolio/scan` (screenshot OCR) and `POST /api/portfolio/snapshots` (skill upload) threw a SQLite/Turso constraint error: `NOT NULL constraint failed: portfolio_snapshots.raw_html`. The insert was silently caught and surfaced as an "Upload failed" toast.
+
+**Root cause:** Both routes hardcoded `NULL` as the literal SQL value for `raw_html` in their INSERT statements. `scripts/migrate.ts` defines `raw_html TEXT NOT NULL`, so this violates the column constraint in production. The test-DB schema in `tests/helpers.ts` declared `raw_html TEXT` (nullable), masking the violation in all automated tests.
+
+**Fix:** Changed the hardcoded `NULL` to `''` (empty string) for `raw_html` in both INSERT statements.
+
+**Regression tests:** `tests/regression/portfolio-raw-html.test.ts`
+
+---
+
 ## BUG-050 · Portfolio: Geo/Sector tabs show stale FX disclaimer text
 
 **Status:** Fixed
@@ -925,6 +1180,54 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 
 ---
 
+## BUG-061 · Portfolio: Excel download broken on mobile Chrome — "Download paused", UUID-named .txt file
+
+**Status:** Fixed
+**Reported:** 2026-04-25
+**Fixed in:** `app/(protected)/portfolio/downloads-modal.tsx`
+
+**Symptom:** Tapping the Excel download button in the Downloads modal on mobile Chrome (Android) shows "Download paused" and saves a UUID-named `.txt` file instead of `portfolio-*.xlsx`.
+
+**Root cause:** The Excel button was `<a href="/api/portfolio/download/excel/${id}" download>`. On Android Chrome, clicking this hands the URL to the Android Download Manager. The Download Manager makes a fresh HTTP request **without the session cookie**, which either produces an unexpected response or loses the `Content-Disposition` filename — resulting in "Download paused" and a UUID-named temp file. The `download` attribute on `<a>` tags is unreliable for API-authenticated binary files on mobile browsers.
+
+**Fix:** Replaced the `<a href download>` Excel button with a `<button>` that calls `fetch()` + `.blob()` + `URL.createObjectURL()` + a programmatically-clicked temporary `<a>` element. This keeps the download request inside the page context where the session cookie is present, and gives full control over the filename. A per-row loading state prevents double-clicks.
+
+**Regression tests:** `tests/components/downloads-modal.test.tsx` — "BUG-061" describe block
+
+---
+
+## BUG-056 · News: Portfolio tab never loads tickers when user adds holdings via OCR scan
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** The Portfolio News section on the News tab stays hidden and never shows content, even after the user has uploaded a portfolio screenshot and holdings are saved in the DB. No tickers are ever populated, so the section condition `portfolioTickers.length > 0 || news.port.length > 0` is never met.
+
+**Root cause:** `portfolioTickers` was only populated by two paths: (1) `handleUpload` — user uploads an HTML file via the news FAB; (2) `loadBrief` — the saved brief JSON includes a `tickers` field from a previous Refresh with tickers. The `sharedTickers` prop from `PortfolioClient` was cleared in BUG-049 (now always `[]`). Since users switched to OCR screenshot scan to add holdings, `handleUpload` is never called, and tickers are never set.
+
+**Fix:** Added a `loadTickers` `useEffect` (runs once on mount) that fetches `/api/portfolio/snapshots`, extracts unique non-null tickers from `holdings`, and calls `setPortfolioTickers`. Does NOT auto-generate portfolio news — tickers are just made available for when the user clicks Refresh or the Portfolio tab is opened. HTML upload flow is preserved and overrides the auto-loaded tickers if the user uploads a new report.
+
+**Regression test:** `tests/components/news-client-snapshot-tickers.test.tsx`
+
+---
+
+## BUG-057 · News: Singapore Headlines, Property, and Portfolio sections empty after Refresh
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/news/generate/route.ts`
+
+**Symptom:** After hitting Refresh on the News tab, World Headlines and Jobs sections populate correctly, but Singapore Headlines, Singapore Property, and Portfolio News sections remain empty ("No stories yet").
+
+**Root cause:** `app/api/news/generate/route.ts` (the Anthropic API proxy used by the agentic news loop) had no `maxDuration` export. Vercel defaults to 10s for serverless functions. Broad queries (world headlines) complete within 10s, but niche `web_search` queries (Singapore news, property, portfolio tickers) routinely take >10s, causing the proxy to time out and return an empty response. Sections processed later in the sequential `handleRefresh()` loop were also more likely to hit cumulative rate-limit delays.
+
+**Fix:** Added `export const maxDuration = 60` to `app/api/news/generate/route.ts` — the same pattern used in `app/api/portfolio/scan/route.ts` (BUG-043) and the Excel download route.
+
+**Regression test:** `tests/regression/news-generate-timeout.test.ts` — "BUG-057" describe block
+
+---
+
 ## BUG-054 · Portfolio: NULL inserted for raw_html violates NOT NULL schema constraint
 
 **Status:** Fixed
@@ -938,3 +1241,21 @@ Before inserting a new snapshot, if `cash` and `realised_pnl` are absent from th
 **Fix:** Changed `NULL` to `''` (empty string) for the `raw_html` positional value in both INSERT statements.
 
 **Regression test:** `tests/api/portfolio-scan.test.ts` and `tests/api/portfolio-snapshots.test.ts` — "BUG-054 – raw_html stored as empty string not NULL"
+
+---
+
+## BUG-055 · Excel download route times out on Vercel: no maxDuration + N+1 holdings queries
+
+**Status:** Fixed
+**Reported:** 2026-04-24
+**Fixed in:** `app/api/portfolio/download/excel/[id]/route.ts`
+
+**Symptom:** The Excel download endpoint (`GET /api/portfolio/download/excel/[id]`) times out on Vercel for portfolios with many snapshots, returning a 504 or no response.
+
+**Root cause 1 — No maxDuration:** The route had no `export const maxDuration`, so Vercel applied its default 10s limit. The scan route already sets `maxDuration = 60`; this route was overlooked.
+
+**Root cause 2 — N+1 query pattern:** The route fetched all snapshots, then ran one `SELECT * FROM portfolio_holdings WHERE snapshot_id = ?` per snapshot inside a `Promise.all`. With N snapshots this issues N+1 DB round-trips, each incurring network latency to Turso.
+
+**Fix:** Added `export const maxDuration = 60`. Replaced the per-snapshot holdings query with a single `SELECT * FROM portfolio_holdings ORDER BY snapshot_id`, then grouped results by `snapshot_id` in JS before building the `ExcelSnapData[]` array.
+
+**Regression test:** `tests/api/portfolio-excel-download.test.ts` — "BUG-055" describe block
