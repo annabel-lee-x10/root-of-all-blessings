@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
-import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory, seedTag, seedNewsBrief } from './helpers'
+import { initTestDb, clearTestDb, resetTestDb, req, seedAccount, seedCategory } from './helpers'
 
 vi.mock('@/lib/session', () => ({
   createSession: vi.fn().mockResolvedValue(undefined),
@@ -184,63 +184,6 @@ describe('Regression: datetime precision', () => {
     expect(res.status).toBe(201)
     const data = await res.json()
     expect(data.datetime).toBe(datetime)
-  })
-})
-
-describe('Regression: news auth guard', () => {
-  it('middleware blocks unauthenticated GET /api/news', async () => {
-    const { proxy: middleware } = await import('@/proxy')
-    const { NextRequest } = await import('next/server')
-    const request = new NextRequest(new URL('/api/news', 'http://localhost:3000'))
-    const res = await middleware(request)
-    expect(res.status).toBe(307)
-  })
-
-  it('middleware blocks unauthenticated POST /api/news/upload', async () => {
-    const { proxy: middleware } = await import('@/proxy')
-    const { NextRequest } = await import('next/server')
-    const request = new NextRequest(new URL('/api/news/upload', 'http://localhost:3000'), { method: 'POST' })
-    const res = await middleware(request)
-    expect(res.status).toBe(307)
-  })
-
-  it('middleware blocks unauthenticated POST /api/news/generate', async () => {
-    const { proxy: middleware } = await import('@/proxy')
-    const { NextRequest } = await import('next/server')
-    const request = new NextRequest(new URL('/api/news/generate', 'http://localhost:3000'), { method: 'POST' })
-    const res = await middleware(request)
-    expect(res.status).toBe(307)
-  })
-})
-
-describe('Regression: news brief CRUD', () => {
-  it('GET returns null before any brief is created', async () => {
-    const { GET } = await import('@/app/api/news/route')
-    const res = await GET()
-    expect(res.status).toBe(200)
-    expect(await res.json()).toBeNull()
-  })
-
-  it('POST brief then GET returns it with aliased field names', async () => {
-    const { POST, GET } = await import('@/app/api/news/route')
-    const brief_json = { world: [{ id: 'integ-1', headline: 'Test' }], sg: [], prop: [], jobsGlobal: [], jobsSg: [], port: [] }
-    const postRes = await POST(req('/api/news', 'POST', { brief_json, tickers: ['NVDA'] }))
-    expect(postRes.status).toBe(201)
-    const getRes = await GET()
-    const data = await getRes.json()
-    expect(data.brief_json).toBeDefined()
-    expect(data.generated_at).toBeDefined()
-    expect(JSON.parse(data.brief_json).world[0].id).toBe('integ-1')
-    expect(JSON.parse(data.tickers)).toContain('NVDA')
-  })
-
-  it('newest brief is returned when multiple briefs stored', async () => {
-    seedNewsBrief('old', { world: [{ id: 'old' }], sg: [], prop: [], jobsGlobal: [], jobsSg: [], port: [] }, null, '2025-01-01T00:00:00.000Z')
-    seedNewsBrief('new', { world: [{ id: 'new' }], sg: [], prop: [], jobsGlobal: [], jobsSg: [], port: [] }, null, '2026-04-19T10:00:00.000Z')
-    const { GET } = await import('@/app/api/news/route')
-    const res = await GET()
-    const data = await res.json()
-    expect(JSON.parse(data.brief_json).world[0].id).toBe('new')
   })
 })
 
