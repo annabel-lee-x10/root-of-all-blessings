@@ -536,7 +536,10 @@ export function NewsClient({
 
     for (const { key, n, system, label, q } of sectionConfigs) {
       // Port participates in the unified loop, but skip the fetch when there are no tickers.
-      if (key === 'port' && portfolioTickers.length === 0) continue
+      if (key === 'port' && portfolioTickers.length === 0) {
+        setNews(p => ({ ...p, [key]: [] }))
+        continue
+      }
       setRefreshMsg(`↻ Refreshing ${label}...`)
       setLoadingSections(p => ({ ...p, [key]: true }))
       try {
@@ -560,6 +563,7 @@ export function NewsClient({
         if (key === 'prop' && cards.length > 0) propFetchedRef.current = true
       } catch (err) {
         console.error(`Refresh error [${key}]:`, err)
+        setNews(p => ({ ...p, [key]: [] }))
       }
       setLoadingSections(p => ({ ...p, [key]: false }))
     }

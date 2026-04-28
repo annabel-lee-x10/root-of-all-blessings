@@ -5,6 +5,27 @@ Track confirmed bugs here before they are fixed. Format:
 
 ---
 
+## BUG-069 · News refresh — UI keeps showing stale section cards when refresh skips port (no tickers) or any section's API call fails
+
+**Status:** Fixed
+**Reported:** 2026-04-28
+**Fixed in:** `app/(protected)/news/news-client.tsx`
+
+**Symptom:** After hitting Refresh on QS Daily Brief, sections that hit a non-success path in the loop body kept rendering their previous-day cards (with old "25 Apr" timestamps) even after the refresh button finished and "✓ Brief generated" appeared. PR #118 (BUG-068) fixed DB persistence for the same paths, but the rendered React state was never updated, so the user saw a successful refresh while looking at stale data.
+
+**Root cause:** In `handleRefresh()`'s loop in `news-client.tsx`, two paths exited without ever calling `setNews` for the section in question:
+- (a) Skip path — `if (key === 'port' && portfolioTickers.length === 0) continue` skipped before any state update, leaving `news.port` at its mount-time value.
+- (b) Catch path — `catch (err) { console.error(...) }` swallowed the error and never cleared `news[key]`, so a network/API failure on any of the 6 sections (`world`, `sg`, `prop`, `jobsGlobal`, `jobsSg`, `port`) left that section's stale cards rendered.
+
+**Fix:** Added `setNews(p => ({ ...p, [key]: [] }))` on both paths — once before the `continue` in the skip branch, once inside the catch after `console.error`. Net change: 2 lines added. Successful refresh path is unchanged.
+
+**Regression tests:** `tests/components/news-refresh-clears-ui.test.tsx` — seven DOM-level cases driven by a parameterized helper:
+- (a) Skip path: mount with stale port card + `portfolioTickers === 0`, hit Refresh, assert stale card text is no longer in the DOM.
+- (b–g) Catch path × 6 sections: mount with a uniquely-headlined stale card in the section under test, mock `/api/news/generate` to fail for that section's request, hit Refresh, assert stale card text is no longer in the DOM.
+All 7 cases fail on `main` with messages like "expected document not to contain element, found <span>STALE WORLD CARD UNIQUE-AAAA</span>" and pass after the two `setNews` calls are added.
+
+---
+
 ## BUG-068 · News refresh — Portfolio section is special-cased outside the main loop, leaving stale port cards in DB when tickers are absent or fetch fails
 
 **Status:** Fixed
