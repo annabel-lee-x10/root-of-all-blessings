@@ -49,10 +49,45 @@ const PORT_SYS = `You are a financial news analyst. Search for recent stock news
 // ── agentic loop helpers ───────────────────────────────────────────────────────
 type AnthropicMsg = { role: string; content: unknown }
 type ContentBlock = { type: string; text?: string; id?: string }
+type AnthropicUsage = {
+  input_tokens?: number
+  output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
+}
+
+export type RefreshTokens = {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens: number
+  cache_read_input_tokens: number
+  total: number
+}
+
+const ZERO_TOKENS: RefreshTokens = {
+  input_tokens: 0, output_tokens: 0,
+  cache_creation_input_tokens: 0, cache_read_input_tokens: 0, total: 0,
+}
+
+function addUsage(acc: RefreshTokens, u: AnthropicUsage | undefined): RefreshTokens {
+  if (!u) return acc
+  const inT = (u.input_tokens ?? 0)
+  const outT = (u.output_tokens ?? 0)
+  const cct = (u.cache_creation_input_tokens ?? 0)
+  const crt = (u.cache_read_input_tokens ?? 0)
+  return {
+    input_tokens: acc.input_tokens + inT,
+    output_tokens: acc.output_tokens + outT,
+    cache_creation_input_tokens: acc.cache_creation_input_tokens + cct,
+    cache_read_input_tokens: acc.cache_read_input_tokens + crt,
+    total: acc.total + inT + outT + cct + crt,
+  }
+}
 
 async function anthropicTurn(messages: AnthropicMsg[], system: string): Promise<{
   stop_reason: string
   content: ContentBlock[]
+  usage?: AnthropicUsage
 }> {
   const opts = {
     method: 'POST',
@@ -77,14 +112,18 @@ async function anthropicTurn(messages: AnthropicMsg[], system: string): Promise<
   return res.json()
 }
 
-async function agenticLoop(system: string, userMsg: string): Promise<string> {
+async function agenticLoop(system: string, userMsg: string): Promise<{ text: string; usage: RefreshTokens }> {
   let messages: AnthropicMsg[] = [{ role: 'user', content: userMsg }]
+  let usage: RefreshTokens = ZERO_TOKENS
   for (let turn = 0; turn < 8; turn++) {
     const data = await anthropicTurn(messages, system)
+    usage = addUsage(usage, data.usage)
     const content = data.content ?? []
     const texts = content.filter(b => b.type === 'text').map(b => b.text ?? '')
 
-    if (data.stop_reason === 'end_turn') return stripCiteTags(texts.join('').trim())
+    if (data.stop_reason === 'end_turn') {
+      return { text: stripCiteTags(texts.join('').trim()), usage }
+    }
 
     if (data.stop_reason === 'tool_use') {
       messages = [...messages, { role: 'assistant', content }]
@@ -98,10 +137,10 @@ async function agenticLoop(system: string, userMsg: string): Promise<string> {
       if (results.length) messages = [...messages, { role: 'user', content: results }]
       continue
     }
-    if (texts.length) return stripCiteTags(texts.join('').trim())
+    if (texts.length) return { text: stripCiteTags(texts.join('').trim()), usage }
     break
   }
-  return ''
+  return { text: '', usage }
 }
 
 
@@ -345,6 +384,7 @@ export function NewsClient({
   const [refreshMsg, setRefreshMsg] = useState('')
   const [loadingSections, setLoadingSections] = useState<Record<string, boolean>>({})
   const [sentFilter, setSentFilter] = useState<'all' | Sentiment>('all')
+  const [lastRefreshTokens, setLastRefreshTokens] = useState<RefreshTokens | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const propFetchedRef = useRef(false)
   const sharedTickersPrevRef = useRef<string>('')
@@ -358,10 +398,14 @@ export function NewsClient({
       setBrief(data)
       if (data?.brief_json) {
         try {
-          const parsed = JSON.parse(data.brief_json) as QsBriefSections
-          setNews({ ...EMPTY_SECTIONS, ...parsed })
+          const parsed = JSON.parse(data.brief_json) as QsBriefSections & {
+            _meta?: { tokens?: RefreshTokens }
+          }
+          const { _meta, ...sections } = parsed
+          setNews({ ...EMPTY_SECTIONS, ...sections })
+          if (_meta?.tokens) setLastRefreshTokens(_meta.tokens)
           // DB already has a prop result (even empty) — no need to auto-fetch on expand
-          if ('prop' in parsed) propFetchedRef.current = true
+          if ('prop' in sections) propFetchedRef.current = true
           if (data.tickers) {
             setPortfolioTickers(JSON.parse(data.tickers) as string[])
           }
@@ -422,8 +466,8 @@ export function NewsClient({
         day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Singapore',
       })
       const q = `Search recent news for these portfolio tickers today ${today}: ${tickers.join(', ')}.`
-      const raw = await agenticLoop(PORT_SYS, q)
-      const items = parseArr(raw)
+      const { text } = await agenticLoop(PORT_SYS, q)
+      const items = parseArr(text)
       const ts = nowSGT()
       const cards = items.slice(0, 20).map((it, i) => {
         const ticker = it.ticker ? String(it.ticker) : undefined
@@ -446,12 +490,12 @@ export function NewsClient({
         day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Singapore',
       })
       const q = `Search top 5 Singapore property market news today ${today}: HDB, condo, landed, commercial, launches, policy.`
-      const raw = await agenticLoop(SEARCH_SYS, q)
-      let items = parseArr(raw)
-      if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
-        console.warn('[news:prop] empty parse on non-empty response, retrying. Preview:', raw.slice(0, 120))
-        const raw2 = await agenticLoop(SEARCH_SYS, q)
-        items = parseArr(raw2)
+      const { text } = await agenticLoop(SEARCH_SYS, q)
+      let items = parseArr(text)
+      if (items.length === 0 && text.length > 0 && !text.trimStart().startsWith('[')) {
+        console.warn('[news:prop] empty parse on non-empty response, retrying. Preview:', text.slice(0, 120))
+        const { text: text2 } = await agenticLoop(SEARCH_SYS, q)
+        items = parseArr(text2)
       }
       const ts = nowSGT()
       const cards = items.slice(0, 5).map((it, i) => mapCard(it, 'prop', i, ts))
@@ -532,49 +576,71 @@ export function NewsClient({
       },
     ]
 
-    const fresh: QsBriefSections = { ...EMPTY_SECTIONS }
+    setRefreshMsg('↻ Refreshing...')
 
-    for (const { key, n, system, label, q } of sectionConfigs) {
-      // Port participates in the unified loop, but skip the fetch when there are no tickers.
-      if (key === 'port' && portfolioTickers.length === 0) {
-        setNews(p => ({ ...p, [key]: [] }))
-        continue
-      }
-      setRefreshMsg(`↻ Refreshing ${label}...`)
-      setLoadingSections(p => ({ ...p, [key]: true }))
-      try {
-        const raw = await agenticLoop(system, q)
-        let items = parseArr(raw)
-        if (items.length === 0 && raw.length > 0 && !raw.trimStart().startsWith('[')) {
-          console.warn(`[news:${key}] empty parse on non-empty response, retrying. Preview:`, raw.slice(0, 120))
-          const raw2 = await agenticLoop(system, q)
-          items = parseArr(raw2)
+    type SectionResult = { key: typeof sectionConfigs[number]['key']; cards: QsNewsCard[]; usage: RefreshTokens }
+
+    // Fire all 6 sections in parallel. Each per-section task owns its own
+    // loading state, error handling, and per-section setNews — so a single
+    // failure cannot abort the others. Promise.allSettled never rejects.
+    const settled = await Promise.allSettled(
+      sectionConfigs.map(async ({ key, n, system, q }): Promise<SectionResult> => {
+        // Port participates in the unified parallel batch but skips the fetch
+        // when there are no tickers — mirrors the pre-parallel BUG-069 contract.
+        if (key === 'port' && portfolioTickers.length === 0) {
+          setNews(p => ({ ...p, [key]: [] }))
+          return { key, cards: [], usage: ZERO_TOKENS }
         }
-        const ts = nowSGT()
-        const cards = items.slice(0, n).map((it, i) => {
-          if (key === 'port') {
-            const ticker = it.ticker ? String(it.ticker) : undefined
-            return mapCard(it, 'port', i, ts, ticker)
+        setLoadingSections(p => ({ ...p, [key]: true }))
+        try {
+          const r = await agenticLoop(system, q)
+          let items = parseArr(r.text)
+          let usage = r.usage
+          if (items.length === 0 && r.text.length > 0 && !r.text.trimStart().startsWith('[')) {
+            console.warn(`[news:${key}] empty parse on non-empty response, retrying. Preview:`, r.text.slice(0, 120))
+            const r2 = await agenticLoop(system, q)
+            items = parseArr(r2.text)
+            usage = addUsage(usage, r2.usage)
           }
-          return mapCard(it, key, i, ts)
-        })
-        fresh[key] = cards
-        setNews(p => ({ ...p, [key]: cards }))
-        if (key === 'prop' && cards.length > 0) propFetchedRef.current = true
-      } catch (err) {
-        console.error(`Refresh error [${key}]:`, err)
-        setNews(p => ({ ...p, [key]: [] }))
-      }
-      setLoadingSections(p => ({ ...p, [key]: false }))
-    }
+          const ts = nowSGT()
+          const cards = items.slice(0, n).map((it, i) => {
+            if (key === 'port') {
+              const ticker = it.ticker ? String(it.ticker) : undefined
+              return mapCard(it, 'port', i, ts, ticker)
+            }
+            return mapCard(it, key, i, ts)
+          })
+          setNews(p => ({ ...p, [key]: cards }))
+          if (key === 'prop' && cards.length > 0) propFetchedRef.current = true
+          return { key, cards, usage }
+        } catch (err) {
+          console.error(`Refresh error [${key}]:`, err)
+          setNews(p => ({ ...p, [key]: [] }))
+          return { key, cards: [], usage: ZERO_TOKENS }
+        } finally {
+          setLoadingSections(p => ({ ...p, [key]: false }))
+        }
+      })
+    )
 
-    // Persist to DB
+    // Aggregate fulfilled results into the persisted snapshot + token total.
+    const fresh: QsBriefSections = { ...EMPTY_SECTIONS }
+    let totals: RefreshTokens = ZERO_TOKENS
+    for (const r of settled) {
+      if (r.status !== 'fulfilled') continue
+      fresh[r.value.key] = r.value.cards
+      totals = addUsage(totals, r.value.usage)
+    }
+    setLastRefreshTokens(totals)
+
+    // Persist to DB. _meta.tokens travels inside brief_json so it survives reloads
+    // without any schema change (the API just round-trips brief_json verbatim).
     try {
       await fetch('/api/news', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          brief_json: fresh,
+          brief_json: { ...fresh, _meta: { tokens: totals } },
           tickers: portfolioTickers.length > 0 ? portfolioTickers : undefined,
         }),
       })
@@ -582,7 +648,7 @@ export function NewsClient({
       console.error('Save brief error:', err)
     }
 
-    setRefreshMsg('✓ Brief generated')
+    setRefreshMsg(`✓ Brief generated · ${totals.total.toLocaleString()} tokens`)
     setRefreshing(false)
     setTimeout(() => setRefreshMsg(''), 3000)
     showToast('Brief refreshed', 'success')
@@ -773,6 +839,26 @@ export function NewsClient({
             showTicker
             defaultOpen
           />
+        )}
+
+        {/* ── token-usage footer ─────────────────────────────────────────── */}
+        {lastRefreshTokens && lastRefreshTokens.total > 0 && (
+          <div style={{
+            marginTop: '2rem',
+            paddingTop: '0.75rem',
+            borderTop: `1px solid ${BORDER}`,
+            color: MUTED,
+            fontSize: '0.7rem',
+            fontFamily: "'Courier New', monospace",
+            textAlign: 'center',
+            lineHeight: 1.55,
+            wordBreak: 'break-word',
+          }}>
+            Last refresh: {lastRefreshTokens.total.toLocaleString()} tokens
+            <span style={{ opacity: 0.7 }}>
+              {' '}· in {lastRefreshTokens.input_tokens.toLocaleString()} / out {lastRefreshTokens.output_tokens.toLocaleString()}
+            </span>
+          </div>
         )}
       </div>
     </div>
