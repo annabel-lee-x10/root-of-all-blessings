@@ -7,9 +7,7 @@
     "build": "next build",
     "start": "next start",
     "migrate": "tsx scripts/migrate.ts",
-    "migrate:portfolio": "tsx scripts/migrate-portfolio.ts",
     "seed": "tsx scripts/seed.ts",
-    "seed:snap27": "tsx scripts/seed-snap27.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -24,7 +22,6 @@
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "recharts": "^3.8.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -1,27 +1,8 @@
 'use client'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { ThemeToggle } from './theme-toggle'
-
-// ── View types ────────────────────────────────────────────────────────────────
-
-type View = 'budget' | 'portfolio'
-
-const VIEW_LABELS: Record<View, string> = {
-  budget: 'Budget',
-  portfolio: 'Portfolio',
-}
-
-const VIEW_HOME: Record<View, string> = {
-  budget: '/dashboard',
-  portfolio: '/portfolio',
-}
-
-function getView(pathname: string): View {
-  if (pathname.startsWith('/portfolio')) return 'portfolio'
-  return 'budget'
-}
 
 const BUDGET_MORE = [
   { href: '/accounts', label: 'Accounts' },
@@ -83,13 +64,7 @@ function DotsIcon() {
 
 export function NavBar() {
   const pathname = usePathname()
-  const router = useRouter()
-  const view = getView(pathname)
   const [moreOpen, setMoreOpen] = useState(false)
-
-  function switchView(v: View) {
-    if (v !== view) router.push(VIEW_HOME[v])
-  }
 
   function isActive(matchPaths: string[]) {
     return matchPaths.some((p) =>
@@ -155,32 +130,6 @@ export function NavBar() {
           <img src="/brand/logo.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-dark" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/logo-light.svg" alt="Root OS" height={28} style={{ height: '28px', width: 'auto' }} className="logo-light" />
-
-          {/* View Switcher — pill tabs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', background: 'var(--bg-subtle)', borderRadius: '8px', padding: '2px' }}>
-            {(['budget', 'portfolio'] as View[]).map((v) => (
-              <button
-                key={v}
-                aria-current={view === v ? 'page' : undefined}
-                onClick={() => switchView(v)}
-                style={{
-                  background: view === v ? 'var(--accent)' : 'transparent',
-                  border: view === v ? 'none' : '1px solid transparent',
-                  borderRadius: '6px',
-                  color: view === v ? 'white' : 'var(--text-muted)',
-                  fontSize: '12px',
-                  fontWeight: view === v ? 600 : 400,
-                  cursor: 'pointer',
-                  padding: '3px 8px',
-                  whiteSpace: 'nowrap',
-                  transition: 'background 0.15s, color 0.15s',
-                  lineHeight: 1.4,
-                }}
-              >
-                {VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Right side */}
@@ -224,75 +173,60 @@ export function NavBar() {
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
-        {view === 'budget' ? (
-          <>
-            {/* Dashboard */}
-            <Link
-              href="/dashboard"
-              data-active={String(isActive(['/', '/dashboard']))}
-              style={bottomTabStyle(isActive(['/', '/dashboard']))}
-            >
-              <HomeIcon />
-              <span style={{ fontSize: '10px', fontWeight: 500 }}>Dashboard</span>
-            </Link>
+        {/* Dashboard */}
+        <Link
+          href="/dashboard"
+          data-active={String(isActive(['/', '/dashboard']))}
+          style={bottomTabStyle(isActive(['/', '/dashboard']))}
+        >
+          <HomeIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>Dashboard</span>
+        </Link>
 
-            {/* Transactions */}
-            <Link
-              href="/transactions"
-              data-active={String(isActive(['/transactions']))}
-              style={bottomTabStyle(isActive(['/transactions']))}
-            >
-              <ListIcon />
-              <span style={{ fontSize: '10px', fontWeight: 500 }}>Transactions</span>
-            </Link>
+        {/* Transactions */}
+        <Link
+          href="/transactions"
+          data-active={String(isActive(['/transactions']))}
+          style={bottomTabStyle(isActive(['/transactions']))}
+        >
+          <ListIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>Transactions</span>
+        </Link>
 
-            {/* Add — raised accent FAB */}
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Link href="/add" aria-label="Add transaction" style={fabStyle}>
-                <PlusIcon size={26} />
-              </Link>
-            </div>
+        {/* Add — raised accent FAB */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Link href="/add" aria-label="Add transaction" style={fabStyle}>
+            <PlusIcon size={26} />
+          </Link>
+        </div>
 
-            {/* Categories */}
-            <Link
-              href="/categories"
-              data-active={String(isActive(['/categories']))}
-              style={bottomTabStyle(isActive(['/categories']))}
-            >
-              <CategoryIcon />
-              <span style={{ fontSize: '10px', fontWeight: 500 }}>Categories</span>
-            </Link>
+        {/* Categories */}
+        <Link
+          href="/categories"
+          data-active={String(isActive(['/categories']))}
+          style={bottomTabStyle(isActive(['/categories']))}
+        >
+          <CategoryIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>Categories</span>
+        </Link>
 
-            {/* More */}
-            <button
-              onClick={() => setMoreOpen(true)}
-              style={{
-                ...bottomTabStyle(moreOpen),
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-              } as React.CSSProperties}
-            >
-              <DotsIcon />
-              <span style={{ fontSize: '10px', fontWeight: 500 }}>More</span>
-            </button>
-          </>
-        ) : (
-          /* Portfolio — FAB only */
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <button
-              aria-label="Upload portfolio snapshot"
-              style={{ ...fabStyle, cursor: 'pointer', border: 'none', padding: 0 }}
-              onClick={() => window.dispatchEvent(new CustomEvent('portfolio:open-upload'))}
-            >
-              <PlusIcon size={26} />
-            </button>
-          </div>
-        )}
+        {/* More */}
+        <button
+          onClick={() => setMoreOpen(true)}
+          style={{
+            ...bottomTabStyle(moreOpen),
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+          } as React.CSSProperties}
+        >
+          <DotsIcon />
+          <span style={{ fontSize: '10px', fontWeight: 500 }}>More</span>
+        </button>
       </nav>
 
       {/* ── Budget More sheet — mobile only ── */}
-      {moreOpen && view === 'budget' && (
+      {moreOpen && (
         <div className="sm:hidden">
           {/* Backdrop */}
           <div
