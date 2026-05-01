@@ -146,6 +146,7 @@ export default function TransactionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [cloningId, setCloningId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<TransactionRow | null>(null)
   const [undoStack, setUndoStack] = useState<TransactionRow[]>([])
@@ -277,6 +278,48 @@ export default function TransactionsPage() {
       }
     } finally {
       setSavingId(null)
+    }
+  }
+
+  async function cloneTransaction(id: string) {
+    if (!editForm) return
+    setCloningId(id)
+    try {
+      const amt = parseFloat(editForm.amount)
+      const rate = editForm.fx_rate ? parseFloat(editForm.fx_rate) : null
+      const body = {
+        type: editForm.type,
+        amount: amt,
+        currency: editForm.currency,
+        fx_rate: rate,
+        fx_date: editForm.fx_date || null,
+        sgd_equivalent: editForm.currency !== 'SGD' && rate != null ? amt * rate : null,
+        account_id: editForm.account_id,
+        to_account_id: editForm.to_account_id || null,
+        category_id: editForm.category_id || null,
+        payee: editForm.payee || null,
+        note: editForm.note || null,
+        payment_method: accounts.find((a) => a.id === editForm.account_id)?.type ?? null,
+        datetime: fromInputDt(editForm.datetime),
+        tag_ids: editForm.tag_ids,
+      }
+      const res = await fetch('/api/transactions/clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        showToast('Draft created from clone', 'success', {
+          label: 'View drafts',
+          onClick: () => { window.location.href = '/dashboard' },
+        })
+      } else {
+        showToast('Failed to clone', 'error')
+      }
+    } catch {
+      showToast('Failed to clone', 'error')
+    } finally {
+      setCloningId(null)
     }
   }
 
@@ -792,6 +835,14 @@ export default function TransactionsPage() {
                 )}
 
                 <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={cancelEdit} style={BTN_SEC}>Cancel</button>
+                  <button
+                    onClick={() => cloneTransaction(tx.id)}
+                    disabled={cloningId === tx.id}
+                    style={{ ...BTN_SEC, opacity: cloningId === tx.id ? 0.6 : 1 }}
+                  >
+                    {cloningId === tx.id ? 'Cloning...' : 'Clone'}
+                  </button>
                   <button
                     onClick={() => saveEdit(tx.id)}
                     disabled={savingId === tx.id}
@@ -799,7 +850,6 @@ export default function TransactionsPage() {
                   >
                     {savingId === tx.id ? 'Saving...' : 'Save changes'}
                   </button>
-                  <button onClick={cancelEdit} style={BTN_SEC}>Cancel</button>
                 </div>
               </div>
             )}
