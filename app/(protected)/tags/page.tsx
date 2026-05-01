@@ -16,6 +16,17 @@ const CARD = { background: '#161b22', border: '1px solid #30363d', borderRadius:
 
 type TagWithMeta = Tag & { tx_count: number; category_id: string | null }
 
+type SortOption = 'name_asc' | 'name_desc' | 'count_desc' | 'count_asc'
+type FilterChip = 'all' | 'unused' | 'low' | 'high'
+
+const SORT_KEY = 'tags.sort'
+const FILTER_KEY = 'tags.filter'
+const SORT_OPTIONS: SortOption[] = ['name_asc', 'name_desc', 'count_desc', 'count_asc']
+const FILTER_CHIPS: FilterChip[] = ['all', 'unused', 'low', 'high']
+
+const CHIP_BASE = { padding: '0.35rem 0.8rem', borderRadius: '999px', border: '1px solid #30363d', background: '#0d1117', color: '#e6edf3', fontSize: '0.8rem', cursor: 'pointer', minHeight: '36px' }
+const CHIP_ACTIVE = { ...CHIP_BASE, background: '#CC5500', color: '#0d1117', border: '1px solid #CC5500', fontWeight: 600 }
+
 function useMobile(bp = 640) {
   const [mobile, setMobile] = useState(false)
   useEffect(() => {
@@ -36,6 +47,8 @@ export default function TagsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [sortOption, setSortOption] = useState<SortOption>('name_asc')
+  const [filterChip, setFilterChip] = useState<FilterChip>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -72,9 +85,43 @@ export default function TagsPage() {
 
   useEffect(() => { load() }, [])
 
-  const visible = tags.filter(t =>
-    !search.trim() || t.name.toLowerCase().includes(search.trim().toLowerCase())
-  )
+  useEffect(() => {
+    try {
+      const s = window.localStorage.getItem(SORT_KEY)
+      if (s && (SORT_OPTIONS as string[]).includes(s)) setSortOption(s as SortOption)
+      const f = window.localStorage.getItem(FILTER_KEY)
+      if (f && (FILTER_CHIPS as string[]).includes(f)) setFilterChip(f as FilterChip)
+    } catch {}
+  }, [])
+
+  function chooseSort(value: SortOption) {
+    setSortOption(value)
+    try { window.localStorage.setItem(SORT_KEY, value) } catch {}
+  }
+
+  function chooseFilter(value: FilterChip) {
+    setFilterChip(value)
+    try { window.localStorage.setItem(FILTER_KEY, value) } catch {}
+  }
+
+  const visible = (() => {
+    let list = tags
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(t => t.name.toLowerCase().includes(q))
+    }
+    if (filterChip === 'unused') list = list.filter(t => t.tx_count === 0)
+    else if (filterChip === 'low') list = list.filter(t => t.tx_count >= 1 && t.tx_count <= 5)
+    else if (filterChip === 'high') list = list.filter(t => t.tx_count >= 6)
+
+    const byNameAsc = (a: TagWithMeta, b: TagWithMeta) => a.name.localeCompare(b.name)
+    const sorted = [...list]
+    if (sortOption === 'name_asc') sorted.sort(byNameAsc)
+    else if (sortOption === 'name_desc') sorted.sort((a, b) => b.name.localeCompare(a.name))
+    else if (sortOption === 'count_desc') sorted.sort((a, b) => b.tx_count - a.tx_count || byNameAsc(a, b))
+    else if (sortOption === 'count_asc') sorted.sort((a, b) => a.tx_count - b.tx_count || byNameAsc(a, b))
+    return sorted
+  })()
 
   async function saveEdit(id: string) {
     if (!editName.trim()) return
@@ -200,20 +247,68 @@ export default function TagsPage() {
       </div>
 
       <input
-        style={{ ...INPUT, marginBottom: '1rem' }}
+        style={{ ...INPUT, marginBottom: '0.6rem' }}
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="Search tags..."
       />
 
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+        <select
+          data-testid="tag-sort-select"
+          aria-label="Sort tags"
+          style={{ ...SELECT, width: 'auto', minHeight: '36px', fontSize: '0.85rem' }}
+          value={sortOption}
+          onChange={e => chooseSort(e.target.value as SortOption)}
+        >
+          <option value="name_asc">Name A–Z</option>
+          <option value="name_desc">Name Z–A</option>
+          <option value="count_desc">Most used</option>
+          <option value="count_asc">Least used</option>
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          data-testid="tag-filter-chip-all"
+          aria-pressed={filterChip === 'all'}
+          style={filterChip === 'all' ? CHIP_ACTIVE : CHIP_BASE}
+          onClick={() => chooseFilter('all')}
+        >All</button>
+        <button
+          type="button"
+          data-testid="tag-filter-chip-unused"
+          aria-pressed={filterChip === 'unused'}
+          style={filterChip === 'unused' ? CHIP_ACTIVE : CHIP_BASE}
+          onClick={() => chooseFilter('unused')}
+        >Unused</button>
+        <button
+          type="button"
+          data-testid="tag-filter-chip-low"
+          aria-pressed={filterChip === 'low'}
+          style={filterChip === 'low' ? CHIP_ACTIVE : CHIP_BASE}
+          onClick={() => chooseFilter('low')}
+        >1–5</button>
+        <button
+          type="button"
+          data-testid="tag-filter-chip-high"
+          aria-pressed={filterChip === 'high'}
+          style={filterChip === 'high' ? CHIP_ACTIVE : CHIP_BASE}
+          onClick={() => chooseFilter('high')}
+        >6+</button>
+      </div>
+
       {loading ? (
         <p style={{ color: '#8b949e' }}>Loading...</p>
       ) : visible.length === 0 ? (
-        <p style={{ color: '#8b949e' }}>{search ? 'No tags match.' : 'No tags yet.'}</p>
+        <p style={{ color: '#8b949e' }}>
+          {tags.length === 0 ? 'No tags yet.' : 'No tags match these filters'}
+        </p>
       ) : (
-        <div>
+        <div data-testid="tags-list">
           {visible.map(t => (
-            <div key={t.id} style={CARD}>
+            <div key={t.id} data-testid={`tag-card-${t.id}`} style={CARD}>
               {editingId === t.id ? (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <input
@@ -233,7 +328,7 @@ export default function TagsPage() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                        <span style={{ color: '#e6edf3', fontWeight: 500 }}>{t.name}</span>
+                        <span data-testid="tag-name" style={{ color: '#e6edf3', fontWeight: 500 }}>{t.name}</span>
                         <Link
                           href={`/transactions?tag_id=${t.id}`}
                           style={{ fontSize: '0.78rem', color: '#8b949e', textDecoration: 'none' }}
